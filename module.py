@@ -2738,14 +2738,27 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function init() {
+    var isMobile = window.innerWidth < 640;
+    var panelH = isMobile ? 150 : 200;
     var panel = document.createElement('div');
-    panel.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:150px;' +
-        'z-index:1000;pointer-events:none;background:rgba(10,14,22,0.82);' +
-        'border-top:1px solid rgba(255,255,255,0.1);box-sizing:border-box;';
-    panel.innerHTML = '<svg id="mini-elev-svg" width="100%" height="150" style="display:block"></svg>';
-    _map.getContainer().style.position = 'relative';
-    _map.getContainer().appendChild(panel);
+    panel.innerHTML = '<svg id="mini-elev-svg" width="100%" height="' + panelH + '" style="display:block"></svg>';
+    panel.style.cssText = 'width:100%;height:' + panelH + 'px;' +
+        'background:rgba(10,14,22,0.95);' +
+        'border-top:2px solid rgba(61,142,248,0.3);box-sizing:border-box;';
+    document.body.style.margin = '0';
+    document.body.appendChild(panel);
+    try {
+        if (window.frameElement) {
+            var curH = window.frameElement.offsetHeight || parseInt(window.frameElement.style.height) || 0;
+            var newH = curH + panelH;
+            window.frameElement.style.height = newH + 'px';
+            // Also fix the Folium outer wrapper div (padding-bottom:60% trick)
+            var fw = window.frameElement.parentElement;
+            if (fw) { fw.style.paddingBottom = '0'; fw.style.height = newH + 'px'; }
+        }
+    } catch(e) {}
     _map.on('moveend zoomend resize', updateChart);
+    window.addEventListener('resize', updateChart);
     updateChart();
 }
 
@@ -2785,7 +2798,8 @@ function updateChart() {
                 document.querySelector('#mini-elev-svg').parentNode;
     var svg = document.querySelector('#mini-elev-svg');
     if (!svg || !_map) return;
-    var W = svg.parentNode.offsetWidth, H = 150;
+    var W = svg.parentNode.offsetWidth;
+    var H = svg.parentNode.offsetHeight || 150;
     if (W < 50) return;
     var bounds = _map.getBounds();
     var vis = MINI_ELEV.filter(function(p) {
@@ -2793,7 +2807,7 @@ function updateChart() {
                p[2] >= bounds.getWest() && p[2] <= bounds.getEast();
     });
     if (vis.length < 2) {
-        svg.innerHTML = '<text x="'+(W/2)+'" y="52" text-anchor="middle" font-size="11" ' +
+        svg.innerHTML = '<text x="'+(W/2)+'" y="'+(H/2+4)+'" text-anchor="middle" font-size="11" ' +
             'fill="rgba(255,255,255,0.35)" font-family="sans-serif">Route nicht sichtbar</text>';
         return;
     }
@@ -2802,7 +2816,7 @@ function updateChart() {
     var eMin = Math.max(0, Math.min.apply(null,eles)-80);
     var eMax = Math.max.apply(null,eles)+50;
     var eRange = eMax - eMin;
-    var PL=6, PR=6, PT=14, PB=16, cW=W-PL-PR, cH=H-PT-PB;
+    var PL=8, PR=8, PT=18, PB=20, cW=W-PL-PR, cH=H-PT-PB;
     function xp(km)  { return PL + (km-kmMin)/(kmMax-kmMin)*cW; }
     function yp(ele) { return PT + cH - (ele-eMin)/eRange*cH; }
 
@@ -2819,21 +2833,26 @@ function updateChart() {
     out += '<polyline points="'+pts+'" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.8"/>';
 
     var visCities = MINI_CITIES.filter(function(c){return c.km>=kmMin && c.km<=kmMax;});
+    var cityFs = H >= 180 ? 9 : 7.5;
     visCities.forEach(function(c) {
         var cx = xp(c.km);
         out += '<line x1="'+cx+'" y1="'+PT+'" x2="'+cx+'" y2="'+(H-PB)+
                '" stroke="rgba(255,255,255,0.25)" stroke-width="0.5" stroke-dasharray="2,2"/>';
-        out += '<text x="'+cx+'" y="'+(PT-2)+'" text-anchor="middle" font-size="7.5" ' +
-               'fill="rgba(255,255,255,0.65)" font-family="sans-serif">'+c.name+'</text>';
+        out += '<text x="'+cx+'" y="'+(PT-3)+'" text-anchor="middle" font-size="'+cityFs+'" ' +
+               'fill="rgba(255,255,255,0.72)" font-family="sans-serif">'+c.name+'</text>';
     });
-    out += '<text x="'+(PL+2)+'" y="'+(PT+8)+'" font-size="7" fill="rgba(255,255,255,0.4)" ' +
+    var labelFs = H >= 180 ? 8.5 : 7;
+    out += '<text x="'+(PL+2)+'" y="'+(PT+10)+'" font-size="'+labelFs+'" fill="rgba(255,255,255,0.45)" ' +
            'font-family="sans-serif">'+Math.round(eMax)+'m</text>';
+    out += '<text x="'+(PL+2)+'" y="'+(H-PB-4)+'" font-size="'+labelFs+'" fill="rgba(255,255,255,0.35)" ' +
+           'font-family="sans-serif">'+Math.round(eMin)+'m</text>';
     var km_range = Math.round(kmMax - kmMin);
-    out += '<text x="'+(W/2)+'" y="'+(H-2)+'" text-anchor="middle" font-size="7.5" ' +
+    out += '<text x="'+(W/2)+'" y="'+(H-3)+'" text-anchor="middle" font-size="'+(labelFs-0.5)+'" ' +
            'fill="rgba(255,255,255,0.3)" font-family="sans-serif">' +
            'H\u00f6henprofil \u2013 sichtbarer Bereich ('+km_range+' km)</text>';
 
     svg.setAttribute('viewBox','0 0 '+W+' '+H);
+    svg.setAttribute('height', H);
     svg.innerHTML = out;
 }
 })();

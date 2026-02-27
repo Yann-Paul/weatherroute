@@ -298,7 +298,7 @@ function showRoughMap(data) {
   const mapEl = document.getElementById('map');
   mapEl.style.display = 'block';
 
-  leafletMap = L.map('map').setView(data.center, 5);
+  leafletMap = L.map('map', { zoomControl: true }).setView(data.center, 5);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap', maxZoom: 19
   }).addTo(leafletMap);
@@ -327,9 +327,14 @@ function showRoughMap(data) {
     L.marker([c.lat, c.lon], { icon }).bindPopup(popupHtml).addTo(leafletMap);
   });
 
-  if (cities.length > 1) {
-    leafletMap.fitBounds(cities.map(c => [c.lat, c.lon]), { padding: [28, 28] });
-  }
+  // invalidateSize ensures Leaflet recalculates container dimensions after
+  // display:none → display:block (especially important on mobile)
+  setTimeout(() => {
+    leafletMap.invalidateSize();
+    if (cities.length > 1) {
+      leafletMap.fitBounds(cities.map(c => [c.lat, c.lon]), { padding: [28, 28] });
+    }
+  }, 100);
 }
 
 /* ── Polling ── */

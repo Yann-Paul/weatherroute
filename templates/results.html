@@ -98,13 +98,15 @@
         }
         #map-panel .map-wrap {
             border-radius: 8px;
-            overflow: hidden;
+            overflow: visible;
             border: 1px solid var(--border);
         }
         #map-panel .map-wrap iframe,
         #map-panel .map-wrap > div {
             width: 100% !important;
-            height: 600px !important;
+            height: 420px;
+            min-height: 280px;
+            display: block;
         }
 
         /* ── Elevation panel ─────────────────────────────── */
@@ -408,7 +410,7 @@
             /* Karten-Panel */
             #map-panel { padding: 10px 10px; }
             #map-panel .map-wrap iframe,
-            #map-panel .map-wrap > div { height: 380px !important; }
+            #map-panel .map-wrap > div { height: 310px; }
 
             /* Höhenprofil-Panel */
             #elevation-panel { padding: 12px 10px; }
@@ -430,7 +432,7 @@
 
         @media (max-width: 400px) {
             #map-panel .map-wrap iframe,
-            #map-panel .map-wrap > div { height: 300px !important; }
+            #map-panel .map-wrap > div { height: 250px; }
             .tab { padding: 9px 8px; font-size: 10px; }
         }
     </style>
@@ -563,6 +565,34 @@ const ROUTE_WEATHER  = {{ route_weather_json | safe }};
 const DESIRED_LOW    = {{ desired_low_temp  | default(15) }};
 const DESIRED_HIGH   = {{ desired_high_temp | default(25) }};
 const REST_DAYS_BY_REL = { {% for city_id, day, city_name, distance in route %}{% set rest = city_rest_days.get(city_id, 0) %}{% if rest > 0 %}{{ day - start_day }}: {{ rest }},{% endif %}{% endfor %} };
+
+/* ── Map iframe auto-sizing ─────────────────────── */
+function sizeMapIframe() {
+    if (window.innerWidth < 640) return; // mobile uses fixed CSS heights
+    const panel  = document.getElementById('map-panel');
+    if (!panel) return;
+    // Folium produces TWO nested wrapper divs around the iframe.
+    // We must set the OUTER wrapper to the full total height so the inner
+    // div (resized by init() inside the iframe) doesn't overflow it.
+    const foliumWrap = panel.querySelector('.map-wrap > div'); // outer wrapper
+    const iframe     = panel.querySelector('.map-wrap iframe');
+    if (!iframe) return;
+    const headerH = (document.querySelector('.header') || {offsetHeight:0}).offsetHeight;
+    const tabsH   = (document.querySelector('.tabs')   || {offsetHeight:0}).offsetHeight;
+    const panelPT = parseInt(getComputedStyle(panel).paddingTop) || 0;
+    const ELEV_H  = 200; // elevation panel added by iframe JS
+    const BUFFER  = 16;
+    const mapH  = Math.max(280, window.innerHeight - headerH - tabsH - panelPT - ELEV_H - BUFFER);
+    const totalH = mapH + ELEV_H; // outer wrapper must hold both
+    if (foliumWrap) {
+        foliumWrap.style.paddingBottom = '0';
+        foliumWrap.style.height = totalH + 'px'; // full height incl. elevation
+    }
+    iframe.style.height = mapH + 'px'; // iframe starts at map-only height
+    // init() inside the iframe will extend it to totalH
+}
+document.addEventListener('DOMContentLoaded', sizeMapIframe);
+window.addEventListener('resize', sizeMapIframe);
 
 /* ── Tab switching ──────────────────────────────── */
 document.addEventListener('DOMContentLoaded', function () {
