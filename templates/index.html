@@ -334,11 +334,10 @@
       input[type="date"],
       select { padding: 10px 11px; font-size: 14px; }
 
-      /* City row: let rest-days label text shrink */
-      .rest-days-wrap span { display: none; }        /* hide "+ Tage" labels */
+      /* City row: Pausentage-Wrap auf Mobile kompakt halten */
+      .rest-days-wrap span { display: none; }        /* hide "⏸ Pause" labels */
       .rest-days-wrap { padding: 2px 4px; gap: 1px; }
-      .rest-days-wrap::before { content: "+"; font-size: 11px; color: var(--muted); }
-      .rest-days-wrap::after  { content: "T"; font-size: 11px; color: var(--muted); }
+      .rest-days-wrap::before { content: "⏸"; font-size: 11px; color: var(--muted); }
 
       /* Larger touch targets for icon buttons */
       .btn-icon { width: 36px; height: 36px; font-size: 15px; border-radius: 7px; }
@@ -367,7 +366,7 @@
 <div class="page-wrap">
   <div class="page-header">
     <h1>🗺 Travel Route Planner</h1>
-    <p>Berechne eine klimaoptimierte Reiseroute anhand von Temperaturdaten.</p>
+    <p>Wetteroptimierte Reiseroute basierend auf historischen Wetterdaten.</p>
   </div>
 
   <form id="routeForm" action="/calculate" method="POST">
@@ -386,6 +385,7 @@
         <div id="cityInputs"></div>
         <div id="err-cities" class="field-msg"></div>
         <button type="button" class="btn-add" onclick="addCityField()">＋ Stadt hinzufügen</button>
+        <div class="hint" style="margin-top:6px">⏸ = Pausentage: Anzahl Tage, die an dieser Stadt verbracht werden, ohne weiterzureisen (z.B. für Ausflüge oder Erholung).</div>
       </div>
 
       <div class="toggle-row" style="margin-bottom:14px">
@@ -434,6 +434,7 @@
 
       <div class="field">
         <label>Direktverbindungen (Flug / Bahn / Fähre)</label>
+        <div class="hint" style="margin-bottom:8px">Städtepaare, die hier eingetragen sind, werden im Reiseplan <strong>direkt miteinander verbunden</strong> – ohne dass eine Fahrroute berechnet wird. Nutze dies für Abschnitte, die du per Flug, Fähre oder Zug zurücklegst.</div>
         <div id="connectionInputs">
           <div class="connection-row">
             <input type="text" class="city-autocomplete" name="connection_start" placeholder="Von…">
@@ -485,11 +486,18 @@
       </div>
 
       <div class="field" style="margin-top:10px">
-        <label>Temperatur-Gewichtung (0 = nur Distanz, 1 = nur Temperatur)</label>
+        <label>Temperatur-Gewichtung</label>
         <div class="slider-row">
           <input type="range" name="temp_weight" min="0" max="1" step="0.05" value="0.5"
                  oninput="document.getElementById('tw-val').textContent=this.value">
           <div class="slider-value" id="tw-val">0.5</div>
+        </div>
+        <div class="hint" style="margin-top:5px">
+          Steuert, wie stark Wetterwerte die Routenwahl beeinflussen.<br>
+          <strong>0</strong> = nur kürzeste Distanz zählt, Temperaturen werden ignoriert.<br>
+          <strong>0.5</strong> = ausgewogener Kompromiss zwischen Distanz und Wetter (empfohlen).<br>
+          <strong>1</strong> = nur Wetterqualität zählt, auch lange Umwege werden akzeptiert.<br>
+          Bewertet werden Tages- &amp; Nachttemperatur anhand deiner Zielwerte.
         </div>
       </div>
     </div>
@@ -530,7 +538,15 @@
 
     <!-- ══ GESPERRTE LÄNDER ══ -->
     <div class="card">
-      <div class="card-title">🚫 Gesperrte Länder</div>
+      <div class="card-title" style="justify-content:space-between">
+        <span>🚫 Gesperrte Länder</span>
+        <button type="button" id="btn-block-all" onclick="toggleBlockAll()"
+                style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:5px;
+                       border:1px solid var(--danger);background:#fef2f2;color:var(--danger);
+                       cursor:pointer;white-space:nowrap;transition:background .12s">
+          Alle sperren
+        </button>
+      </div>
 
       <div class="country-grid">
         <label><input type="checkbox" name="blocked_countries" value="RU"><span>Russia</span></label>
@@ -741,10 +757,10 @@
         '<button type="button" class="btn-icon" title="Nach unten" onclick="swapCity(this,1)">▼</button>' +
       '</div>' +
       '<input type="text" class="city-autocomplete" name="cities" placeholder="Stadtname…">' +
-      '<div class="rest-days-wrap" title="Pausentage in dieser Stadt">' +
-        '<span>+</span>' +
+      '<div class="rest-days-wrap" title="Anzahl Pausentage an dieser Stadt – der Algorithmus verweilt dort entsprechend viele Tage ohne weiterzureisen">' +
+        '<span>⏸</span>' +
         '<input type="number" name="city_rest_days" value="0" min="0" max="365">' +
-        '<span>Tage</span>' +
+        '<span>Tage Pause</span>' +
       '</div>' +
       '<button type="button" class="btn-icon danger" title="Entfernen" onclick="removeRow(this)">✕</button>';
     return row;
@@ -801,6 +817,14 @@
       '<button type="button" class="btn-icon danger" onclick="removeRow(this)">✕</button>';
     document.getElementById('countryInputs').appendChild(row);
     attachCountryAC(row.querySelector('input'));
+  }
+
+  /* ── Alle Länder sperren / entsperren ── */
+  function toggleBlockAll() {
+    const boxes = document.querySelectorAll('.country-grid input[type="checkbox"]');
+    const allChecked = Array.from(boxes).every(cb => cb.checked);
+    boxes.forEach(cb => { cb.checked = !allChecked; });
+    document.getElementById('btn-block-all').textContent = allChecked ? 'Alle sperren' : 'Alle entsperren';
   }
 
   /* ── Slider label: live-format with thousands separator ── */

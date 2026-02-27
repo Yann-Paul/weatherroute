@@ -3,6 +3,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Route Results</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -382,6 +383,56 @@
         }
         td.rest-day { background: rgba(234,179,8,0.04) !important; }
         td.rest-day .city-cell-inner { border-left-color: rgba(234,179,8,0.5) !important; }
+
+        /* ── Mobile responsive ───────────────────────────── */
+        @media (max-width: 640px) {
+            /* Header: wrap statt overflow */
+            .header {
+                padding: 12px 16px;
+                flex-wrap: wrap;
+                gap: 6px 12px;
+            }
+            .header h1 { font-size: 17px; width: 100%; }
+            .header .badge { font-size: 10px; }
+            .header .stat { margin-left: 0; font-size: 11px; }
+
+            /* Tabs: scrollbar statt überlaufen */
+            .tabs {
+                padding: 0 8px;
+                overflow-x: auto;
+                scrollbar-width: none;
+            }
+            .tabs::-webkit-scrollbar { display: none; }
+            .tab { padding: 10px 10px; font-size: 11px; white-space: nowrap; }
+
+            /* Karten-Panel */
+            #map-panel { padding: 10px 10px; }
+            #map-panel .map-wrap iframe,
+            #map-panel .map-wrap > div { height: 380px !important; }
+
+            /* Höhenprofil-Panel */
+            #elevation-panel { padding: 12px 10px; }
+            .elevation-header { flex-direction: column; gap: 6px; margin-bottom: 10px; }
+
+            /* Starttag-Tabelle: Controls */
+            .table-controls {
+                padding: 10px 12px;
+                gap: 8px;
+            }
+            .legend { margin-left: 0; }
+            .table-controls input[type=range] { width: 80px; }
+
+            /* Routenliste */
+            #list-panel { padding: 14px 14px; }
+            .route-city { font-size: 13px; }
+            .route-day  { font-size: 16px; }
+        }
+
+        @media (max-width: 400px) {
+            #map-panel .map-wrap iframe,
+            #map-panel .map-wrap > div { height: 300px !important; }
+            .tab { padding: 9px 8px; font-size: 10px; }
+        }
     </style>
 </head>
 <body>

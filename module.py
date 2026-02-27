@@ -2739,10 +2739,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function init() {
     var panel = document.createElement('div');
-    panel.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:95px;' +
+    panel.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:150px;' +
         'z-index:1000;pointer-events:none;background:rgba(10,14,22,0.82);' +
         'border-top:1px solid rgba(255,255,255,0.1);box-sizing:border-box;';
-    panel.innerHTML = '<svg id="mini-elev-svg" width="100%" height="95" style="display:block"></svg>';
+    panel.innerHTML = '<svg id="mini-elev-svg" width="100%" height="150" style="display:block"></svg>';
     _map.getContainer().style.position = 'relative';
     _map.getContainer().appendChild(panel);
     _map.on('moveend zoomend resize', updateChart);
@@ -2785,7 +2785,7 @@ function updateChart() {
                 document.querySelector('#mini-elev-svg').parentNode;
     var svg = document.querySelector('#mini-elev-svg');
     if (!svg || !_map) return;
-    var W = svg.parentNode.offsetWidth, H = 95;
+    var W = svg.parentNode.offsetWidth, H = 150;
     if (W < 50) return;
     var bounds = _map.getBounds();
     var vis = MINI_ELEV.filter(function(p) {
@@ -2802,7 +2802,7 @@ function updateChart() {
     var eMin = Math.max(0, Math.min.apply(null,eles)-80);
     var eMax = Math.max.apply(null,eles)+50;
     var eRange = eMax - eMin;
-    var PL=6, PR=6, PT=12, PB=14, cW=W-PL-PR, cH=H-PT-PB;
+    var PL=6, PR=6, PT=14, PB=16, cW=W-PL-PR, cH=H-PT-PB;
     function xp(km)  { return PL + (km-kmMin)/(kmMax-kmMin)*cW; }
     function yp(ele) { return PT + cH - (ele-eMin)/eRange*cH; }
 
