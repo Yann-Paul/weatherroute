@@ -568,7 +568,8 @@ const REST_DAYS_BY_REL = { {% for city_id, day, city_name, distance in route %}{
 
 /* ── Map iframe auto-sizing ─────────────────────── */
 function sizeMapIframe() {
-    if (window.innerWidth < 640) return; // mobile uses fixed CSS heights
+    const isMobile        = window.innerWidth < 640;
+    const isLandscapeMobile = !isMobile && window.innerHeight < 500;
     const panel  = document.getElementById('map-panel');
     if (!panel) return;
     // Folium produces TWO nested wrapper divs around the iframe.
@@ -577,12 +578,24 @@ function sizeMapIframe() {
     const foliumWrap = panel.querySelector('.map-wrap > div'); // outer wrapper
     const iframe     = panel.querySelector('.map-wrap iframe');
     if (!iframe) return;
+    const ELEV_H = isMobile ? 150 : (isLandscapeMobile ? 100 : 200);
+    if (isMobile) {
+        // Portrait mobile: map height is fixed by CSS; just pre-expand the outer
+        // wrapper so init() inside the iframe can show the elevation panel.
+        const mapH   = iframe.offsetHeight || (window.innerWidth <= 400 ? 250 : 310);
+        const totalH = mapH + ELEV_H;
+        if (foliumWrap) { foliumWrap.style.paddingBottom = '0'; foliumWrap.style.height = totalH + 'px'; }
+        iframe.style.height = mapH + 'px';
+        return;
+    }
     const headerH = (document.querySelector('.header') || {offsetHeight:0}).offsetHeight;
     const tabsH   = (document.querySelector('.tabs')   || {offsetHeight:0}).offsetHeight;
-    const panelPT = parseInt(getComputedStyle(panel).paddingTop) || 0;
-    const ELEV_H  = 200; // elevation panel added by iframe JS
-    const BUFFER  = 16;
-    const mapH  = Math.max(280, window.innerHeight - headerH - tabsH - panelPT - ELEV_H - BUFFER);
+    const cs      = getComputedStyle(panel);
+    const panelPT = parseInt(cs.paddingTop)    || 0;
+    const panelPB = parseInt(cs.paddingBottom) || 0;
+    const BUFFER  = 4;
+    const minMapH = isLandscapeMobile ? 150 : 280;
+    const mapH  = Math.max(minMapH, window.innerHeight - headerH - tabsH - panelPT - panelPB - ELEV_H - BUFFER);
     const totalH = mapH + ELEV_H; // outer wrapper must hold both
     if (foliumWrap) {
         foliumWrap.style.paddingBottom = '0';

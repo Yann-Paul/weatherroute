@@ -2739,24 +2739,40 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function init() {
     var isMobile = window.innerWidth < 640;
-    var panelH = isMobile ? 150 : 200;
+    var isLandscapeMobile = !isMobile && window.innerHeight < 500;
+    var panelH = isMobile ? 150 : (isLandscapeMobile ? 100 : 200);
     var panel = document.createElement('div');
     panel.innerHTML = '<svg id="mini-elev-svg" width="100%" height="' + panelH + '" style="display:block"></svg>';
     panel.style.cssText = 'width:100%;height:' + panelH + 'px;' +
         'background:rgba(10,14,22,0.95);' +
         'border-top:2px solid rgba(61,142,248,0.3);box-sizing:border-box;';
     document.body.style.margin = '0';
-    document.body.appendChild(panel);
+    var mapContainer = document.querySelector('.folium-map');
     try {
         if (window.frameElement) {
             var curH = window.frameElement.offsetHeight || parseInt(window.frameElement.style.height) || 0;
+            // Pin the map div to its current height BEFORE expanding the iframe.
+            // Without this, .folium-map { height:100% } would stretch to fill the
+            // larger iframe body, pushing the elevation panel out of view.
+            if (mapContainer && curH) { mapContainer.style.height = curH + 'px'; }
+            document.body.appendChild(panel);
             var newH = curH + panelH;
             window.frameElement.style.height = newH + 'px';
-            // Also fix the Folium outer wrapper div (padding-bottom:60% trick)
+            // Fix the Folium inner wrapper (position:relative div)
             var fw = window.frameElement.parentElement;
             if (fw) { fw.style.paddingBottom = '0'; fw.style.height = newH + 'px'; }
+            // Fix the Folium outer wrapper – needed on mobile where sizeMapIframe()
+            // doesn't run, so the outer wrapper stays at the fixed CSS height.
+            var outerFw = fw && fw.parentElement;
+            if (outerFw && outerFw.tagName === 'DIV') {
+                outerFw.style.paddingBottom = '0'; outerFw.style.height = newH + 'px';
+            }
+        } else {
+            document.body.appendChild(panel);
         }
-    } catch(e) {}
+    } catch(e) {
+        document.body.appendChild(panel);
+    }
     _map.on('moveend zoomend resize', updateChart);
     window.addEventListener('resize', updateChart);
     updateChart();
