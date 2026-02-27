@@ -306,6 +306,10 @@
         }
         .weather-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
         .weather-val { font-size: 10px; color: var(--text); width: 36px; text-align: right; flex-shrink: 0; }
+        .wind-block { flex-direction: column; align-items: flex-start; gap: 1px; margin-bottom: 3px; padding: 0; }
+        .wind-header { font-size: 10px; font-weight: 700; color: var(--text); }
+        .wind-line { font-size: 10px; color: var(--muted); padding-left: 4px; }
+        .wind-line.wind-weighted { font-style: italic; }
 
         .temp-chips { display: flex; gap: 4px; margin-bottom: 5px; }
         .chip { padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 500; border: 1px solid; }
@@ -604,14 +608,13 @@ function renderRestCell(td, stop, sd, relDay, offset) {
     div.appendChild(pb);
 
     if (w && w[0] != null) {
-        const tmin = w[0], tmax = w[1], prcp = w[2]??0, wspd = w[3]??0, wdir = w[4]??null;
+        const tmin = w[0], tmax = w[1], prcp = w[2]??0, wspd = w[3]??0, wdir = w[4]??null, wspdR = w[5]??null;
         const chips = document.createElement('div');
         chips.className = 'temp-chips';
         chips.innerHTML = `<span class="chip tmin">${tmin.toFixed(1)}°</span><span class="chip tmax">${tmax.toFixed(1)}°</span>`;
         div.appendChild(chips);
-        div.appendChild(makeBar('Regen', `${prcp.toFixed(1)}mm`, Math.min(prcp/15*100,100), '#3b82f6'));
-        const arrow = wdir != null ? windArrow(wdir) : '';
-        div.appendChild(makeBar('Wind', `${wspd.toFixed(1)} ${arrow}`, Math.min(wspd/50*100,100), '#a78bfa'));
+        div.appendChild(makeBar('Regen', `${prcp.toFixed(1)} mm`, Math.min(prcp/15*100,100), '#3b82f6'));
+        div.appendChild(makeWindBlock(wspd, wdir, wspdR));
     }
 
     const wrapper = document.createElement('div');
@@ -732,14 +735,13 @@ function rebuildTable() {
                 }
 
                 if (w && w[0] != null) {
-                    const tmin = w[0], tmax = w[1], prcp = w[2]??0, wspd = w[3]??0, wdir = w[4]??null;
+                    const tmin = w[0], tmax = w[1], prcp = w[2]??0, wspd = w[3]??0, wdir = w[4]??null, wspdR = w[5]??null;
                     const chips = document.createElement('div');
                     chips.className = 'temp-chips';
                     chips.innerHTML = `<span class="chip tmin">${tmin.toFixed(1)}°</span><span class="chip tmax">${tmax.toFixed(1)}°</span>`;
                     div.appendChild(chips);
-                    div.appendChild(makeBar('Regen', `${prcp.toFixed(1)}mm`, Math.min(prcp/15*100,100), '#3b82f6'));
-                    const arrow = wdir != null ? windArrow(wdir) : '';
-                    div.appendChild(makeBar('Wind', `${wspd.toFixed(1)} ${arrow}`, Math.min(wspd/50*100,100), '#a78bfa'));
+                    div.appendChild(makeBar('Regen', `${prcp.toFixed(1)} mm`, Math.min(prcp/15*100,100), '#3b82f6'));
+                    div.appendChild(makeWindBlock(wspd, wdir, wspdR));
                 } else {
                     const na = document.createElement('div');
                     na.style.cssText = 'font-size:10px;color:var(--muted);margin-top:4px;';
@@ -757,6 +759,26 @@ function rebuildTable() {
         tbody.appendChild(tr);
     }
     table.appendChild(tbody);
+}
+
+function compassDir(deg) {
+    const dirs = ['N','NNO','NO','ONO','O','OSO','SO','SSO','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+}
+
+function makeWindBlock(wspd, wdir, wspdR) {
+    const el = document.createElement('div');
+    el.className = 'weather-row wind-block';
+    let html = `<div class="wind-header">Wind</div>`;
+    html += `<div class="wind-line">${wspd.toFixed(1)} km/h</div>`;
+    if (wdir != null) {
+        html += `<div class="wind-line">${Math.round(wdir)}° ${compassDir(wdir)}</div>`;
+    }
+    if (wspdR != null) {
+        html += `<div class="wind-line wind-weighted">gewichtet: ${wspdR.toFixed(1)} km/h</div>`;
+    }
+    el.innerHTML = html;
+    return el;
 }
 
 function makeBar(label, valStr, pct, color) {

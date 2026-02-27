@@ -6,7 +6,7 @@ import folium
 import folium.plugins
 from datetime import datetime, timedelta
 import math
-from collections import deque
+from collections import deque, Counter
 import requests
 import polyline as polyline_codec
 from math import radians, sin, cos, sqrt, atan2, ceil
@@ -1051,6 +1051,73 @@ def preprocess_clusters(graph, target_cities, city_coords, temperatures, targets
     
     return cluster_info, city_to_cluster
 
+def check_route_feasibility(graph, target_cities, start_city, connections,
+                            blocked_countries, city_ids_by_country):
+    """
+    Fast pre-check on a copy of the graph (does not modify the global graph).
+    Returns a list of German human-readable error strings, empty if all OK.
+    """
+    # Work on a copy so we don't mutate the global graph
+    test_graph = graph.copy()
+    test_graph = remove_nodes_for_blocked_countries(
+        test_graph, blocked_countries, city_ids_by_country
+    )
+
+    # Collect all cities that must be reachable
+    all_cities = list(target_cities)
+    if start_city and start_city not in all_cities:
+        all_cities = [start_city] + all_cities
+    if connections:
+        for c1, c2 in connections:
+            if c1 not in all_cities:
+                all_cities.append(c1)
+            if c2 not in all_cities:
+                all_cities.append(c2)
+
+    issues = []
+
+    # 1. Which cities were removed by blocked-country filtering?
+    existing = []
+    for city_id in all_cities:
+        if city_id not in test_graph.nodes:
+            if city_id in graph.nodes:
+                name = graph.nodes[city_id].get('name', str(city_id))
+                issues.append(
+                    f'Stadt „{name}" liegt in einem gesperrten Land '
+                    f'und kann daher nicht besucht werden.'
+                )
+            else:
+                issues.append(
+                    f'Stadt (ID {city_id}) wurde nicht im Graphen gefunden.'
+                )
+        else:
+            existing.append(city_id)
+
+    if len(existing) < 2:
+        return issues  # Can't check connectivity with fewer than 2 cities
+
+    # 2. Connected-component check – find cities cut off from the others
+    comp_of = {node: cid
+               for cid, comp in enumerate(nx.connected_components(test_graph))
+               for node in comp}
+
+    city_comps = {c: comp_of[c] for c in existing if c in comp_of}
+    unique_comps = set(city_comps.values())
+
+    if len(unique_comps) > 1:
+        comp_count = Counter(city_comps.values())
+        main_comp  = comp_count.most_common(1)[0][0]
+        for city_id, comp in city_comps.items():
+            if comp != main_comp:
+                name = test_graph.nodes[city_id].get('name', str(city_id))
+                issues.append(
+                    f'Stadt „{name}" ist von den anderen Städten abgeschnitten '
+                    f'und kann nicht erreicht werden (kein Pfad im Straßengraphen).'
+                )
+
+    return issues
+
+
 def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatures, target_cities, start_city=None,
                       connections=None, start_day=None, low_temp_range=(float('-inf'), float('inf')),
                       high_temp_range=(float('-inf'), float('inf')), daily_max_km=100,
@@ -1067,6 +1134,9 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
 
     # Remove edges for blocked countries
     graph = remove_nodes_for_blocked_countries(graph, blocked_countries, city_ids_by_country)
+
+    # Failure-reason tracking (Counter of reason strings → most common = best diagnosis)
+    _fail_counter = Counter()
 
     # Initialize timing accumulators
     interpol_tt = 0.0
@@ -1102,7 +1172,9 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
             coords[city] = (node['lat'], node['lon'])
         except KeyError:
             print("city: " + str(city) + " not found in graph")
-            return None, float('inf')
+            reason = (f'Stadt (ID {city}) ist nicht im Graphen – '
+                      f'möglicherweise in einem gesperrten Land.')
+            return None, None, reason
 
     connections_dict = {}
     if connections:
@@ -1328,6 +1400,10 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                     total_shortest_path_time += time.time() - t0
                 except Exception as error:
                     print("an error occurred during nx.shortest_path:", str(error))
+                    _fail_counter[
+                        f'Keine Verbindung zwischen „{city_names[from_city]}" und '
+                        f'„{city_names[to_city]}" gefunden.'
+                    ] += 1
                     break
             else:
                 try:
@@ -1350,6 +1426,11 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                     total_shortest_path_time += time.time() - t0
                 except Exception as error:
                     print("an error occurred during optimized_travel_planner:", str(error))
+                    _fail_counter[
+                        f'Kein Weg von „{city_names[from_city]}" nach '
+                        f'„{city_names[to_city]}" gefunden – Städte möglicherweise '
+                        f'nicht verbunden oder Tagesstrecke zu kurz.'
+                    ] += 1
                     break
 
             for j in range(len(path_segment) - 1):
@@ -1383,6 +1464,10 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                             (min_high_temp <= temp_data[1] <= max_high_temp)):
                         valid = False
                         print("weather data out of bound", str(temp_data))
+                        _fail_counter[
+                            f'Temperatur in „{city_names[next_city]}" liegt außerhalb '
+                            f'des erlaubten Bereichs (Wert: {temp_data}).'
+                        ] += 1
                         break
 
                 try:
@@ -1394,6 +1479,10 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                 valid = False
                 print("Exceeded max days", str(total_days), "days out of", str(max_days),
                       "with route:", [city_names[city] for city, _, _, _ in full_route])
+                _fail_counter[
+                    f'Route benötigt {total_days} Tage, aber das Maximum ist {max_days}. '
+                    f'Erhöhe „Max. Reisetage" oder „Max. Tagesstrecke".'
+                ] += 1
                 break
 
             if not valid:
@@ -1411,6 +1500,12 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
             print(f"Valid route found with score: {full_score:.2f}, start day: {route_start_day}")
         elif not all([target in visited_targets for target in target_cities]):
             print("Not all targets visited in route:", [city_names[city] for city in candidate_order])
+            unvisited = [city_names[t] for t in target_cities if t not in visited_targets]
+            if unvisited:
+                _fail_counter[
+                    f'Folgende Städte konnten nicht eingebunden werden: '
+                    f'{", ".join(unvisited)}.'
+                ] += 1
 
     all_evaluated_routes.sort(key=lambda x: x[0])
 
@@ -1507,18 +1602,27 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
         best_start_day = None
 
     # Timing summary
-    print(f"Best score: {best_score:.2f}")
+    print(f"Best score: {best_score:.2f}" if best_full_route else "No route found")
     print(f"Best start day: {best_start_day if best_full_route else None}")
     print(f"Total time for advanced preroute:          {total_advanced_preroute_time:.2f}s")
     print(f"Total time for get_interpolated_temperature: {interpol_tt:.2f}s")
     print(f"Total time for spatial temperature interp:   {spatial_i_tt:.2f}s")
     print(f"Total time for shortest path calls:          {total_shortest_path_time:.2f}s")
 
-    return best_full_route, best_start_day if best_full_route else (None, None)
+    if best_full_route:
+        return best_full_route, best_start_day, None
+    else:
+        # Pick the most frequently occurring failure reason as the diagnosis
+        if _fail_counter:
+            fail_reason = _fail_counter.most_common(1)[0][0]
+        else:
+            fail_reason = ('Kein gültiger Routenverlauf gefunden. '
+                           'Überprüfe Städte, Temperaturgrenzen und Reiselimits.')
+        return None, None, fail_reason
 
 
 
-def get_osrm_route(route_locations, skip_segments=None, routing_mode='car'):
+def get_osrm_route(route_locations, skip_segments=None, routing_mode='car', progress_callback=None):
     """
     Fetch road geometry for each city-to-city segment.
     routing_mode: 'car'            – OSRM driving (default)
@@ -1589,11 +1693,15 @@ def get_osrm_route(route_locations, skip_segments=None, routing_mode='car'):
             road_chunks.append(decoded)
             seg_done += 1
             print(f"  Segment {seg_done}/{n_segs} — {len(decoded)} Punkte", flush=True)
+            if progress_callback:
+                progress_callback(seg_done, n_segs)
 
         except Exception as e:
             print(f"  Segment {i+1} fehlgeschlagen ({routing_mode}): {e}", flush=True)
             road_chunks.append([start, end])
             seg_done += 1
+            if progress_callback:
+                progress_callback(seg_done, n_segs)
 
     print(f"[Routing] Fertig — {len(road_chunks)} Chunks gesamt", flush=True)
     return road_chunks
@@ -1895,7 +2003,7 @@ def build_elevation_svg(elev_data, desired_low_temp=12.0, desired_high_temp=25.0
             d -= nd
         return '31. Dez'
 
-    def render_panels(temp_key, desired_temp):
+    def render_panels(temp_key, desired_temp, panel_label):
         """Build all SVG panel strings for one temperature type (tmin or tmax)."""
         svgs = []
         for seg_idx in range(n_segs):
@@ -2069,6 +2177,10 @@ def build_elevation_svg(elev_data, desired_low_temp=12.0, desired_high_temp=25.0
                 f'<stop offset="83.3%" stop-color="rgb(210,0,0)"/>'
                 f'<stop offset="100%"  stop-color="rgb(215,90,225)"/>'
                 f'</linearGradient></defs>'
+                # panel label (e.g. "Tagestemperatur")
+                f'<text x="{leg_x}" y="{leg_y-18}" font-size="9.5" '
+                f'font-family="sans-serif" fill="#4a6fa5" font-weight="700">'
+                f'{panel_label}</text>'
                 # bar
                 f'<rect x="{leg_x}" y="{leg_y}" width="{leg_w}" height="{leg_h}" '
                 f'fill="url(#tg-{uid})" rx="3" stroke="#b0b8c8" stroke-width="0.8"/>'
@@ -2152,8 +2264,8 @@ def build_elevation_svg(elev_data, desired_low_temp=12.0, desired_high_temp=25.0
             )
         return "\n".join(svgs)
 
-    tmax_html = render_panels("tmax", desired_high_temp)
-    tmin_html = render_panels("tmin", desired_low_temp)
+    tmax_html = render_panels("tmax", desired_high_temp, "Tagestemperatur")
+    tmin_html = render_panels("tmin", desired_low_temp, "Nachttemperatur")
 
     # ── Build slider + JS data for ±30-day temperature preview ───────────
     slider_css  = ''
@@ -2299,9 +2411,9 @@ def build_elevation_svg(elev_data, desired_low_temp=12.0, desired_high_temp=25.0
         '<div class="et-wrap">'
         '<div class="et-tabs">'
         f'<button class="et-btn active" onclick="showET(this,\'et-tmax\')">'
-        f'Tmax &mdash; Ziel {desired_high_temp:.0f}\u00b0C</button>'
+        f'Tagestemperatur &mdash; Ziel {desired_high_temp:.0f}\u00b0C</button>'
         f'<button class="et-btn" onclick="showET(this,\'et-tmin\')">'
-        f'Tmin &mdash; Ziel {desired_low_temp:.0f}\u00b0C</button>'
+        f'Nachttemperatur &mdash; Ziel {desired_low_temp:.0f}\u00b0C</button>'
         '</div>'
         f'{slider_html}'
         f'<div id="et-tmax" class="et-panel">{tmax_html}</div>'
@@ -2555,10 +2667,16 @@ def build_combined_elevation_profile(sub_route_data, max_elev_points=None, point
             "city_data": combined_city_data}
 
 
+_COMPASS_DIRS = ['N','NNO','NO','ONO','O','OSO','SO','SSO','S','SSW','SW','WSW','W','WNW','NW','NNW']
+
+def _compass_dir(deg):
+    return _COMPASS_DIRS[int((((deg % 360) + 360) % 360 + 11.25) / 22.5) % 16]
+
+
 def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_high_temp,
                      min_low_temp, max_low_temp, min_high_temp, max_high_temp,
                      connections=None, show_elevation=True, routing_mode='car',
-                     elev_points_per_1000km=1000):
+                     elev_points_per_1000km=1000, progress_callback=None):
     """
     Create Folium map with elevation profile.
     Returns: (folium_map, elevation_svg, osrm_distances_km)
@@ -2627,7 +2745,7 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
                 temp_bars_html += f"""
                 <div style="margin:8px 0">
                   <div style="font-size:11px;margin-bottom:3px">
-                    <b>tmin:</b> {tmin:.1f}°C (Ziel: {desired_low_temp:.1f}°C)</div>
+                    <b>Nachttemperatur:</b> {tmin:.1f}°C (Ziel: {desired_low_temp:.1f}°C)</div>
                   <div style="position:relative;width:100%;height:20px;
                        background:linear-gradient(to right,#3498DB,#95A5A6,#E74C3C);
                        border-radius:3px">
@@ -2640,16 +2758,16 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
                   </div>
                 </div>"""
             elif tmin is not None:
-                temp_bars_html += f'<div style="margin:8px 0"><b>tmin:</b> {tmin:.1f}°C</div>'
+                temp_bars_html += f'<div style="margin:8px 0"><b>Nachttemperatur:</b> {tmin:.1f}°C</div>'
             else:
-                temp_bars_html += '<div style="margin:8px 0"><b>tmin:</b> N/A</div>'
+                temp_bars_html += '<div style="margin:8px 0"><b>Nachttemperatur:</b> N/A</div>'
             
             if tmax is not None and desired_high_temp is not None:
                 pos = max(0, min(100, ((tmax - (desired_high_temp - 20)) / 40) * 100))
                 temp_bars_html += f"""
                 <div style="margin:8px 0">
                   <div style="font-size:11px;margin-bottom:3px">
-                    <b>tmax:</b> {tmax:.1f}°C (Ziel: {desired_high_temp:.1f}°C)</div>
+                    <b>Tagestemperatur:</b> {tmax:.1f}°C (Ziel: {desired_high_temp:.1f}°C)</div>
                   <div style="position:relative;width:100%;height:20px;
                        background:linear-gradient(to right,#3498DB,#F39C12,#E74C3C);
                        border-radius:3px">
@@ -2662,15 +2780,26 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
                   </div>
                 </div>"""
             elif tmax is not None:
-                temp_bars_html += f'<div style="margin:8px 0"><b>tmax:</b> {tmax:.1f}°C</div>'
+                temp_bars_html += f'<div style="margin:8px 0"><b>Tagestemperatur:</b> {tmax:.1f}°C</div>'
             else:
-                temp_bars_html += '<div style="margin:8px 0"><b>tmax:</b> N/A</div>'
+                temp_bars_html += '<div style="margin:8px 0"><b>Tagestemperatur:</b> N/A</div>'
             
-            other_weather_info = "".join(
-                f"<br>{weather_params[i]}: {temps[i]:.1f}" if temps[i] is not None
-                else f"<br>{weather_params[i]}: N/A"
-                for i in range(2, 6)
-            )
+            prcp_v  = temps[2]
+            wspd_v  = temps[3]
+            wdir_v  = temps[4]
+            wspdR_v = temps[5]
+            rain_html = (f"<br><b>Regen:</b> {prcp_v:.1f} mm" if prcp_v is not None
+                         else "<br><b>Regen:</b> N/A")
+            wind_lines = []
+            if wspd_v is not None:
+                wind_lines.append(f"{wspd_v:.1f} km/h")
+            if wdir_v is not None:
+                wind_lines.append(f"{wdir_v:.0f}° {_compass_dir(wdir_v)}")
+            if wspdR_v is not None:
+                wind_lines.append(f"<i>gewichtet: {wspdR_v:.1f} km/h</i>")
+            wind_html = ("<br><b>Wind:</b><br>&nbsp;&nbsp;" + "<br>&nbsp;&nbsp;".join(wind_lines)
+                         if wind_lines else "")
+            other_weather_info = rain_html + wind_html
             
             date_str = (datetime(2024, 1, 1) + timedelta(days=day - 1)).strftime("%b %d")
             popup = f"""
@@ -2721,7 +2850,8 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
     all_sub_chunks = []
     for start, end in sub_routes:
         all_sub_chunks.append(get_osrm_route(
-            route_locations[start:end + 1], routing_mode=routing_mode
+            route_locations[start:end + 1], routing_mode=routing_mode,
+            progress_callback=progress_callback
         ))
 
     # Road distances — direct_segments stay 0.0
@@ -2808,20 +2938,27 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
             }
         }, 100);
         function updateSizes(zoom) {
-            var s = Math.pow(1.4, zoom - 5);
-            document.querySelectorAll('.wind-arrow').forEach(function(el) {
-                var sz = 30*s; el.style.width=sz+'px'; el.style.height=sz+'px';
-                el.style.marginLeft=-(sz/2)+'px'; el.style.marginTop=-(sz/2)+'px';
-            });
-            document.querySelectorAll('.day-marker').forEach(function(el) {
-                var sz=35*s; el.style.width=sz+'px'; el.style.height=sz+'px';
-                el.style.fontSize=(14*s)+'px'; el.style.borderWidth=(3*s)+'px';
-            });
+            // Minimal scaling, capped at 2× base size
+            var s = Math.min(2.0, Math.pow(1.15, zoom - 5));
+
+            // Month labels
             document.querySelectorAll('.month-label').forEach(function(el) {
                 el.style.fontSize=(11*s)+'px';
                 el.style.padding=(4*s)+'px '+(10*s)+'px';
                 el.style.minWidth=(40*s)+'px'; el.style.borderWidth=(2*s)+'px';
                 el.style.borderRadius=(6*s)+'px';
+            });
+
+            // City day-marker pins – grow from bottom-center (pin tip = map point)
+            document.querySelectorAll('.day-marker-wrap').forEach(function(el) {
+                el.style.transform = 'scale('+s+')';
+                el.style.transformOrigin = '50% 100%';
+            });
+
+            // Wind arrows – grow from bottom-left (near city marker)
+            document.querySelectorAll('.wind-arrow').forEach(function(el) {
+                el.style.transform = 'scale('+s+')';
+                el.style.transformOrigin = '0% 100%';
             });
         }
     });
@@ -2829,46 +2966,106 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
     m.get_root().html.add_child(folium.Element(zoom_script))
     
     # Add markers
-    for (lat, lon), popup, rel_day, (wdir, wspd), ns in zip(
-            route_locations, popups, relative_days, wind_data, temp_scores):
-        
+    for idx, ((lat, lon), popup, rel_day, (wdir, wspd), ns) in enumerate(zip(
+            route_locations, popups, relative_days, wind_data, temp_scores)):
+
         if ns < 0.5:
             r = int(ns * 2 * 255); g = 200; b = 50
         else:
             r = 255; g = int((1 - (ns - 0.5) * 2) * 200); b = 50
-        
+
+        # ── Day marker: small pin with tail ──────────────────────────────
         folium.Marker(
             location=[lat, lon],
             popup=folium.Popup(popup, max_width=300),
-            icon=folium.DivIcon(html=f'''
-                <div class="day-marker" style="
-                    background-color:rgb({r},{g},{b});border:3px solid white;
-                    border-radius:50%;width:35px;height:35px;display:flex;
-                    align-items:center;justify-content:center;font-weight:bold;
-                    color:white;font-size:14px;box-shadow:0 2px 5px rgba(0,0,0,0.3);
-                    z-index:1000;transition:all 0.3s ease">{rel_day}</div>''')
+            icon=folium.DivIcon(
+                html=f'''
+                <div class="day-marker-wrap" style="display:flex;flex-direction:column;align-items:center;">
+                  <div class="day-marker" style="
+                      background-color:rgb({r},{g},{b});border:2px solid white;
+                      border-radius:50%;width:26px;height:26px;display:flex;
+                      align-items:center;justify-content:center;font-weight:700;
+                      color:white;font-size:10px;
+                      box-shadow:0 2px 6px rgba(0,0,0,0.45);z-index:1000">{rel_day}</div>
+                  <div class="day-marker-pin" style="
+                      width:0;height:0;
+                      border-left:5px solid transparent;
+                      border-right:5px solid transparent;
+                      border-top:8px solid rgb({r},{g},{b})"></div>
+                </div>''',
+                icon_size=(26, 34),
+                icon_anchor=(13, 34),
+            )
         ).add_to(m)
-        
+
+        # ── Wind arrow: direction + strength ─────────────────────────────
         if wdir is not None and wspd is not None:
-            rotation = (270 - wdir) % 360
+            # meteorological convention: wind FROM wdir → arrow points TO wdir+180
+            rotation = (wdir + 180) % 360
+
+            # Color by speed (m/s)
+            if   wspd < 3:  wc = '#74b9ff'  # calm  – light blue
+            elif wspd < 7:  wc = '#2ecc71'  # light – green
+            elif wspd < 12: wc = '#f1c40f'  # mod.  – yellow
+            elif wspd < 18: wc = '#e67e22'  # strong – orange
+            else:           wc = '#e74c3c'  # storm  – red
+
+            # Number of arrows indicates wind strength
+            n_arrows = 1
+            if wspd >= 3:  n_arrows = 2
+            if wspd >= 7:  n_arrows = 3
+            if wspd >= 12: n_arrows = 4
+
+            aw = 14   # per-arrow horizontal slot (px) – wide enough for a clear head
+            gap = 4   # gap between arrows (px)
+            svg_w = n_arrows * aw + (n_arrows - 1) * gap
+            svg_h = 30
+            cx_svg = svg_w / 2
+            cy_svg = svg_h / 2
+
+            arrows_path = ''
+            for ai in range(n_arrows):
+                cx = ai * (aw + gap) + aw // 2
+                # Head: wide triangle, tip at y=3, base at y=14 (±6 px)
+                # Shaft: rect 4 px wide, from y=14 to y=27
+                arrows_path += (
+                    f'<polygon points="{cx},3 {cx-6},14 {cx+6},14"'
+                    f' fill="{wc}" filter="url(#wf{idx})"/>'
+                    f'<rect x="{cx-2}" y="14" width="4" height="13" rx="1"'
+                    f' fill="{wc}" filter="url(#wf{idx})"/>'
+                )
+
             folium.Marker(
                 location=[lat, lon],
                 icon=folium.DivIcon(html=f'''
                     <div class="wind-arrow" style="
-                        position:relative;width:30px;height:30px;
-                        transform:rotate({rotation}deg);transform-origin:center;
-                        margin-left:-15px;margin-top:-15px;
-                        transition:all 0.3s ease;z-index:999">
-                      <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2L12 20M12 20L5 13M12 20L19 13"
-                              stroke="#2ECC71" stroke-width="2.5"
-                              stroke-linecap="round" stroke-linejoin="round"
-                              filter="url(#shadow)"/>
-                        <defs><filter id="shadow">
-                          <feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.5"/>
-                        </filter></defs>
+                        z-index:999;margin-left:5px;margin-top:-30px;
+                        display:inline-flex;flex-direction:column;
+                        align-items:center;gap:2px">
+                      <!-- Speed label at top = further from city = at arrow tip side -->
+                      <div style="font-size:11px;font-weight:700;color:{wc};
+                           background:rgba(10,20,30,0.82);border-radius:4px;
+                           padding:1px 5px;white-space:nowrap;line-height:1.5">
+                        {wspd:.0f}\u202fkm/h
+                      </div>
+                      <!-- Arrows rotate inside SVG; container stays upright -->
+                      <svg width="{svg_w}" height="{svg_h}"
+                           viewBox="0 0 {svg_w} {svg_h}" fill="none"
+                           overflow="visible"
+                           style="transform:rotate({rotation}deg);
+                                  transform-origin:{cx_svg}px {cy_svg}px">
+                        <defs>
+                          <filter id="wf{idx}" x="-50%" y="-50%" width="200%" height="200%">
+                            <feDropShadow dx="0" dy="0" stdDeviation="1.2"
+                                          flood-color="black" flood-opacity="0.75"/>
+                          </filter>
+                        </defs>
+                        {arrows_path}
                       </svg>
-                    </div>''')
+                    </div>''',
+                    icon_size=(svg_w + 20, 52),
+                    icon_anchor=(0, 52),
+                )
             ).add_to(m)
     
     # Month labels
@@ -2928,4 +3125,455 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
     return m, elevation_svg, osrm_distances_km
 
 
+def create_loading_route_map(graph, temperatures, route, exp, desired_low_temp, desired_high_temp,
+                    min_low_temp, max_low_temp, min_high_temp, max_high_temp):
+    """
+    Returns compact JSON-serializable city data for the loading page map.
+    {"cities": [{lat, lon, name, rel_day, day, color, tmin, tmax}, ...], "center": [lat, lon]}
+    """
+    start_day = route[0][1] if route else 0
+
+    all_temps_data = []
+    for city_id, day, city_name, distance in route:
+        try:
+            graph.nodes[city_id]  # ensure node exists
+            temps = get_interpolated_weather(city_id, day, temperatures)
+            temp_score, _ = calculate_temperature_score(
+                temps, exp, desired_low_temp, desired_high_temp,
+                min_low_temp, max_low_temp, min_high_temp, max_high_temp
+            )
+            all_temps_data.append((city_id, day, city_name, temps, temp_score))
+        except KeyError:
+            continue
+
+    if not all_temps_data:
+        return None
+
+    scores = [d[4] for d in all_temps_data]
+    mn, mx = min(scores), max(scores)
+    rng = mx - mn if mx > mn else 1
+
+    cities = []
+    for city_id, day, city_name, temps, temp_score in all_temps_data:
+        try:
+            nd = graph.nodes[city_id]
+            lat, lon = float(nd['lat']), float(nd['lon'])
+            ns = (temp_score - mn) / rng
+            if ns < 0.5:
+                r = int(ns * 2 * 255); g = 200; b = 50
+            else:
+                r = 255; g = int((1 - (ns - 0.5) * 2) * 200); b = 50
+            cities.append({
+                "lat": lat, "lon": lon, "name": city_name,
+                "rel_day": day - start_day, "day": day,
+                "color": f"rgb({r},{g},{b})",
+                "tmin": round(float(temps[0]), 1) if temps[0] is not None else None,
+                "tmax": round(float(temps[1]), 1) if temps[1] is not None else None,
+            })
+        except KeyError:
+            continue
+
+    if not cities:
+        return None
+
+    center_lat = sum(c["lat"] for c in cities) / len(cities)
+    center_lon = sum(c["lon"] for c in cities) / len(cities)
+    return {"cities": cities, "center": [center_lat, center_lon]}
+
+
+# Legacy full-map version (kept for reference, not used by app.py)
+def _create_loading_route_map_legacy(graph, temperatures, route, exp, desired_low_temp, desired_high_temp,
+                    min_low_temp, max_low_temp, min_high_temp, max_high_temp):
+    """Create Folium map with route markers showing dates and temperatures"""
+    route_locations = []
+    popups = []
+    relative_days = []
+    wind_data = []
+    temp_scores = []
+    weather_params = ['tmin', 'tmax', 'prcp', 'wspd', 'wdir', 'wspd_resultant']
+    
+    # Get start day from first city
+    start_day = route[0][1] if route else 0
+    
+    # First pass: collect all temperature scores for normalization
+    all_temps_data = []
+    for city_id, day, city_name, distance in route:
+        try:
+            node_data = graph.nodes[city_id]
+            temps = get_interpolated_weather(city_id, day, temperatures)
+            temp_score, violated = calculate_temperature_score(
+                temps, exp, desired_low_temp, desired_high_temp,
+                min_low_temp, max_low_temp, min_high_temp, max_high_temp
+            )
+            all_temps_data.append((city_id, day, city_name, distance, temps, temp_score, violated))
+        except KeyError:
+            continue
+    
+    if not all_temps_data:
+        return None
+    
+    # Normalize temperature scores to 0-1 range
+    scores_only = [data[5] for data in all_temps_data]
+    min_score = min(scores_only)
+    max_score = max(scores_only)
+    score_range = max_score - min_score if max_score > min_score else 1
+    
+    # Second pass: create markers with normalized colors
+    for city_id, day, city_name, distance, temps, temp_score, violated in all_temps_data:
+        try:
+            node_data = graph.nodes[city_id]
+            lat = node_data['lat']
+            lon = node_data['lon']
+            route_locations.append((lat, lon))
+            
+            # Calculate relative day
+            rel_day = day - start_day
+            relative_days.append(rel_day)
+            
+            # Normalize score (0 = best/green, 1 = worst/red)
+            normalized_score = (temp_score - min_score) / score_range
+            temp_scores.append(normalized_score)
+            
+            # Calculate color based on normalized score (green -> yellow -> red)
+            if normalized_score < 0.5:
+                # Green to Yellow
+                r = int(normalized_score * 2 * 255)
+                g = 200
+                b = 50
+            else:
+                # Yellow to Red
+                r = 255
+                g = int((1 - (normalized_score - 0.5) * 2) * 200)
+                b = 50
+            
+            marker_color = f"rgb({r}, {g}, {b})"
+            
+            # Store wind data
+            wdir = temps[4] if temps[4] is not None else None
+            wspd_resultant = temps[5] if temps[5] is not None else None
+            wind_data.append((wdir, wspd_resultant))
+            
+            # Create temperature bars for tmin and tmax
+            tmin = temps[0] if temps[0] is not None else None
+            tmax = temps[1] if temps[1] is not None else None
+            
+            temp_bars_html = ""
+            
+            # Temperature bar for tmin
+            if tmin is not None and desired_low_temp is not None:
+                # Calculate position and deviation
+                tmin_deviation = tmin - desired_low_temp
+                tmin_bar_color = "#3498DB" if abs(tmin_deviation) < 5 else "#E74C3C"
+                
+                # Scale for bar (range: desired_low_temp ± 20°C)
+                bar_range = 40
+                tmin_position = ((tmin - (desired_low_temp - 20)) / bar_range) * 100
+                tmin_position = max(0, min(100, tmin_position))
+                desired_low_position = 50  # Center at desired temp
+                
+                temp_bars_html += f"""
+                <div style="margin: 8px 0;">
+                    <div style="font-size: 11px; margin-bottom: 3px;"><b>Nachttemperatur:</b> {tmin:.1f}°C (Ziel: {desired_low_temp:.1f}°C)</div>
+                    <div style="position: relative; width: 100%; height: 20px; background: linear-gradient(to right, #3498DB, #95A5A6, #E74C3C); border-radius: 3px;">
+                        <div style="position: absolute; left: {desired_low_position}%; top: 0; width: 2px; height: 100%; background: white; z-index: 2;"></div>
+                        <div style="position: absolute; left: {tmin_position}%; top: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; background: black; border: 2px solid white; border-radius: 50%; z-index: 3;"></div>
+                    </div>
+                </div>
+                """
+            elif tmin is not None:
+                temp_bars_html += f"""<div style="margin: 8px 0;"><b>Nachttemperatur:</b> {tmin:.1f}°C</div>"""
+            else:
+                temp_bars_html += f"""<div style="margin: 8px 0;"><b>Nachttemperatur:</b> N/A</div>"""
+            
+            # Temperature bar for tmax
+            if tmax is not None and desired_high_temp is not None:
+                tmax_deviation = tmax - desired_high_temp
+                tmax_bar_color = "#E67E22" if abs(tmax_deviation) < 5 else "#E74C3C"
+                
+                # Scale for bar (range: desired_high_temp ± 20°C)
+                bar_range = 40
+                tmax_position = ((tmax - (desired_high_temp - 20)) / bar_range) * 100
+                tmax_position = max(0, min(100, tmax_position))
+                desired_high_position = 50  # Center at desired temp
+                
+                temp_bars_html += f"""
+                <div style="margin: 8px 0;">
+                    <div style="font-size: 11px; margin-bottom: 3px;"><b>Tagestemperatur:</b> {tmax:.1f}°C (Ziel: {desired_high_temp:.1f}°C)</div>
+                    <div style="position: relative; width: 100%; height: 20px; background: linear-gradient(to right, #3498DB, #F39C12, #E74C3C); border-radius: 3px;">
+                        <div style="position: absolute; left: {desired_high_position}%; top: 0; width: 2px; height: 100%; background: white; z-index: 2;"></div>
+                        <div style="position: absolute; left: {tmax_position}%; top: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; background: black; border: 2px solid white; border-radius: 50%; z-index: 3;"></div>
+                    </div>
+                </div>
+                """
+            elif tmax is not None:
+                temp_bars_html += f"""<div style="margin: 8px 0;"><b>Tagestemperatur:</b> {tmax:.1f}°C</div>"""
+            else:
+                temp_bars_html += f"""<div style="margin: 8px 0;"><b>Tagestemperatur:</b> N/A</div>"""
+            
+            # Build remaining weather info string
+            prcp_v  = temps[2]
+            wspd_v  = temps[3]
+            wdir_v  = temps[4]
+            wspdR_v = temps[5]
+            rain_html = (f"<br><b>Regen:</b> {prcp_v:.1f} mm" if prcp_v is not None
+                         else "<br><b>Regen:</b> N/A")
+            wind_lines = []
+            if wspd_v is not None:
+                wind_lines.append(f"{wspd_v:.1f} km/h")
+            if wdir_v is not None:
+                wind_lines.append(f"{wdir_v:.0f}° {_compass_dir(wdir_v)}")
+            if wspdR_v is not None:
+                wind_lines.append(f"<i>gewichtet: {wspdR_v:.1f} km/h</i>")
+            wind_html = ("<br><b>Wind:</b><br>&nbsp;&nbsp;" + "<br>&nbsp;&nbsp;".join(wind_lines)
+                         if wind_lines else "")
+            other_weather_info = rain_html + wind_html
+            
+            date_str = (datetime(2024, 1, 1) + timedelta(days=day-1)).strftime("%b %d")
+            popup = f"""
+            <div style="font-family: Arial, sans-serif; min-width: 200px;">
+                <b>Stadt:</b> {city_name}<br>
+                <b>Datum:</b> {date_str}<br>
+                <b>Tag:</b> {rel_day}<br>
+                <b>Temp-Score:</b> {temp_score:.2f} (norm: {normalized_score:.2f})
+                <hr style="margin: 8px 0;">
+                {temp_bars_html}
+                <hr style="margin: 8px 0;">
+                {other_weather_info}
+            </div>
+            """
+            popups.append(popup)
+            
+        except KeyError:
+            continue
+
+    if not route_locations:
+        return None
+
+    # Create map
+    center_lat = sum(coord[0] for coord in route_locations) / len(route_locations)
+    center_lon = sum(coord[1] for coord in route_locations) / len(route_locations)
+    m = folium.Map(location=[center_lat, center_lon], zoom_start=5)
+
+    # Add custom CSS and JavaScript for zoom-dependent sizing
+    zoom_script = """
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var map = null;
+        
+        // Find the map object
+        var checkMap = setInterval(function() {
+            var mapDiv = document.querySelector('.folium-map');
+            if (mapDiv && mapDiv._leaflet_id) {
+                map = mapDiv;
+                clearInterval(checkMap);
+                
+                // Get all Leaflet maps
+                for (var id in window) {
+                    if (id.startsWith('map_')) {
+                        var leafletMap = window[id];
+                        if (leafletMap && leafletMap.on) {
+                            updateSizes(leafletMap.getZoom());
+                            leafletMap.on('zoomend', function() {
+                                updateSizes(leafletMap.getZoom());
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+        }, 100);
+        
+        function updateSizes(zoom) {
+            // Scale factor based on zoom level (exponential scaling)
+            var scaleFactor = Math.pow(1.4, zoom - 5);
+            
+            // Update arrow sizes
+            var arrowBaseSize = 30;
+            var arrowSize = arrowBaseSize * scaleFactor;
+            var arrows = document.querySelectorAll('.wind-arrow');
+            arrows.forEach(function(arrow) {
+                arrow.style.width = arrowSize + 'px';
+                arrow.style.height = arrowSize + 'px';
+                arrow.style.marginLeft = -(arrowSize/2) + 'px';
+                arrow.style.marginTop = -(arrowSize/2) + 'px';
+            });
+            
+            // Update day marker sizes
+            var markerBaseSize = 35;
+            var markerSize = markerBaseSize * scaleFactor;
+            var fontSize = 14 * scaleFactor;
+            var borderWidth = 3 * scaleFactor;
+            
+            var dayMarkers = document.querySelectorAll('.day-marker');
+            dayMarkers.forEach(function(marker) {
+                marker.style.width = markerSize + 'px';
+                marker.style.height = markerSize + 'px';
+                marker.style.fontSize = fontSize + 'px';
+                marker.style.borderWidth = borderWidth + 'px';
+            });
+            
+            // Update month label sizes
+            var monthFontSize = 11 * scaleFactor;
+            var monthPaddingVertical = 4 * scaleFactor;
+            var monthPaddingHorizontal = 10 * scaleFactor;
+            var monthMinWidth = 40 * scaleFactor;
+            var monthBorderWidth = 2 * scaleFactor;
+            var monthBorderRadius = 6 * scaleFactor;
+            
+            var monthLabels = document.querySelectorAll('.month-label');
+            monthLabels.forEach(function(label) {
+                label.style.fontSize = monthFontSize + 'px';
+                label.style.padding = monthPaddingVertical + 'px ' + monthPaddingHorizontal + 'px';
+                label.style.minWidth = monthMinWidth + 'px';
+                label.style.borderWidth = monthBorderWidth + 'px';
+                label.style.borderRadius = monthBorderRadius + 'px';
+            });
+        }
+    });
+    </script>
+    """
+    m.get_root().html.add_child(folium.Element(zoom_script))
+
+    # Add markers with popups, relative days, and color-coded backgrounds
+    for i, ((lat, lon), popup, rel_day, (wdir, wspd), norm_score) in enumerate(zip(route_locations, popups, relative_days, wind_data, temp_scores)):
+        # Calculate color based on normalized score
+        if norm_score < 0.5:
+            r = int(norm_score * 2 * 255)
+            g = 200
+            b = 50
+        else:
+            r = 255
+            g = int((1 - (norm_score - 0.5) * 2) * 200)
+            b = 50
+        
+        marker_color = f"rgb({r}, {g}, {b})"
+        
+        # Add day marker with dynamic color
+        folium.Marker(
+            location=[lat, lon],
+            popup=folium.Popup(popup, max_width=300),
+            icon=folium.DivIcon(html=f'''
+                <div class="day-marker" style="
+                    background-color: {marker_color};
+                    border: 3px solid white;
+                    border-radius: 50%;
+                    width: 35px;
+                    height: 35px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    color: white;
+                    font-size: 14px;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                    z-index: 1000;
+                    transition: all 0.3s ease;
+                ">{rel_day}</div>
+            ''')
+        ).add_to(m)
+        
+        # Add wind arrow if wind data is available
+        if wdir is not None and wspd is not None:
+            rotation = (270 - wdir) % 360
+            
+            folium.Marker(
+                location=[lat, lon],
+                icon=folium.DivIcon(html=f'''
+                    <div class="wind-arrow" style="
+                        position: relative;
+                        width: 30px;
+                        height: 30px;
+                        transform: rotate({rotation}deg);
+                        transform-origin: center;
+                        margin-left: -15px;
+                        margin-top: -15px;
+                        transition: all 0.3s ease;
+                        z-index: 999;
+                    ">
+                        <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L12 20M12 20L5 13M12 20L19 13" 
+                                  stroke="#2ECC71" 
+                                  stroke-width="2.5" 
+                                  stroke-linecap="round" 
+                                  stroke-linejoin="round"
+                                  filter="url(#shadow)"/>
+                            <defs>
+                                <filter id="shadow">
+                                    <feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.5"/>
+                                </filter>
+                            </defs>
+                        </svg>
+                    </div>
+                ''')
+            ).add_to(m)
+
+    # Add month change markers
+    month_names = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+    
+    for i in range(len(route) - 1):
+        city_id1, day1, city_name1, distance1 = route[i]
+        city_id2, day2, city_name2, distance2 = route[i + 1]
+        
+        date1 = datetime(2024, 1, 1) + timedelta(days=day1-1)
+        date2 = datetime(2024, 1, 1) + timedelta(days=day2-1)
+        month1 = date1.month
+        month2 = date2.month
+        
+        if month1 != month2:
+            days_in_month = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+            cumulative_days = sum(days_in_month[:month2-1]) + 1
+            
+            if day2 > day1:
+                t = (cumulative_days - day1) / (day2 - day1)
+                t = max(0, min(1, t))
+            else:
+                t = 0.5
+            
+            lat1, lon1 = route_locations[i]
+            lat2, lon2 = route_locations[i + 1]
+            month_lat = lat1 + t * (lat2 - lat1)
+            month_lon = lon1 + t * (lon2 - lon1)
+            
+            month_label = month_names[month2 - 1]
+            folium.Marker(
+                location=[month_lat, month_lon],
+                icon=folium.DivIcon(html=f'''
+                    <div class="month-label" style="
+                        background-color: rgba(46, 204, 113, 0.95);
+                        border: 2px solid #27AE60;
+                        border-radius: 6px;
+                        padding: 4px 10px;
+                        font-weight: bold;
+                        color: white;
+                        font-size: 11px;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                        white-space: nowrap;
+                        z-index: 1001;
+                        transition: all 0.3s ease;
+                        min-width: 40px;
+                        text-align: center;
+                    ">{month_label}</div>
+                ''')
+            ).add_to(m)
+
+    # Add animated polyline with arrows
+    folium.PolyLine(
+        route_locations,
+        color='#E74C3C',
+        weight=3,
+        opacity=0.8,
+        smooth_factor=1
+    ).add_to(m)
+    
+    for i in range(len(route_locations) - 1):
+        folium.plugins.AntPath(
+            locations=[route_locations[i], route_locations[i + 1]],
+            color='#E74C3C',
+            weight=3,
+            opacity=0.8,
+            delay=800,
+            dash_array=[10, 20]
+        ).add_to(m)
+
+    return m
 

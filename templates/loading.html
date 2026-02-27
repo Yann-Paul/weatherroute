@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Route wird berechnet…</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    :root {
+      --bg: #0f1923; --card: #1a2d45; --border: rgba(255,255,255,0.08);
+      --text: #e8edf5; --muted: #6b7a8d; --accent: #3d8ef8;
+      --good: #2ecc71; --warn: #f1c40f; --bad: #e74c3c;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+    .page-wrap { max-width: 1100px; margin: 0 auto; padding: 36px 20px 60px; }
+
+    .header { margin-bottom: 28px; }
+    .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 5px; }
+    .header p  { color: var(--muted); font-size: 13px; }
+
+    /* Two-column layout */
+    .layout { display: flex; gap: 22px; align-items: flex-start; }
+    .left  { width: 290px; flex-shrink: 0; }
+    .right { flex: 1; min-width: 0; }
+
+    /* ── Steps ── */
+    .step {
+      display: flex; align-items: flex-start; gap: 13px;
+      padding: 13px 14px; border-radius: 10px; margin-bottom: 8px;
+      border: 1px solid transparent; transition: all 0.3s;
+    }
+    .step.waiting { opacity: 0.38; }
+    .step.active  { background: rgba(61,142,248,0.07); border-color: rgba(61,142,248,0.22); }
+    .step.done    { background: rgba(46,204,113,0.06); border-color: rgba(46,204,113,0.22); }
+    .step.error   { background: rgba(231,76,60,0.07);  border-color: rgba(231,76,60,0.22); }
+
+    .step-icon {
+      width: 22px; height: 22px; flex-shrink: 0; margin-top: 1px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px;
+    }
+    .step-body { flex: 1; min-width: 0; }
+    .step-title  { font-weight: 600; font-size: 13px; margin-bottom: 3px; }
+    .step-detail { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(61,142,248,0.25);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    /* OSRM progress bar */
+    .bar-wrap {
+      margin-top: 7px; background: rgba(255,255,255,0.07);
+      border-radius: 4px; height: 5px; overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%; background: var(--accent);
+      border-radius: 4px; width: 0%;
+      transition: width 0.45s ease;
+    }
+
+    /* ── Map panel ── */
+    .map-panel {
+      border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border);
+      height: 520px; background: #111d2b;
+      position: relative;
+    }
+    #map { height: 100%; width: 100%; display: none; }
+
+    /* Placeholder */
+    .map-placeholder {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 14px; color: var(--muted); font-size: 13px;
+    }
+    @keyframes pulse {
+      0%,100% { transform: scale(0.82); opacity: 0.45; }
+      50%      { transform: scale(1.08); opacity: 1; }
+    }
+    .pulse-ring {
+      width: 52px; height: 52px;
+      border: 3px solid var(--accent); border-radius: 50%;
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+
+    /* Error box */
+    .error-box {
+      background: rgba(231,76,60,0.1); border: 1px solid rgba(231,76,60,0.3);
+      border-radius: 10px; padding: 16px 18px; margin-top: 16px;
+      font-size: 13px; color: #f5a5a0; display: none;
+    }
+    .error-box-title {
+      font-size: 14px; font-weight: 700; color: #f87171;
+      margin-bottom: 8px; display: flex; align-items: center; gap: 7px;
+    }
+    .error-box-msg {
+      color: #fca5a5; line-height: 1.55; margin-bottom: 14px;
+    }
+    .error-box-hint {
+      font-size: 11px; color: var(--muted); margin-bottom: 12px;
+      line-height: 1.5;
+    }
+    .btn-back-loading {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px;
+      background: rgba(231,76,60,0.18); border: 1px solid rgba(231,76,60,0.35);
+      color: #fca5a5; border-radius: 7px;
+      font-size: 12px; font-weight: 600;
+      text-decoration: none; transition: background .15s;
+    }
+    .btn-back-loading:hover { background: rgba(231,76,60,0.32); }
+    .step.cancelled { opacity: 0.22; }
+
+    @media (max-width: 680px) {
+      .layout { flex-direction: column; }
+      .left { width: 100%; }
+      .map-panel { height: 360px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <div class="header">
+    <h1 id="main-title">Route wird berechnet…</h1>
+    <p id="main-sub">Bitte warte. Der Vorgang kann je nach Routenlänge einige Minuten dauern.</p>
+  </div>
+
+  <div class="layout">
+    <!-- Left: progress steps -->
+    <div class="left">
+
+      <div class="step active" id="step-1">
+        <div class="step-icon"><div class="spinner" id="icon-1"></div></div>
+        <div class="step-body">
+          <div class="step-title">Route berechnen</div>
+          <div class="step-detail" id="detail-1">Optimalen Weg suchen…</div>
+        </div>
+      </div>
+
+      <div class="step waiting" id="step-2">
+        <div class="step-icon" id="icon-2" style="color:var(--muted)">○</div>
+        <div class="step-body">
+          <div class="step-title">Straßenverlauf laden</div>
+          <div class="step-detail" id="detail-2">Wartet auf Route…</div>
+          <div class="bar-wrap" id="bar-wrap" style="display:none">
+            <div class="bar-fill" id="bar-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step waiting" id="step-3">
+        <div class="step-icon" id="icon-3" style="color:var(--muted)">○</div>
+        <div class="step-body">
+          <div class="step-title">Höhenprofil erstellen</div>
+          <div class="step-detail" id="detail-3">Wartet…</div>
+        </div>
+      </div>
+
+      <div class="error-box" id="error-box"></div>
+    </div>
+
+    <!-- Right: map -->
+    <div class="right">
+      <div class="map-panel">
+        <div class="map-placeholder" id="map-placeholder">
+          <div class="pulse-ring"></div>
+          <span>Grobe Route erscheint sobald der Algorithmus fertig ist…</span>
+        </div>
+        <div id="map"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const JOB_ID = {{ job_id | tojson }};
+let mapInited = false;
+let leafletMap = null;
+
+/* ── Step state helpers ── */
+function setDone(n) {
+  const s = document.getElementById('step-' + n);
+  const ic = document.getElementById('icon-' + n);
+  s.className = 'step done';
+  ic.innerHTML = '';
+  ic.style.cssText = 'color:var(--good);font-size:16px;font-weight:700;width:22px;height:22px;display:flex;align-items:center;justify-content:center;';
+  ic.textContent = '✓';
+}
+function setActive(n) {
+  const s = document.getElementById('step-' + n);
+  const ic = document.getElementById('icon-' + n);
+  s.className = 'step active';
+  ic.innerHTML = '<div class="spinner"></div>';
+  ic.style.cssText = 'width:22px;height:22px;display:flex;align-items:center;justify-content:center;';
+}
+function setWaiting(n) {
+  const s = document.getElementById('step-' + n);
+  const ic = document.getElementById('icon-' + n);
+  s.className = 'step waiting';
+  ic.innerHTML = '';
+  ic.style.cssText = 'color:var(--muted);font-size:15px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;';
+  ic.textContent = '○';
+}
+const ERROR_HINTS = {
+  'gesperrten Land':       'Die Stadt liegt in einem Land, das du gesperrt hast. Entsperre das Land oder wähle eine andere Stadt.',
+  'abgeschnitten':         'Die Stadt hat keine Straßenverbindung zu den anderen gewählten Städten. Wähle eine andere Stadt oder prüfe die gesperrten Länder.',
+  'Keine Verbindung':      'Zwischen zwei Städten existiert kein Straßenpfad. Prüfe ob dazwischenliegende Länder gesperrt sind.',
+  'Kein Weg':              'Der Routing-Algorithmus konnte keine Route zwischen zwei Städten berechnen. Erhöhe die Tagesstrecke oder wähle andere Städte.',
+  'Temperatur':            'Eine Stadt hat Temperaturen außerhalb deines erlaubten Bereichs. Erweitere den Temperaturbereich oder wähle einen anderen Starttag.',
+  'Max. Reisetage':        'Die Route ist zu lang für das eingestellte Tageslimit. Erhöhe „Max. Reisetage" oder „Max. Tagesstrecke", oder reduziere die Anzahl der Städte.',
+  'benötigt':              'Die Route ist zu lang für das eingestellte Tageslimit. Erhöhe „Max. Reisetage" oder „Max. Tagesstrecke", oder reduziere die Anzahl der Städte.',
+  'eingebunden werden':    'Einige Städte konnten nicht in die Route eingebunden werden. Prüfe ob sie erreichbar sind und die Tagesstrecke ausreicht.',
+  'Kein gültiger':         'Mögliche Ursachen: zu strenge Temperaturgrenzen, zu kurze Tagesstrecke oder zu wenig Reisetage. Versuche die Einschränkungen zu lockern.',
+  'OSRM':                  'Der Straßen-Routing-Dienst (OSRM) ist möglicherweise nicht erreichbar. Bitte später erneut versuchen.',
+  'elevation':             'Der Höhendaten-Dienst ist momentan nicht erreichbar. Das Höhenprofil fehlt, aber die Route kann trotzdem korrekt sein.',
+};
+
+function getHint(msg) {
+  if (!msg) return 'Überprüfe deine Eingaben und versuche es erneut.';
+  for (const key in ERROR_HINTS) {
+    if (msg.includes(key)) return ERROR_HINTS[key];
+  }
+  return 'Überprüfe deine Eingaben und versuche es erneut.';
+}
+
+function setError(n, msg) {
+  // Mark current step as error
+  const s = document.getElementById('step-' + n);
+  const ic = document.getElementById('icon-' + n);
+  s.className = 'step error';
+  ic.innerHTML = '';
+  ic.style.cssText = 'color:var(--bad);font-size:16px;font-weight:700;width:22px;height:22px;display:flex;align-items:center;justify-content:center;';
+  ic.textContent = '✕';
+
+  // Cancel all remaining steps
+  for (let i = n + 1; i <= 3; i++) {
+    const si = document.getElementById('step-' + i);
+    const ici = document.getElementById('icon-' + i);
+    si.className = 'step cancelled';
+    ici.innerHTML = '';
+    ici.style.cssText = 'color:var(--muted);font-size:15px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;';
+    ici.textContent = '○';
+  }
+
+  // Update map placeholder if map not yet shown
+  if (!mapInited) {
+    document.getElementById('map-placeholder').innerHTML =
+      '<div style="font-size:36px;margin-bottom:8px">⚠️</div>' +
+      '<span>Keine Route verfügbar</span>';
+  }
+
+  // Build detailed error box
+  const hint = getHint(msg);
+  const eb = document.getElementById('error-box');
+  eb.style.display = 'block';
+  eb.innerHTML =
+    '<div class="error-box-title">✕ Berechnung fehlgeschlagen</div>' +
+    '<div class="error-box-msg">' + (msg || 'Unbekannter Fehler.') + '</div>' +
+    '<div class="error-box-hint">' + hint + '</div>' +
+    '<a href="/" class="btn-back-loading">← Zurück zur Eingabe</a>';
+}
+
+/* ── Rough map ── */
+function parseRgb(s) {
+  const m = s.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  return m ? [+m[1], +m[2], +m[3]] : [180, 180, 180];
+}
+
+function showRoughMap(data) {
+  if (mapInited) return;
+  mapInited = true;
+
+  document.getElementById('map-placeholder').style.display = 'none';
+  const mapEl = document.getElementById('map');
+  mapEl.style.display = 'block';
+
+  leafletMap = L.map('map').setView(data.center, 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19
+  }).addTo(leafletMap);
+
+  const cities = data.cities;
+
+  // Straight dashed polyline
+  if (cities.length > 1) {
+    L.polyline(cities.map(c => [c.lat, c.lon]), {
+      color: '#e74c3c', weight: 2.5, opacity: 0.65, dashArray: '7 5'
+    }).addTo(leafletMap);
+  }
+
+  // Markers
+  cities.forEach(c => {
+    const [r, g, b] = parseRgb(c.color);
+    const svg = `<svg width="30" height="36" viewBox="0 0 30 36" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="15" cy="15" r="13" fill="rgb(${r},${g},${b})" stroke="white" stroke-width="2"/>
+      <text x="15" y="20" text-anchor="middle" font-family="system-ui" font-size="10"
+            font-weight="700" fill="white">${c.rel_day}</text>
+      <polygon points="9,27 21,27 15,36" fill="rgb(${r},${g},${b})"/>
+    </svg>`;
+    const icon = L.divIcon({ html: svg, className: '', iconSize: [30,36], iconAnchor: [15,36] });
+    const popupHtml = `<b>${c.name}</b><br>Tag&nbsp;${c.rel_day}` +
+      (c.tmin !== null ? `<br>Nacht:&nbsp;${c.tmin}°C &nbsp;·&nbsp; Tag:&nbsp;${c.tmax}°C` : '');
+    L.marker([c.lat, c.lon], { icon }).bindPopup(popupHtml).addTo(leafletMap);
+  });
+
+  if (cities.length > 1) {
+    leafletMap.fitBounds(cities.map(c => [c.lat, c.lon]), { padding: [28, 28] });
+  }
+}
+
+/* ── Polling ── */
+let lastStep = 1;
+
+function poll() {
+  fetch('/status/' + JOB_ID)
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'error') {
+        setError(lastStep, data.error);
+        document.getElementById('main-title').textContent = 'Berechnung fehlgeschlagen';
+        document.getElementById('main-sub').textContent =
+          'Es ist ein Fehler aufgetreten. Passe deine Eingaben an und versuche es erneut.';
+        return; // stop polling
+      }
+
+      const step = data.step || 1;
+
+      // Transition step indicators
+      if (step !== lastStep) {
+        for (let i = 1; i < step; i++) setDone(i);
+        setActive(step);
+        for (let i = step + 1; i <= 3; i++) setWaiting(i);
+        lastStep = step;
+      }
+
+      // Update detail texts
+      if (step === 1) {
+        document.getElementById('detail-1').textContent = data.message || 'Berechne…';
+      } else if (step === 2) {
+        document.getElementById('detail-1').textContent = 'Abgeschlossen';
+        const det2 = document.getElementById('detail-2');
+        if (data.osrm_total > 0) {
+          det2.textContent = data.osrm_done + ' / ' + data.osrm_total + ' Segmente';
+          document.getElementById('bar-wrap').style.display = 'block';
+          const pct = Math.round((data.osrm_done / data.osrm_total) * 100);
+          document.getElementById('bar-fill').style.width = pct + '%';
+        } else {
+          det2.textContent = 'Verbinde mit OSRM…';
+        }
+      } else if (step === 3) {
+        document.getElementById('detail-1').textContent = 'Abgeschlossen';
+        document.getElementById('detail-2').textContent = 'Abgeschlossen';
+        document.getElementById('bar-fill').style.width = '100%';
+        document.getElementById('detail-3').textContent = 'Höhendaten werden geladen…';
+      }
+
+      // Show rough map as soon as route_found
+      if (data.rough_map && !mapInited) {
+        showRoughMap(data.rough_map);
+      }
+
+      if (data.status === 'done') {
+        setDone(1); setDone(2); setDone(3);
+        document.getElementById('main-title').textContent = 'Route fertig!';
+        document.getElementById('main-sub').textContent = 'Weiterleitung zur Ergebnisseite…';
+        setTimeout(() => { window.location.href = '/result/' + JOB_ID; }, 600);
+        return; // stop polling
+      }
+
+      setTimeout(poll, 900);
+    })
+    .catch(() => setTimeout(poll, 2000));
+}
+
+poll();
+</script>
+</body>
+</html>

@@ -292,6 +292,28 @@
     /* ── Autocomplete ── */
     .ui-autocomplete { max-height: 200px; overflow-y: auto; z-index: 9999; font-size: 13px; }
 
+    /* ── Validation ── */
+    .error-banner {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 18px;
+      color: #991b1b;
+      font-size: 13px;
+      display: none;
+    }
+    .error-banner strong { display: block; margin-bottom: 6px; font-size: 13px; }
+    .error-banner ul { margin: 0 0 0 18px; }
+    .error-banner li { margin-bottom: 2px; }
+    input.input-error, select.input-error {
+      border-color: var(--danger) !important;
+      box-shadow: 0 0 0 3px rgba(220,53,69,.12) !important;
+    }
+    .field-msg { font-size: 11px; margin-top: 3px; min-height: 0; }
+    .field-msg.error { color: var(--danger); }
+    #cityInputs.city-error { outline: 2px solid var(--danger); border-radius: 6px; }
+
     /* ══ MOBILE ══════════════════════════════════════════════════════════ */
     @media (max-width: 620px) {
       .page-wrap { padding: 14px 10px 48px; }
@@ -350,6 +372,11 @@
 
   <form id="routeForm" action="/calculate" method="POST">
 
+    <div id="form-errors" class="error-banner" role="alert">
+      <strong>Bitte korrigiere folgende Fehler:</strong>
+      <ul id="error-list"></ul>
+    </div>
+
     <!-- ══ ROUTE ══ -->
     <div class="card">
       <div class="card-title">📍 Route</div>
@@ -357,6 +384,7 @@
       <div class="field" style="margin-bottom:10px">
         <label>Städte (in gewünschter Reihenfolge)</label>
         <div id="cityInputs"></div>
+        <div id="err-cities" class="field-msg"></div>
         <button type="button" class="btn-add" onclick="addCityField()">＋ Stadt hinzufügen</button>
       </div>
 
@@ -374,10 +402,33 @@
           <input type="text" class="city-autocomplete" name="start_city" placeholder="Stadtname…">
         </div>
         <div class="field">
-          <label>Startdatum</label>
-          <input type="date" id="start_date_picker" value="2024-05-01"
-                 oninput="syncStartDay(this.value)">
-          <input type="hidden" name="start_day" id="start_day_hidden" value="122">
+          <label>Startdatum (optional)</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="start_day_sel" onchange="syncStartDay()"
+                    style="width:80px;color:var(--muted)">
+              <option value="" style="color:var(--muted)">Tag</option>
+            </select>
+            <select id="start_month_sel" onchange="updateDayOptions();syncStartDay()"
+                    style="flex:1;color:var(--muted)">
+              <option value="" style="color:var(--muted)">Monat wählen…</option>
+              <option value="1">Januar</option>
+              <option value="2">Februar</option>
+              <option value="3">März</option>
+              <option value="4">April</option>
+              <option value="5">Mai</option>
+              <option value="6">Juni</option>
+              <option value="7">Juli</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">Oktober</option>
+              <option value="11">November</option>
+              <option value="12">Dezember</option>
+            </select>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">
+            Leer lassen → optimaler Starttag im Jahr wird automatisch berechnet
+          </div>
+          <input type="hidden" name="start_day" id="start_day_hidden" value="">
         </div>
       </div>
 
@@ -401,31 +452,35 @@
 
       <div class="form-row">
         <div class="field">
-          <label>Ziel-Tageshöchsttemperatur (°C)</label>
+          <label>Ziel-Tagestemperatur (°C)</label>
           <input type="number" name="high_temp" value="25" step="0.1">
+          <div id="err-high-temp" class="field-msg"></div>
         </div>
         <div class="field">
-          <label>Ziel-Tagestiefsttemperatur (°C)</label>
+          <label>Ziel-Nachttemperatur (°C)</label>
           <input type="number" name="low_temp" value="12" step="0.1">
+          <div id="err-low-temp" class="field-msg"></div>
         </div>
       </div>
 
       <div class="form-row" style="margin-bottom:6px">
         <div class="field">
-          <label>Tmax erlaubter Bereich (°C)</label>
+          <label>Tagestemperatur erlaubter Bereich (°C)</label>
           <div class="range-row">
             <input type="number" name="high_temp_min" placeholder="min" step="0.1">
             <span class="range-sep">bis</span>
             <input type="number" name="high_temp_max" placeholder="max" step="0.1">
           </div>
+          <div id="err-high-range" class="field-msg"></div>
         </div>
         <div class="field">
-          <label>Tmin erlaubter Bereich (°C)</label>
+          <label>Nachttemperatur erlaubter Bereich (°C)</label>
           <div class="range-row">
             <input type="number" name="low_temp_min" placeholder="min" step="0.1">
             <span class="range-sep">bis</span>
             <input type="number" name="low_temp_max" placeholder="max" step="0.1">
           </div>
+          <div id="err-low-range" class="field-msg"></div>
         </div>
       </div>
 
@@ -441,24 +496,19 @@
 
     <!-- ══ REISEEINSTELLUNGEN ══ -->
     <div class="card">
-      <div class="card-title">🚗 Reiseeinstellungen</div>
+      <div class="card-title">Reiseeinstellungen</div>
 
-      <div class="form-row thirds">
-        <div class="field">
-          <label>Routing-Modus</label>
-          <select name="routing_mode">
-            <option value="car">🚗 Auto</option>
-            <option value="car_no_highway">🚗 Auto (ohne Autobahn)</option>
-            <option value="bicycle">🚲 Fahrrad</option>
-          </select>
-        </div>
+      <input type="hidden" name="routing_mode" value="car">
+      <div class="form-row">
         <div class="field">
           <label>Max. Tagesstrecke (km)</label>
-          <input type="number" name="daily_km" value="100" min="10">
+          <input type="number" name="daily_km" value="100" min="1">
+          <div id="err-daily-km" class="field-msg"></div>
         </div>
         <div class="field">
           <label>Max. Reisetage</label>
           <input type="number" name="max_days" value="200" min="1">
+          <div id="err-max-days" class="field-msg"></div>
         </div>
       </div>
     </div>
@@ -519,16 +569,158 @@
 <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 <script>
   /* ── Startdatum → Tag-des-Jahres ── */
-  function syncStartDay(dateStr) {
-    if (!dateStr) return;
-    const d = new Date(dateStr + 'T12:00:00');
-    const jan1 = new Date(d.getFullYear(), 0, 1);
-    const day = Math.round((d - jan1) / 86400000) + 1;
-    document.getElementById('start_day_hidden').value = day;
+  // Leap-year month lengths (matching the original 2024-based calculation)
+  const DAYS_IN_MONTH = [31,29,31,30,31,30,31,31,30,31,30,31];
+
+  function updateDayOptions() {
+    const mSel = document.getElementById('start_month_sel');
+    const dSel = document.getElementById('start_day_sel');
+    const m    = parseInt(mSel.value);
+    const prev = parseInt(dSel.value) || 0;
+
+    // Reset to placeholder when no month is selected
+    dSel.innerHTML = '<option value="" style="color:var(--muted)">Tag</option>';
+    dSel.style.color = 'var(--muted)';
+    mSel.style.color = mSel.value ? '' : 'var(--muted)';
+
+    if (!m) return;   // no month chosen yet
+
+    const max = DAYS_IN_MONTH[m - 1];
+    for (let d = 1; d <= max; d++) {
+      const opt = document.createElement('option');
+      opt.value = d; opt.textContent = d;
+      if (d === Math.min(prev || 1, max)) opt.selected = true;
+      dSel.appendChild(opt);
+    }
+    dSel.style.color = '';
   }
-  /* Sicherheitshalber auch beim Absenden synchronisieren */
-  document.getElementById('routeForm').addEventListener('submit', function() {
-    syncStartDay(document.getElementById('start_date_picker').value);
+
+  function syncStartDay() {
+    const m = parseInt(document.getElementById('start_month_sel').value);
+    const d = parseInt(document.getElementById('start_day_sel').value);
+    const hidden = document.getElementById('start_day_hidden');
+    if (!m || !d) { hidden.value = ''; return; }
+    let doy = d;
+    for (let i = 0; i < m - 1; i++) doy += DAYS_IN_MONTH[i];
+    hidden.value = doy;
+    document.getElementById('start_day_sel').style.color = '';
+  }
+
+  // No pre-selection on page load – hidden field stays empty → optimal day
+  updateDayOptions();
+
+  /* ── Validation ── */
+  function clearErrors() {
+    document.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
+    document.querySelectorAll('.field-msg').forEach(el => { el.textContent = ''; el.classList.remove('error'); });
+    document.getElementById('cityInputs').classList.remove('city-error');
+    document.getElementById('form-errors').style.display = 'none';
+    document.getElementById('error-list').innerHTML = '';
+  }
+
+  function fieldErr(inputEl, msgId, msg) {
+    if (inputEl) inputEl.classList.add('input-error');
+    if (msgId) {
+      const el = document.getElementById(msgId);
+      if (el) { el.textContent = msg; el.classList.add('error'); }
+    }
+    return msg;
+  }
+
+  function validateForm() {
+    clearErrors();
+    const errs = [];
+
+    // 1. Mindestens eine Stadt
+    const filledCities = Array.from(document.querySelectorAll('input[name="cities"]'))
+      .filter(i => i.value.trim());
+    if (filledCities.length === 0) {
+      errs.push('Bitte mindestens eine Stadt eingeben.');
+      document.getElementById('cityInputs').classList.add('city-error');
+      fieldErr(null, 'err-cities', 'Mindestens eine Stadt ist erforderlich.');
+    }
+
+    // 2. Zieltemperaturen
+    const highTempEl = document.querySelector('input[name="high_temp"]');
+    const lowTempEl  = document.querySelector('input[name="low_temp"]');
+    const highTemp   = parseFloat(highTempEl.value);
+    const lowTemp    = parseFloat(lowTempEl.value);
+    if (isNaN(highTemp)) {
+      errs.push(fieldErr(highTempEl, 'err-high-temp', 'Bitte eine gültige Ziel-Tagestemperatur eingeben.'));
+    }
+    if (isNaN(lowTemp)) {
+      errs.push(fieldErr(lowTempEl, 'err-low-temp', 'Bitte eine gültige Ziel-Nachttemperatur eingeben.'));
+    }
+    if (!isNaN(highTemp) && !isNaN(lowTemp) && lowTemp > highTemp) {
+      errs.push(fieldErr(lowTempEl, 'err-low-temp',
+        `Nachttemperatur (${lowTemp}°C) darf nicht höher sein als Tagestemperatur (${highTemp}°C).`));
+    }
+
+    // 3. Temperaturbereiche: Min ≤ Max
+    const htMinEl = document.querySelector('input[name="high_temp_min"]');
+    const htMaxEl = document.querySelector('input[name="high_temp_max"]');
+    const ltMinEl = document.querySelector('input[name="low_temp_min"]');
+    const ltMaxEl = document.querySelector('input[name="low_temp_max"]');
+    const htMin = htMinEl.value !== '' ? parseFloat(htMinEl.value) : null;
+    const htMax = htMaxEl.value !== '' ? parseFloat(htMaxEl.value) : null;
+    const ltMin = ltMinEl.value !== '' ? parseFloat(ltMinEl.value) : null;
+    const ltMax = ltMaxEl.value !== '' ? parseFloat(ltMaxEl.value) : null;
+
+    if (htMin !== null && htMax !== null && htMin > htMax) {
+      errs.push(fieldErr(htMinEl, 'err-high-range',
+        `Tagestemperatur Bereich: Min (${htMin}°C) darf nicht größer als Max (${htMax}°C) sein.`));
+    }
+    if (ltMin !== null && ltMax !== null && ltMin > ltMax) {
+      errs.push(fieldErr(ltMinEl, 'err-low-range',
+        `Nachttemperatur Bereich: Min (${ltMin}°C) darf nicht größer als Max (${ltMax}°C) sein.`));
+    }
+
+    // 4. Tagesstrecke & Reisetage
+    const dailyKmEl = document.querySelector('input[name="daily_km"]');
+    const maxDaysEl = document.querySelector('input[name="max_days"]');
+    const dailyKm   = parseFloat(dailyKmEl.value);
+    const maxDays   = parseInt(maxDaysEl.value);
+    if (isNaN(dailyKm) || dailyKm < 1) {
+      errs.push(fieldErr(dailyKmEl, 'err-daily-km',
+        'Max. Tagesstrecke muss mindestens 1 km betragen.'));
+    }
+    if (isNaN(maxDays) || maxDays < 1) {
+      errs.push(fieldErr(maxDaysEl, 'err-max-days',
+        'Max. Reisetage muss mindestens 1 betragen.'));
+    }
+
+    // 5. Verbindungen: beide Felder oder keines
+    document.querySelectorAll('.connection-row').forEach((row, i) => {
+      const fromEl = row.querySelector('input[name="connection_start"]');
+      const toEl   = row.querySelector('input[name="connection_stop"]');
+      const from   = fromEl.value.trim();
+      const to     = toEl.value.trim();
+      if (from && !to) {
+        fromEl.classList.add('input-error');
+        toEl.classList.add('input-error');
+        errs.push(`Verbindung ${i + 1}: „Nach"-Feld fehlt.`);
+      } else if (!from && to) {
+        fromEl.classList.add('input-error');
+        toEl.classList.add('input-error');
+        errs.push(`Verbindung ${i + 1}: „Von"-Feld fehlt.`);
+      }
+    });
+
+    if (errs.length) {
+      const ul = document.getElementById('error-list');
+      ul.innerHTML = errs.map(e => `<li>${e}</li>`).join('');
+      const banner = document.getElementById('form-errors');
+      banner.style.display = 'block';
+      banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return false;
+    }
+    return true;
+  }
+
+  /* Form-Submit: erst synchronisieren, dann validieren */
+  document.getElementById('routeForm').addEventListener('submit', function(e) {
+    syncStartDay();
+    if (!validateForm()) e.preventDefault();
   });
 
   /* ── Autocomplete helpers ── */
