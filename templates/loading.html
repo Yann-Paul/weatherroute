@@ -123,10 +123,19 @@
     .btn-back-loading:hover { background: rgba(231,76,60,0.32); }
     .step.cancelled { opacity: 0.22; }
 
-    @media (max-width: 680px) {
+    @media (max-width: 760px) {
       .layout { flex-direction: column; }
-      .left { width: 100%; }
-      .map-panel { height: 360px; }
+      .left  { width: 100%; }
+      .map-panel { height: 340px; }
+      .page-wrap { padding: 20px 16px 40px; }
+      .header { margin-bottom: 16px; }
+      .header h1 { font-size: 18px; }
+      .btn-back-loading { padding: 11px 18px; min-height: 44px; }
+    }
+    @media (max-width: 400px) {
+      .map-panel { height: 260px; }
+      .page-wrap { padding: 14px 12px 28px; }
+      .header h1 { font-size: 16px; }
     }
   </style>
 </head>

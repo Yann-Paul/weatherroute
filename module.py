@@ -2564,6 +2564,7 @@ def build_combined_elevation_profile(sub_route_data, max_elev_points=None, point
     # sampled point so x-positions are derived from geometry, not from the API.
     all_sampled_latlon = []
     all_sub_sampled_kms = []
+    all_sub_sampled_latlons = []
     sub_sample_counts = []
     for info in sub_info:
         coords_km = info['coords_km']
@@ -2571,6 +2572,7 @@ def build_combined_elevation_profile(sub_route_data, max_elev_points=None, point
         if n == 0:
             sub_sample_counts.append(0)
             all_sub_sampled_kms.append([])
+            all_sub_sampled_latlons.append([])
             continue
         n_alloc = max(2, round(n / total_coords * max_elev_points))
         if n > n_alloc:
@@ -2579,8 +2581,10 @@ def build_combined_elevation_profile(sub_route_data, max_elev_points=None, point
             indices[-1] = n - 1
         else:
             indices = list(range(n))
-        all_sampled_latlon.extend((coords_km[idx][0], coords_km[idx][1]) for idx in indices)
+        seg_latlons = [(coords_km[idx][0], coords_km[idx][1]) for idx in indices]
+        all_sampled_latlon.extend(seg_latlons)
         all_sub_sampled_kms.append([coords_km[idx][2] for idx in indices])
+        all_sub_sampled_latlons.append(seg_latlons)
         sub_sample_counts.append(len(indices))
 
     n_sampled = len(all_sampled_latlon)
@@ -2606,19 +2610,22 @@ def build_combined_elevation_profile(sub_route_data, max_elev_points=None, point
     # x-positions come from pre-computed road-geometry km values (no haversine on
     # API results), so profile and city markers share the same distance reference.
     combined_profile = []
+    combined_latlons = []
     combined_city_marks = []
     combined_city_data = []   # {km, name, tmin, tmax, ele} — ele filled in after
     km_offset = 0.0
     result_offset = 0
 
-    for info, count, sampled_kms in zip(sub_info, sub_sample_counts, all_sub_sampled_kms):
+    for info, count, sampled_kms, seg_latlons in zip(
+            sub_info, sub_sample_counts, all_sub_sampled_kms, all_sub_sampled_latlons):
         if count == 0:
             continue
         sub_results = all_results[result_offset:result_offset + count]
         result_offset += count
 
-        for km, r in zip(sampled_kms, sub_results):
+        for (slat, slon), km, r in zip(seg_latlons, sampled_kms, sub_results):
             combined_profile.append((km_offset + km, r["elevation"]))
+            combined_latlons.append((slat, slon))
 
         city_temps_sub = info.get('city_temps', [])
         t0 = city_temps_sub[0] if city_temps_sub else (None, None, None)
@@ -2663,14 +2670,186 @@ def build_combined_elevation_profile(sub_route_data, max_elev_points=None, point
           f"{len(combined_city_data)} Städte, "
           f"Höhe: {min_ele:.0f}–{max_ele:.0f} m", flush=True)
 
-    return {"profile": combined_profile, "city_marks": combined_city_marks,
-            "city_data": combined_city_data}
+    return {"profile": combined_profile, "profile_latlons": combined_latlons,
+            "city_marks": combined_city_marks, "city_data": combined_city_data}
 
 
 _COMPASS_DIRS = ['N','NNO','NO','ONO','O','OSO','SO','SSO','S','SSW','SW','WSW','W','WNW','NW','NNW']
 
 def _compass_dir(deg):
     return _COMPASS_DIRS[int((((deg % 360) + 360) % 360 + 11.25) / 22.5) % 16]
+
+
+def _km_to_latlon(km_target, profile, latlons):
+    """Interpolate lat/lon for a given km position along the elevation profile."""
+    for i in range(len(profile) - 1):
+        km0, km1 = profile[i][0], profile[i + 1][0]
+        if km0 <= km_target <= km1:
+            t = (km_target - km0) / (km1 - km0) if km1 > km0 else 0.0
+            lat0, lon0 = latlons[i]
+            lat1, lon1 = latlons[i + 1]
+            return lat0 + t * (lat1 - lat0), lon0 + t * (lon1 - lon0)
+    if latlons:
+        return latlons[0] if km_target <= profile[0][0] else latlons[-1]
+    return 0.0, 0.0
+
+
+class MiniElevationControl:
+    """
+    Injects a mini elevation chart overlay into a Folium map via MacroElement.
+    The chart sits at the bottom of the map and updates on viewport changes.
+    """
+    def __init__(self, elev_json, cities_json, desired_high, desired_low):
+        self._elev_json    = elev_json
+        self._cities_json  = cities_json
+        self._desired_high = desired_high
+        self._desired_low  = desired_low
+
+    def add_to(self, m):
+        """Add the mini elevation control to a Folium map."""
+        from branca.element import MacroElement
+        from jinja2 import Template
+
+        dh = self._desired_high
+        dl = self._desired_low
+        ej = self._elev_json
+        cj = self._cities_json
+
+        class _Ctrl(MacroElement):
+            _template = Template(u"""
+            {%- macro script(this, kwargs) -%}
+(function() {
+var MINI_ELEV   = {{ this._ej }};
+var MINI_CITIES = {{ this._cj }};
+var D_HIGH = {{ this._dh }};
+var D_LOW  = {{ this._dl }};
+var _map = null;
+document.addEventListener('DOMContentLoaded', function() {
+    var tries = 0;
+    var iv = setInterval(function() {
+        tries++;
+        for (var id in window) {
+            if (id.startsWith('map_') && window[id] && window[id].getBounds) {
+                _map = window[id]; clearInterval(iv); init(); return;
+            }
+        }
+        if (tries > 100) clearInterval(iv);
+    }, 50);
+});
+
+function init() {
+    var panel = document.createElement('div');
+    panel.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:95px;' +
+        'z-index:1000;pointer-events:none;background:rgba(10,14,22,0.82);' +
+        'border-top:1px solid rgba(255,255,255,0.1);box-sizing:border-box;';
+    panel.innerHTML = '<svg id="mini-elev-svg" width="100%" height="95" style="display:block"></svg>';
+    _map.getContainer().style.position = 'relative';
+    _map.getContainer().appendChild(panel);
+    _map.on('moveend zoomend resize', updateChart);
+    updateChart();
+}
+
+function tempToRgb(temp, desired) {
+    var STOPS = [
+        [-1.0,[60,0,80]],[-0.667,[30,30,160]],[-0.333,[100,160,255]],
+        [0.0,[255,255,255]],[0.333,[255,150,100]],[0.667,[200,40,40]],[1.0,[160,0,120]]
+    ];
+    var t = Math.max(-1, Math.min(1, (temp - desired) / 15));
+    for (var i = 0; i < STOPS.length-1; i++) {
+        if (t <= STOPS[i+1][0]) {
+            var f = (t-STOPS[i][0])/(STOPS[i+1][0]-STOPS[i][0]);
+            var r0=STOPS[i][1][0],g0=STOPS[i][1][1],b0=STOPS[i][1][2];
+            var r1=STOPS[i+1][1][0],g1=STOPS[i+1][1][1],b1=STOPS[i+1][1][2];
+            return 'rgb('+Math.round(r0+f*(r1-r0))+','+Math.round(g0+f*(g1-g0))+','+Math.round(b0+f*(b1-b0))+')';
+        }
+    }
+    return 'rgb(160,0,120)';
+}
+
+function interpTemp(km, ele, cities, tempKey) {
+    if (!cities.length) return null;
+    var ci = -1;
+    for (var k = 0; k < cities.length; k++) { if (cities[k].km >= km) { ci = k; break; } }
+    if (ci < 0) ci = cities.length - 1;
+    if (ci === 0) ci = 1;
+    var c0 = cities[ci-1], c1 = cities[ci];
+    var t = c1.km > c0.km ? (km - c0.km) / (c1.km - c0.km) : 0;
+    var prcp = (c0.prcp||0) + t*((c1.prcp||0) - (c0.prcp||0));
+    var lapse = (1.0 - 0.4*Math.min(1, prcp/5)) / 100;
+    var eleRef = c0.ele + t*(c1.ele - c0.ele);
+    return (c0[tempKey] + t*(c1[tempKey] - c0[tempKey])) - (ele - eleRef) * lapse;
+}
+
+function updateChart() {
+    var panel = document.querySelector('#mini-elev-svg') &&
+                document.querySelector('#mini-elev-svg').parentNode;
+    var svg = document.querySelector('#mini-elev-svg');
+    if (!svg || !_map) return;
+    var W = svg.parentNode.offsetWidth, H = 95;
+    if (W < 50) return;
+    var bounds = _map.getBounds();
+    var vis = MINI_ELEV.filter(function(p) {
+        return p[1] >= bounds.getSouth() && p[1] <= bounds.getNorth() &&
+               p[2] >= bounds.getWest() && p[2] <= bounds.getEast();
+    });
+    if (vis.length < 2) {
+        svg.innerHTML = '<text x="'+(W/2)+'" y="52" text-anchor="middle" font-size="11" ' +
+            'fill="rgba(255,255,255,0.35)" font-family="sans-serif">Route nicht sichtbar</text>';
+        return;
+    }
+    var kmMin = vis[0][0], kmMax = vis[vis.length-1][0];
+    var eles = vis.map(function(p){return p[3];});
+    var eMin = Math.max(0, Math.min.apply(null,eles)-80);
+    var eMax = Math.max.apply(null,eles)+50;
+    var eRange = eMax - eMin;
+    var PL=6, PR=6, PT=12, PB=14, cW=W-PL-PR, cH=H-PT-PB;
+    function xp(km)  { return PL + (km-kmMin)/(kmMax-kmMin)*cW; }
+    function yp(ele) { return PT + cH - (ele-eMin)/eRange*cH; }
+
+    var out = '';
+    for (var i = 0; i < vis.length-1; i++) {
+        var km0=vis[i][0], e0=vis[i][3], km1=vis[i+1][0], e1=vis[i+1][3];
+        var tv = interpTemp((km0+km1)/2, (e0+e1)/2, MINI_CITIES, 'tmax');
+        var col = tv != null ? tempToRgb(tv, D_HIGH) : '#4a6fa5';
+        out += '<polygon points="'+xp(km0)+','+yp(e0)+' '+xp(km1)+','+yp(e1)+
+               ' '+xp(km1)+','+yp(eMin)+' '+xp(km0)+','+yp(eMin)+
+               '" fill="'+col+'" opacity="0.85"/>';
+    }
+    var pts = vis.map(function(p){return xp(p[0])+','+yp(p[3]);}).join(' ');
+    out += '<polyline points="'+pts+'" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.8"/>';
+
+    var visCities = MINI_CITIES.filter(function(c){return c.km>=kmMin && c.km<=kmMax;});
+    visCities.forEach(function(c) {
+        var cx = xp(c.km);
+        out += '<line x1="'+cx+'" y1="'+PT+'" x2="'+cx+'" y2="'+(H-PB)+
+               '" stroke="rgba(255,255,255,0.25)" stroke-width="0.5" stroke-dasharray="2,2"/>';
+        out += '<text x="'+cx+'" y="'+(PT-2)+'" text-anchor="middle" font-size="7.5" ' +
+               'fill="rgba(255,255,255,0.65)" font-family="sans-serif">'+c.name+'</text>';
+    });
+    out += '<text x="'+(PL+2)+'" y="'+(PT+8)+'" font-size="7" fill="rgba(255,255,255,0.4)" ' +
+           'font-family="sans-serif">'+Math.round(eMax)+'m</text>';
+    var km_range = Math.round(kmMax - kmMin);
+    out += '<text x="'+(W/2)+'" y="'+(H-2)+'" text-anchor="middle" font-size="7.5" ' +
+           'fill="rgba(255,255,255,0.3)" font-family="sans-serif">' +
+           'H\u00f6henprofil \u2013 sichtbarer Bereich ('+km_range+' km)</text>';
+
+    svg.setAttribute('viewBox','0 0 '+W+' '+H);
+    svg.innerHTML = out;
+}
+})();
+            {%- endmacro -%}
+            """)
+
+            def __init__(self, ej, cj, dh, dl):
+                super().__init__()
+                self._name = 'MiniElevationControl'
+                self._ej = ej
+                self._cj = cj
+                self._dh = dh
+                self._dl = dl
+
+        ctrl = _Ctrl(ej, cj, dh, dl)
+        ctrl.add_to(m)
 
 
 def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_high_temp,
@@ -3121,6 +3300,38 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
                     color:#000;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.3)">
                     ✈ / ⛴</div>''')
         ).add_to(m)
+
+    # Add mini elevation chart overlay if elevation data is available
+    if elev_data:
+        profile  = elev_data["profile"]
+        latlons  = elev_data.get("profile_latlons", [])
+        city_data_elev = elev_data["city_data"]
+        if latlons and len(latlons) == len(profile):
+            # Subsample every 3rd point for a compact payload
+            mini_elev = [
+                [round(km, 2), round(lat, 5), round(lon, 5), round(ele, 1)]
+                for (km, ele), (lat, lon) in zip(profile, latlons)
+            ][::3]
+            mini_cities = []
+            for cd in city_data_elev:
+                lat, lon = _km_to_latlon(cd["km"], profile, latlons)
+                mini_cities.append({
+                    "name": cd["name"],
+                    "km":   round(cd["km"], 2),
+                    "lat":  round(lat, 5),
+                    "lon":  round(lon, 5),
+                    "tmin": cd["tmin"] if cd["tmin"] is not None else 0.0,
+                    "tmax": cd["tmax"] if cd["tmax"] is not None else 0.0,
+                    "prcp": cd["prcp"] if cd["prcp"] is not None else 0.0,
+                    "ele":  round(cd["ele"], 1) if cd["ele"] is not None else 0.0,
+                })
+            dh = desired_high_temp if desired_high_temp is not None else 25.0
+            dl = desired_low_temp  if desired_low_temp  is not None else 12.0
+            MiniElevationControl(
+                json.dumps(mini_elev),
+                json.dumps(mini_cities),
+                dh, dl
+            ).add_to(m)
 
     return m, elevation_svg, osrm_distances_km
 
