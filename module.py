@@ -2425,6 +2425,7 @@ def build_elevation_svg(elev_data, desired_low_temp=12.0, desired_high_temp=25.0
         '.et-btn:hover{background:#d4ddf0}'
         '.et-btn.active{background:#4a6fa5;color:#fff;'
         'box-shadow:0 2px 8px rgba(74,111,165,.35)}'
+        '.et-btn.inactive{opacity:0.4;pointer-events:auto}'
         '.et-panel{padding:12px 4px 4px}'
         '#elev-tip{position:fixed;display:none;'
         'background:rgba(15,23,42,0.94);color:#e2e8f0;'
@@ -2439,7 +2440,7 @@ def build_elevation_svg(elev_data, desired_low_temp=12.0, desired_high_temp=25.0
         '<div class="et-tabs">'
         f'<button class="et-btn active" onclick="showET(this,\'et-tmax\')">'
         f'Tagestemperatur &mdash; Ziel {desired_high_temp:.0f}\u00b0C</button>'
-        f'<button class="et-btn" onclick="showET(this,\'et-tmin\')">'
+        f'<button class="et-btn inactive" onclick="showET(this,\'et-tmin\')">'
         f'Nachttemperatur &mdash; Ziel {desired_low_temp:.0f}\u00b0C</button>'
         '</div>'
         f'{slider_html}'
@@ -2451,9 +2452,9 @@ def build_elevation_svg(elev_data, desired_low_temp=12.0, desired_high_temp=25.0
         'document.querySelectorAll(".et-panel").forEach(function(e){'
         'e.style.display="none"});'
         'document.querySelectorAll(".et-btn").forEach(function(e){'
-        'e.classList.remove("active")});'
+        'e.classList.remove("active");e.classList.add("inactive")});'
         'document.getElementById(id).style.display="block";'
-        'btn.classList.add("active");}'
+        'btn.classList.add("active");btn.classList.remove("inactive");}'
         'function showElevTip(evt,km,ele,temp){'
         'var tt=document.getElementById("elev-tip");'
         'var s=km+" km\\n"+ele+" m";'
@@ -2756,6 +2757,9 @@ var MINI_CITIES = {{ this._cj }};
 var D_HIGH = {{ this._dh }};
 var D_LOW  = {{ this._dl }};
 var _map = null;
+var _panel = null;
+var _tooltip = null;
+var _chartState = null;
 document.addEventListener('DOMContentLoaded', function() {
     var tries = 0;
     var iv = setInterval(function() {
@@ -2775,7 +2779,7 @@ function init() {
     var panelH = isMobile ? 150 : (isLandscapeMobile ? 100 : 200);
     var panel = document.createElement('div');
     panel.innerHTML = '<svg id="mini-elev-svg" width="100%" height="' + panelH + '" style="display:block"></svg>';
-    panel.style.cssText = 'width:100%;height:' + panelH + 'px;' +
+    panel.style.cssText = 'position:relative;width:100%;height:' + panelH + 'px;' +
         'background:rgba(10,14,22,0.95);' +
         'border-top:2px solid rgba(61,142,248,0.3);box-sizing:border-box;';
     document.body.style.margin = '0';
@@ -2807,6 +2811,24 @@ function init() {
     }
     _map.on('moveend zoomend resize', updateChart);
     window.addEventListener('resize', updateChart);
+    _panel = panel;
+    _tooltip = document.createElement('div');
+    _tooltip.style.cssText = 'position:absolute;pointer-events:none;display:none;' +
+        'background:rgba(10,14,22,0.92);border:1px solid rgba(61,142,248,0.45);' +
+        'color:rgba(255,255,255,0.9);padding:5px 9px;border-radius:4px;' +
+        'font-size:11px;font-family:sans-serif;white-space:nowrap;z-index:20;line-height:1.6;';
+    panel.appendChild(_tooltip);
+    panel.addEventListener('mousemove', onChartMouseMove);
+    panel.addEventListener('mouseleave', function() {
+        if (_tooltip) _tooltip.style.display = 'none';
+        var svg = document.querySelector('#mini-elev-svg');
+        if (svg) {
+            var cl = svg.querySelector('#mini-cursor');
+            if (cl) cl.setAttribute('visibility', 'hidden');
+            var cd = svg.querySelector('#mini-cursor-dot');
+            if (cd) cd.setAttribute('visibility', 'hidden');
+        }
+    });
     updateChart();
 }
 
@@ -2865,14 +2887,26 @@ function updateChart() {
     var eMax = Math.max.apply(null,eles)+50;
     var eRange = eMax - eMin;
     var PL=8, PR=8, PT=18, PB=20, cW=W-PL-PR, cH=H-PT-PB;
+    _chartState = {vis:vis, kmMin:kmMin, kmMax:kmMax, eMin:eMin, eMax:eMax, eRange:eRange,
+                   PL:PL, cW:cW, PT:PT, PB:PB, cH:cH, H:H};
     function xp(km)  { return PL + (km-kmMin)/(kmMax-kmMin)*cW; }
     function yp(ele) { return PT + cH - (ele-eMin)/eRange*cH; }
 
     var out = '';
     for (var i = 0; i < vis.length-1; i++) {
         var km0=vis[i][0], e0=vis[i][3], km1=vis[i+1][0], e1=vis[i+1][3];
-        var tv = interpTemp((km0+km1)/2, (e0+e1)/2, MINI_CITIES, 'tmax');
-        var col = tv != null ? tempToRgb(tv, D_HIGH) : '#4a6fa5';
+        var tmx = interpTemp((km0+km1)/2, (e0+e1)/2, MINI_CITIES, 'tmax');
+        var tmn = interpTemp((km0+km1)/2, (e0+e1)/2, MINI_CITIES, 'tmin');
+        var col;
+        if (tmx != null && tmn != null) {
+            // Average normalised deviation of both day and night temp from desired
+            var avgDev = ((tmx - D_HIGH) + (tmn - D_LOW)) / (2 * 15);
+            col = tempToRgb(avgDev * 15, 0);
+        } else if (tmx != null) {
+            col = tempToRgb(tmx, D_HIGH);
+        } else {
+            col = '#4a6fa5';
+        }
         out += '<polygon points="'+xp(km0)+','+yp(e0)+' '+xp(km1)+','+yp(e1)+
                ' '+xp(km1)+','+yp(eMin)+' '+xp(km0)+','+yp(eMin)+
                '" fill="'+col+'" opacity="0.85"/>';
@@ -2899,9 +2933,64 @@ function updateChart() {
            'fill="rgba(255,255,255,0.3)" font-family="sans-serif">' +
            'H\u00f6henprofil \u2013 sichtbarer Bereich ('+km_range+' km)</text>';
 
+    // Crosshair (hidden until hover)
+    out += '<line id="mini-cursor" x1="0" y1="'+PT+'" x2="0" y2="'+(H-PB)+
+           '" stroke="rgba(255,255,255,0.65)" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>';
+    out += '<circle id="mini-cursor-dot" cx="0" cy="0" r="3" fill="white" opacity="0.85" visibility="hidden"/>';
     svg.setAttribute('viewBox','0 0 '+W+' '+H);
     svg.setAttribute('height', H);
     svg.innerHTML = out;
+}
+
+function onChartMouseMove(e) {
+    if (!_chartState || !_tooltip) return;
+    var cs = _chartState;
+    var svg = document.querySelector('#mini-elev-svg');
+    if (!svg) return;
+    var rect = svg.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    // Hide when outside the chart area
+    if (x < cs.PL || x > cs.PL + cs.cW) {
+        _tooltip.style.display = 'none';
+        var cl2 = svg.querySelector('#mini-cursor');
+        if (cl2) cl2.setAttribute('visibility', 'hidden');
+        var cd2 = svg.querySelector('#mini-cursor-dot');
+        if (cd2) cd2.setAttribute('visibility', 'hidden');
+        return;
+    }
+    var km = cs.kmMin + (x - cs.PL) / cs.cW * (cs.kmMax - cs.kmMin);
+    // Find nearest data point for elevation
+    var best = cs.vis[0], bestDist = Math.abs(best[0] - km);
+    for (var i = 1; i < cs.vis.length; i++) {
+        var d = Math.abs(cs.vis[i][0] - km);
+        if (d < bestDist) { bestDist = d; best = cs.vis[i]; }
+    }
+    var ele = best[3];
+    var tmax = interpTemp(km, ele, MINI_CITIES, 'tmax');
+    var tmin = interpTemp(km, ele, MINI_CITIES, 'tmin');
+    // Update crosshair position
+    var cx = cs.PL + (km - cs.kmMin) / (cs.kmMax - cs.kmMin) * cs.cW;
+    var cy = cs.PT + cs.cH - (ele - cs.eMin) / cs.eRange * cs.cH;
+    var cl = svg.querySelector('#mini-cursor');
+    if (cl) { cl.setAttribute('x1', cx); cl.setAttribute('x2', cx); cl.setAttribute('visibility', 'visible'); }
+    var cdot = svg.querySelector('#mini-cursor-dot');
+    if (cdot) { cdot.setAttribute('cx', cx); cdot.setAttribute('cy', cy); cdot.setAttribute('visibility', 'visible'); }
+    // Build tooltip
+    var dayCol   = tmax != null ? tempToRgb(tmax, D_HIGH) : '#aaa';
+    var nightCol = tmin != null ? tempToRgb(tmin, D_LOW)  : '#aaa';
+    _tooltip.innerHTML =
+        '<div style="color:rgba(180,210,255,0.55);font-size:9px;margin-bottom:2px">km\u00a0' + Math.round(km) + '</div>' +
+        '<div style="color:rgba(150,200,255,0.85)">\u26f0\u00a0' + Math.round(ele) + '\u00a0m</div>' +
+        (tmax != null ? '<div style="color:'+dayCol+'">\u2600\u00a0Tag:\u00a0'+tmax.toFixed(1)+'\u00b0C</div>' : '') +
+        (tmin != null ? '<div style="color:'+nightCol+'">\u263d\u00a0Nacht:\u00a0'+tmin.toFixed(1)+'\u00b0C</div>' : '');
+    _tooltip.style.display = 'block';
+    var tw = _tooltip.offsetWidth;
+    var panelW = svg.parentNode.offsetWidth;
+    var tx = x + 14;
+    if (tx + tw + 4 > panelW) tx = x - tw - 14;
+    _tooltip.style.left = tx + 'px';
+    _tooltip.style.bottom = '26px';
+    _tooltip.style.top = 'auto';
 }
 })();
             {%- endmacro -%}
@@ -3206,6 +3295,12 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
                 el.style.transform = 'scale('+s+')';
                 el.style.transformOrigin = '0% 100%';
             });
+
+            // Extra arrows (2nd, 3rd, 4th): only show when zoomed in enough
+            var showExtra = zoom >= 7;
+            document.querySelectorAll('.extra-arr').forEach(function(el) {
+                el.style.display = showExtra ? '' : 'none';
+            });
         }
     });
     </script>"""
@@ -3244,17 +3339,39 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
             )
         ).add_to(m)
 
-        # ── Wind arrow: direction + strength ─────────────────────────────
+        # ── Wind arrow: direction + travel-direction alignment ───────────
         if wdir is not None and wspd is not None:
             # meteorological convention: wind FROM wdir → arrow points TO wdir+180
             rotation = (wdir + 180) % 360
 
-            # Color by speed (m/s)
-            if   wspd < 3:  wc = '#74b9ff'  # calm  – light blue
-            elif wspd < 7:  wc = '#2ecc71'  # light – green
-            elif wspd < 12: wc = '#f1c40f'  # mod.  – yellow
-            elif wspd < 18: wc = '#e67e22'  # strong – orange
-            else:           wc = '#e74c3c'  # storm  – red
+            # Color by wind alignment with travel direction (air-line prev→next city)
+            n = len(route_locations)
+            if n > 1:
+                if idx == 0:
+                    lat1, lon1 = route_locations[0]; lat2, lon2 = route_locations[1]
+                elif idx == n - 1:
+                    lat1, lon1 = route_locations[n-2]; lat2, lon2 = route_locations[n-1]
+                else:
+                    lat1, lon1 = route_locations[idx-1]; lat2, lon2 = route_locations[idx+1]
+                travel_br = calculate_bearing(lat1, lon1, lat2, lon2)
+                wind_to   = (wdir + 180) % 360
+                diff      = abs((wind_to - travel_br + 180) % 360 - 180)  # 0–180°
+                alignment = math.cos(math.radians(diff))  # +1 tailwind, -1 headwind
+            else:
+                alignment = 0.0
+            # Interpolate: tailwind +1→green, crosswind 0→light-blue, headwind -1→yellow
+            t = (alignment + 1) / 2  # 0=headwind, 0.5=cross, 1=tailwind
+            if t >= 0.5:
+                f = (t - 0.5) * 2
+                wr = int(116 + f * (46  - 116))   # #74b9ff → #2ecc71
+                wg = int(185 + f * (204 - 185))
+                wb = int(255 + f * (113 - 255))
+            else:
+                f = t * 2
+                wr = int(241 + f * (116 - 241))   # #f1c40f → #74b9ff
+                wg = int(196 + f * (185 - 196))
+                wb = int(15  + f * (255 - 15))
+            wc = f'#{wr:02x}{wg:02x}{wb:02x}'
 
             # Number of arrows indicates wind strength
             n_arrows = 1
@@ -3274,12 +3391,16 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
                 cx = ai * (aw + gap) + aw // 2
                 # Head: wide triangle, tip at y=3, base at y=14 (±6 px)
                 # Shaft: rect 4 px wide, from y=14 to y=27
-                arrows_path += (
+                arrow_svg = (
                     f'<polygon points="{cx},3 {cx-6},14 {cx+6},14"'
                     f' fill="{wc}" filter="url(#wf{idx})"/>'
                     f'<rect x="{cx-2}" y="14" width="4" height="13" rx="1"'
                     f' fill="{wc}" filter="url(#wf{idx})"/>'
                 )
+                if ai == 0:
+                    arrows_path += arrow_svg
+                else:
+                    arrows_path += f'<g class="extra-arr">{arrow_svg}</g>'
 
             folium.Marker(
                 location=[lat, lon],

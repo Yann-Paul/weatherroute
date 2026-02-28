@@ -10,12 +10,19 @@ import os
 import pycountry
 import threading
 import uuid
+import difflib
 
 app = Flask(__name__)
 
+
+def _normalize_ascii(s):
+    """Replace German umlauts with ASCII equivalents for fuzzy city matching."""
+    return (s.replace('ä', 'a').replace('ö', 'o').replace('ü', 'u')
+             .replace('ß', 'ss'))
+
 # Load your data once at startup
 def import_data():
-    global city_graph, temperatures, city_names
+    global city_graph, temperatures, city_names, city_names_ascii
     path = "data/"
     city_graph, temperatures = load_data(path)
     city_names = {}
@@ -36,7 +43,42 @@ def import_data():
             if de_name not in city_names:   # don't overwrite English entries
                 city_names[de_name] = str(city_id)
 
+    # Build ASCII-normalized index for umlaut-tolerant lookups (first key wins)
+    city_names_ascii = {}
+    for k in city_names:
+        ascii_k = _normalize_ascii(k)
+        if ascii_k not in city_names_ascii:
+            city_names_ascii[ascii_k] = k
+
 import_data()
+
+
+def resolve_city_name(raw):
+    """Resolve a raw user input to (city_id, matched_key).
+
+    Tries in order:
+      1. Strip whitespace + exact lowercase match
+      2. ASCII-normalised match  (Koln → köln, Dusseldorf → düsseldorf)
+      3. difflib fuzzy match on ASCII-normalised names (muenchen → münchen)
+    Returns (None, None) when no match is found.
+    """
+    name = raw.strip().lower()
+    if not name:
+        return None, None
+    # 1. Exact
+    if name in city_names:
+        return city_names[name], name
+    # 2. ASCII-normalised (strip umlauts from both sides)
+    ascii_name = _normalize_ascii(name)
+    if ascii_name in city_names_ascii:
+        orig_key = city_names_ascii[ascii_name]
+        return city_names[orig_key], orig_key
+    # 3. Fuzzy on ASCII-normalised names (handles ue→ü, typos, etc.)
+    matches = difflib.get_close_matches(ascii_name, city_names_ascii.keys(), n=1, cutoff=0.82)
+    if matches:
+        orig_key = city_names_ascii[matches[0]]
+        return city_names[orig_key], orig_key
+    return None, None
 
 # In-memory job store (safe with gthread workers – single process)
 jobs = {}
@@ -276,11 +318,17 @@ def calculate_route():
             blocked_countries.append(code)
 
     city_rest_days_raw = request.form.getlist('city_rest_days')
+
+    # Resolve each city name with fuzzy/umlaut-tolerant matching
+    resolved_cities = []   # [(original_stripped, city_id, matched_key)]
+    for city in cities:
+        city_id, matched_key = resolve_city_name(city)
+        resolved_cities.append((city.strip(), city_id, matched_key))
+
     city_ids = []
     city_rest_days = {}
-    for i, city in enumerate(cities):
-        if city.lower() in city_names:
-            city_id = city_names[city.lower()]
+    for i, (orig, city_id, matched_key) in enumerate(resolved_cities):
+        if city_id is not None:
             city_ids.append(city_id)
             try:
                 rest = int(city_rest_days_raw[i]) if i < len(city_rest_days_raw) else 0
@@ -291,10 +339,12 @@ def calculate_route():
 
     connections = []
     for start, stop in zip(connection_starts, connection_stops):
-        if start.lower() in city_names and stop.lower() in city_names:
-            connections.append((city_names[start.lower()], city_names[stop.lower()]))
+        s_id, s_key = resolve_city_name(start)
+        e_id, e_key = resolve_city_name(stop)
+        if s_id is not None and e_id is not None:
+            connections.append((s_id, e_id))
 
-    start_city = city_names.get(start_city_name.lower())
+    start_city, start_matched_key = resolve_city_name(start_city_name)
 
     print("Connections:", connections)
     print("start city:", start_city)
@@ -303,9 +353,12 @@ def calculate_route():
     print(blocked_countries)
 
     # ── Server-side validation ───────────────────────────────────────────
-    entered_cities = [c.strip() for c in cities if c.strip()]
-    unrecognized   = [c for c in entered_cities if c.lower() not in city_names]
+    unrecognized = [orig for orig, city_id, _ in resolved_cities
+                    if city_id is None and orig]
+    corrections  = [(orig, matched_key) for orig, city_id, matched_key in resolved_cities
+                    if city_id is not None and orig.lower() != matched_key]
     validation_errors = []
+    warnings = []
 
     if not city_ids and not start_city:
         if unrecognized:
@@ -322,10 +375,18 @@ def calculate_route():
             f'{", ".join(unrecognized)}.'
         )
 
+    if corrections:
+        warnings.append(
+            'Eingaben automatisch korrigiert: '
+            + ', '.join(f'„{orig}" → „{key}"' for orig, key in corrections)
+        )
+
     if start_city_name and not start_city:
         validation_errors.append(
             f'Startstadt „{start_city_name}" nicht gefunden. Bitte Schreibweise prüfen.'
         )
+    elif start_city_name and start_matched_key and start_city_name.strip().lower() != start_matched_key:
+        warnings.append(f'Startstadt „{start_city_name.strip()}" als „{start_matched_key}" erkannt.')
 
     if low_temp > high_temp:
         validation_errors.append(
@@ -356,28 +417,29 @@ def calculate_route():
     # Connections: flag pairs where only one side was recognized
     for start, stop in zip(connection_starts, connection_stops):
         if start.strip() and stop.strip():
-            start_ok = start.lower() in city_names
-            stop_ok  = stop.lower() in city_names
-            if not start_ok and not stop_ok:
+            s_id, _ = resolve_city_name(start)
+            e_id, _ = resolve_city_name(stop)
+            if s_id is None and e_id is None:
                 validation_errors.append(
                     f'Verbindung „{start} → {stop}": Beide Städte nicht gefunden.'
                 )
-            elif not start_ok:
+            elif s_id is None:
                 validation_errors.append(
                     f'Verbindung: Startstadt „{start}" nicht gefunden.'
                 )
-            elif not stop_ok:
+            elif e_id is None:
                 validation_errors.append(
                     f'Verbindung: Zielstadt „{stop}" nicht gefunden.'
                 )
 
-    # Unrecognized-only warnings don't block; other errors do
-    blocking = [e for e in validation_errors
-                if 'übersprungen' not in e]   # skip-warnings are non-blocking
+    # "übersprungen" messages are non-blocking warnings, everything else blocks
+    blocking = [e for e in validation_errors if 'übersprungen' not in e]
+    skip_warnings = [e for e in validation_errors if 'übersprungen' in e]
+    all_warnings = skip_warnings + warnings
     if blocking:
         return render_template('error.html',
                                errors=blocking,
-                               warnings=[e for e in validation_errors if e not in blocking])
+                               warnings=all_warnings)
 
     params = dict(
         city_ids=city_ids,
