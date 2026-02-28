@@ -238,18 +238,14 @@
             white-space: nowrap;
         }
         th .start-day-num {
-            display: block;
-            font-size: 16px;
-            font-weight: 800;
-            color: var(--text);
-            letter-spacing: -0.5px;
+            display: none;
         }
         th .start-date-str {
             display: block;
-            font-size: 10px;
-            color: var(--accent);
-            font-weight: 400;
-            margin-top: 2px;
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--text);
+            letter-spacing: -0.3px;
         }
 
         td {
@@ -415,6 +411,7 @@
             /* Höhenprofil-Panel */
             #elevation-panel { padding: 12px 10px; }
             .elevation-header { flex-direction: column; gap: 6px; margin-bottom: 10px; }
+            .elevation-box svg { min-width: 0; }
 
             /* Starttag-Tabelle: Controls */
             .table-controls {
@@ -444,7 +441,7 @@
     <h1>Optimale Route</h1>
     <span class="badge">{{ route|length }} Stops</span>
     <div class="stat">Gesamtstrecke: <span>{{ overall_distance|int }} km</span></div>
-    <div class="stat">Starttag: <span>{{ start_day }}</span></div>
+    <div class="stat">Starttag: <span id="start-date-stat">{{ start_day }}</span></div>
 </div>
 
 <!-- ── Tabs ───────────────────────────────────── -->
@@ -496,7 +493,7 @@
         <label>Starttag-Bereich</label>
         <input type="range" id="offset-slider" min="-60" max="60" value="0"
                oninput="shiftColumns(this.value)">
-        <span id="offset-label" style="color:var(--accent); font-size:12px;">±0 Tage</span>
+        <span id="offset-label" style="color:var(--accent); font-size:12px;"></span>
 
         <label style="margin-left:16px">Schrittweite</label>
         <select id="step-select" onchange="onStepChange()">
@@ -609,6 +606,12 @@ window.addEventListener('resize', sizeMapIframe);
 
 /* ── Tab switching ──────────────────────────────── */
 document.addEventListener('DOMContentLoaded', function () {
+    var sdEl = document.getElementById('start-date-stat');
+    if (sdEl) {
+        var d = dayToDate(BASE_START_DAY);
+        sdEl.textContent = ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2)+'.';
+    }
+    updateOffsetLabel();
     document.querySelectorAll('.tab').forEach(function (tab) {
         tab.addEventListener('click', function () {
             var panelId = tab.getAttribute('data-target');
@@ -624,7 +627,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 /* ── Date helpers ───────────────────────────────── */
 function dayToDate(dayOfYear) {
-    const d = new Date(2024, 0, 1);
+    const d = new Date(2026, 0, 1);
     d.setDate(d.getDate() + dayOfYear - 1);
     return d;
 }
@@ -685,7 +688,7 @@ function renderRestCell(td, stop, sd, relDay, offset) {
     div.style.borderLeftColor = color ?? 'rgba(234,179,8,0.5)';
     if (color) div.style.background = color.replace('0.85','0.05');
 
-    const calDayRest = ((sd + relDay - 2 + 365) % 365) + 1;
+    const calDayRest = ((sd + relDay - 1 + 365) % 365) + 1;
     const dateEl = document.createElement('div');
     dateEl.className   = 'cell-date';
     dateEl.textContent = dateStr(calDayRest);
@@ -727,15 +730,17 @@ function onStepChange() {
     slider.min = -maxOffset; slider.max = maxOffset;
     slider.value = Math.round(parseInt(slider.value) / step) * step;
     globalOffset = parseInt(slider.value);
-    document.getElementById('offset-label').textContent =
-        (globalOffset >= 0 ? '+' : '') + globalOffset + ' Tage';
+    updateOffsetLabel();
     rebuildTable();
 }
 function shiftColumns(val) {
     globalOffset = parseInt(val);
-    document.getElementById('offset-label').textContent =
-        (val >= 0 ? '+' : '') + val + ' Tage';
+    updateOffsetLabel();
     rebuildTable();
+}
+function updateOffsetLabel() {
+    const center = ((BASE_START_DAY + globalOffset - 1 + 365) % 365) + 1;
+    document.getElementById('offset-label').textContent = dateStr(center);
 }
 function rebuildTable() {
     const step    = parseInt(document.getElementById('step-select').value);
@@ -791,7 +796,7 @@ function rebuildTable() {
                 tr.appendChild(td); return;
             }
 
-            const calDay = ((sd + relDay - 2 + 365) % 365) + 1;
+            const calDay = ((sd + relDay - 1 + 365) % 365) + 1;
             const sdKey  = String(sd);
 
             stopsOnDay.forEach(stop => {

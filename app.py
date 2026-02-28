@@ -60,7 +60,7 @@ def search_countries():
     return jsonify(matches[:10])
 
 
-def build_route_weather_json(graph, temperatures, route, start_day):
+def build_route_weather_json(graph, temperatures, route, start_day, warming_factor=0.0):
     """
     Berechnet Wetterdaten für jeden Stadt-Stop auf der Route
     für einen Puffer von ±70 Tagen um den Starttag.
@@ -76,7 +76,7 @@ def build_route_weather_json(graph, temperatures, route, start_day):
         for sd in all_start_days:
             cal_day = ((sd + rel_day - 1) % 365) + 1
             try:
-                w = get_interpolated_weather(city_id, cal_day, temperatures)
+                w = get_interpolated_weather(city_id, cal_day, temperatures, warming_factor)
                 weather_by_startday[str(sd)] = [
                     round(v, 2) if v is not None else None
                     for v in w
@@ -147,6 +147,7 @@ def run_calculation(job_id, params):
             max_days=params['max_days'],
             sorted_input=params['sorted_input'],
             city_rest_days=params['city_rest_days'],
+            warming_factor=params['warming_factor'],
         )
 
         if not route:
@@ -161,6 +162,7 @@ def run_calculation(job_id, params):
             params['low_temp'], params['high_temp'],
             params['low_temp_min'], params['low_temp_max'],
             params['high_temp_min'], params['high_temp_max'],
+            warming_factor=params['warming_factor'],
         )
         update(2, "Route gefunden! Straßenverlauf wird geladen...",
                status='route_found', rough_map=rough_map,
@@ -187,6 +189,7 @@ def run_calculation(job_id, params):
             routing_mode=params['routing_mode'],
             elev_points_per_1000km=params['elev_points_per_1000km'],
             progress_callback=osrm_progress,
+            warming_factor=params['warming_factor'],
         )
 
         update(3, "Höhenprofil wird erstellt...", status='running')
@@ -197,7 +200,8 @@ def run_calculation(job_id, params):
             for i, (city_id, day, city_name, _) in enumerate(route)
         ]
         route_weather_json = build_route_weather_json(
-            city_graph, temperatures, route, start_day
+            city_graph, temperatures, route, start_day,
+            warming_factor=params['warming_factor'],
         )
 
         job['result'] = {
@@ -255,6 +259,7 @@ def calculate_route():
     max_days  = int(request.form.get('max_days', 30))
     elev_points_per_1000km = int(request.form.get('elev_points_per_1000km', 1000))
     temp_weight = float(request.form.get('temp_weight', 0.5))
+    warming_factor = float(request.form.get('warming_factor', 0.6))
 
     routing_mode = request.form.get('routing_mode', 'car')
     if routing_mode not in ('car', 'bicycle', 'car_no_highway'):
@@ -389,6 +394,7 @@ def calculate_route():
         max_days=max_days,
         elev_points_per_1000km=elev_points_per_1000km,
         temp_weight=temp_weight,
+        warming_factor=warming_factor,
         routing_mode=routing_mode,
         sorted_input=sorted_input,
         blocked_countries=blocked_countries,

@@ -153,10 +153,11 @@ def get_month_day(day_of_year):
     return 12, 31  # Fallback for day 365/366
 
 
-def get_interpolated_temperature(city, day_of_year, temperatures):
+def get_interpolated_temperature(city, day_of_year, temperatures, warming_factor=0.0):
     """
     Get temperature interpolated between months based on day of year.
-    Returns (low_temp, high_temp) or (None, None) if data missing
+    Returns (low_temp, high_temp) or (None, None) if data missing.
+    warming_factor is added to both tmin and tmax.
     """
     month, day = get_month_day(day_of_year)
     days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
@@ -176,8 +177,8 @@ def get_interpolated_temperature(city, day_of_year, temperatures):
         prev_month = 12 if month == 1 else month - 1
         adjacent_temps = temperatures.get(city, {}).get(str(prev_month), [None]*6)[:2]
         if None in adjacent_temps:
-            return current_month_temps  # Fallback to current month if adjacent unavailable
-            
+            return current_month_temps[0] + warming_factor, current_month_temps[1] + warming_factor
+
         # Calculate interpolation weight (0 at middle of previous month, 1 at middle of current month)
         prev_mid_day = days_in_month[prev_month-1] // 2
         total_days = (days_in_month[prev_month-1] - prev_mid_day) + mid_month_day
@@ -189,8 +190,8 @@ def get_interpolated_temperature(city, day_of_year, temperatures):
         next_month = 1 if month == 12 else month + 1
         adjacent_temps = temperatures.get(city, {}).get(str(next_month), [None]*6)[:2]
         if None in adjacent_temps:
-            return current_month_temps  # Fallback to current month if adjacent unavailable
-            
+            return current_month_temps[0] + warming_factor, current_month_temps[1] + warming_factor
+
         # Calculate interpolation weight (0 at middle of current month, 1 at middle of next month)
         next_mid_day = days_in_month[next_month-1] // 2
         total_days = (days_in_month[month-1] - mid_month_day) + next_mid_day
@@ -198,15 +199,15 @@ def get_interpolated_temperature(city, day_of_year, temperatures):
         weight = 1 - (days_from_current_mid / total_days)
     
     # Interpolate temperatures - fixed to use current_month_temps instead of current_temps
-    low_temp = current_month_temps[0] * weight + adjacent_temps[0] * (1 - weight)
-    high_temp = current_month_temps[1] * weight + adjacent_temps[1] * (1 - weight)
-    
+    low_temp = current_month_temps[0] * weight + adjacent_temps[0] * (1 - weight) + warming_factor
+    high_temp = current_month_temps[1] * weight + adjacent_temps[1] * (1 - weight) + warming_factor
+
     return low_temp, high_temp
 
-def get_interpolated_weather(city, day_of_year, temperatures):
+def get_interpolated_weather(city, day_of_year, temperatures, warming_factor=0.0):
     """
     Get temperature interpolated between months based on day of year.
-    Returns (low_temp, high_temp) or (None, None) if data missing
+    Returns [tmin, tmax, prcp, wspd, ...]. warming_factor is added to tmin and tmax.
     """
     month, day = get_month_day(day_of_year)
     days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
@@ -276,7 +277,10 @@ def get_interpolated_weather(city, day_of_year, temperatures):
         interp_dir_rad = np.arctan2(interp_y, interp_x)
         interp_output.append(np.rad2deg(interp_dir_rad) % 360)
         interp_output.append(np.sqrt(interp_x**2 + interp_y**2))
-    
+
+    if warming_factor and len(interp_output) >= 2:
+        if interp_output[0] is not None: interp_output[0] += warming_factor
+        if interp_output[1] is not None: interp_output[1] += warming_factor
     return interp_output
 
 def calculate_temperature_score(temp_data, exp = 2, desired_low_temp=None, desired_high_temp=None, 
@@ -318,7 +322,7 @@ def calculate_daily_temperature_scores(from_city, to_city, start_day, travel_day
                                     desired_low_temp=None, desired_high_temp=None,
                                     min_low_temp=float('-inf'), max_low_temp=float('inf'),
                                     min_high_temp=float('-inf'), max_high_temp=float('inf'),
-                                    interpol_tt=None, spatial_i_tt=None):
+                                    interpol_tt=None, spatial_i_tt=None, warming_factor=0.0):
     """
     Calculate temperature scores for each day of travel between cities.
     Uses both temporal (between months) and spatial (between cities) interpolation.
@@ -329,8 +333,8 @@ def calculate_daily_temperature_scores(from_city, to_city, start_day, travel_day
     
     # Get interpolated temperatures for both cities for start and end day
     start_time = time.time()
-    from_temps = get_interpolated_temperature(from_city, start_day, temperatures)
-    to_temps = get_interpolated_temperature(to_city, start_day+travel_days, temperatures)
+    from_temps = get_interpolated_temperature(from_city, start_day, temperatures, warming_factor)
+    to_temps = get_interpolated_temperature(to_city, start_day+travel_days, temperatures, warming_factor)
     if interpol_tt is not None:
         interpol_tt += time.time() - start_time   
     
@@ -381,7 +385,8 @@ def optimized_travel_planner(G, source, target, current_day, temperatures,
                             min_low_temp, max_low_temp, min_high_temp, max_high_temp,
                             temp_weight=0.5, exp=2, time_penalty_weight=0.3,
                             heuristic_weight=2,
-                            interpol_tt=None, spatial_i_tt=None):
+                            interpol_tt=None, spatial_i_tt=None,
+                            warming_factor=0.0):
     """
     Hybrid A* implementation with geographical heuristic guidance and time-aware state pruning.
     Now ensures only the best instance for each city remains in the priority queue.
@@ -427,7 +432,7 @@ def optimized_travel_planner(G, source, target, current_day, temperatures,
                     current_node, neighbor, current_day + acc_days, edge_days,
                     temperatures, exp, desired_low_temp, desired_high_temp,
                     min_low_temp, max_low_temp, min_high_temp, max_high_temp,
-                    interpol_tt, spatial_i_tt
+                    interpol_tt, spatial_i_tt, warming_factor
                 )
 
             if violated:
@@ -497,8 +502,8 @@ def optimized_travel_planner(G, source, target, current_day, temperatures,
     return path, best_score, interpol_tt, spatial_i_tt
 
 def calculate_path_score(G,route, connections_dict, start_day, temperatures, desired_low_temp, desired_high_temp,
-           min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, daily_max_km, max_days, exp=2, 
-           interpol_tt=None, spatial_i_tt=None):
+           min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, daily_max_km, max_days, exp=2,
+           interpol_tt=None, spatial_i_tt=None, warming_factor=0.0):
     """
     Cluster-compatible score calculation.
     """
@@ -525,7 +530,7 @@ def calculate_path_score(G,route, connections_dict, start_day, temperatures, des
                     from_city, to_city, current_day + total_days, edge_days,
                     temperatures, exp, desired_low_temp, desired_high_temp,
                     min_low_temp, max_low_temp, min_high_temp, max_high_temp,
-                    interpol_tt, spatial_i_tt
+                    interpol_tt, spatial_i_tt, warming_factor
                 )
 
             if violated:
@@ -548,9 +553,9 @@ def calculate_path_score(G,route, connections_dict, start_day, temperatures, des
 
 # ---------------------- Modified Route Calculation ----------------------
 def calculate_route_score(route, current_day, targets_day_estimates, temperatures, desired_low_temp, desired_high_temp,
-           min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp=2, 
+           min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp=2,
            interpol_tt=None, spatial_i_tt=None,
-           city_to_cluster=None, cluster_info=None):
+           city_to_cluster=None, cluster_info=None, warming_factor=0.0):
     """
     Cluster-compatible score calculation.
     """
@@ -594,7 +599,7 @@ def calculate_route_score(route, current_day, targets_day_estimates, temperature
         if temp_weight > 0 or max_high_temp < float('inf') or max_low_temp < float('inf') or min_high_temp > float('-inf') or min_low_temp > float('-inf'):
             temp_score, violated, interpol_tt, spatial_i_tt = calculate_daily_temperature_scores(
                 from_city, to_city, current_day + total_days, travel_days, temperatures, exp, desired_low_temp, desired_high_temp,
-                min_low_temp, max_low_temp, min_high_temp, max_high_temp, interpol_tt, spatial_i_tt
+                min_low_temp, max_low_temp, min_high_temp, max_high_temp, interpol_tt, spatial_i_tt, warming_factor
             )
 
             if temp_weight >0:
@@ -614,11 +619,11 @@ def calculate_route_score(route, current_day, targets_day_estimates, temperature
     return end_score, total_days, days_track, interpol_tt, spatial_i_tt
 
 # ---------------------- Modified Nearest Neighbor ----------------------
-def nearest_neighbor_with_random(start, target_cities, connections_dict, targets_day_estimates, city_names, max_days, start_day, temperatures, 
-                                desired_low_temp, desired_high_temp, min_low_temp, max_low_temp, min_high_temp, 
-                                max_high_temp, temp_weight, sun_weight, wind_weight, randomization=0, exp=2, 
+def nearest_neighbor_with_random(start, target_cities, connections_dict, targets_day_estimates, city_names, max_days, start_day, temperatures,
+                                desired_low_temp, desired_high_temp, min_low_temp, max_low_temp, min_high_temp,
+                                max_high_temp, temp_weight, sun_weight, wind_weight, randomization=0, exp=2,
                                 interpol_tt=None, spatial_i_tt=None,
-                                city_to_cluster=None, cluster_info=None):
+                                city_to_cluster=None, cluster_info=None, warming_factor=0.0):
     """
     Cluster-compatible version of nearest neighbor algorithm.
     """
@@ -666,10 +671,10 @@ def nearest_neighbor_with_random(start, target_cities, connections_dict, targets
                 
                 if current_days + effective_days <= max_days:
                     score, _, _, interpol_tt, spatial_i_tt = calculate_route_score(
-                        [current, next_city], start_day + current_days, targets_day_estimates, temperatures, 
-                        desired_low_temp, desired_high_temp, min_low_temp, max_low_temp, min_high_temp, 
-                        max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp, interpol_tt, 
-                        spatial_i_tt, city_to_cluster, cluster_info
+                        [current, next_city], start_day + current_days, targets_day_estimates, temperatures,
+                        desired_low_temp, desired_high_temp, min_low_temp, max_low_temp, min_high_temp,
+                        max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp, interpol_tt,
+                        spatial_i_tt, city_to_cluster, cluster_info, warming_factor
                     )
                     neighbor_scores.append((score, next_city, effective_days))
             
@@ -699,8 +704,8 @@ def nearest_neighbor_with_random(start, target_cities, connections_dict, targets
 
 def improve_route(route, connections_dict, current_day, targets_day_estimates, temperatures,
                  desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
-                 min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp = 2, interpol_tt = None, spatial_i_tt = None,
-                 city_to_cluster=None, cluster_info=None):
+                 min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp=2, interpol_tt=None, spatial_i_tt=None,
+                 city_to_cluster=None, cluster_info=None, warming_factor=0.0):
    """
    Optimizes route using 2-opt local search:
    1. Try swapping all possible pairs of route segments
@@ -716,9 +721,9 @@ def improve_route(route, connections_dict, current_day, targets_day_estimates, t
        
    improved = True
    best_score, _, days_track, interpol_tt, spatial_i_tt = calculate_route_score(
-       route, current_day, targets_day_estimates, temperatures, desired_low_temp, 
-       desired_high_temp, min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp, 
-       interpol_tt, spatial_i_tt, city_to_cluster, cluster_info
+       route, current_day, targets_day_estimates, temperatures, desired_low_temp,
+       desired_high_temp, min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp,
+       interpol_tt, spatial_i_tt, city_to_cluster, cluster_info, warming_factor
        )
    best_route = route
    best_days_track = days_track
@@ -735,11 +740,11 @@ def improve_route(route, connections_dict, current_day, targets_day_estimates, t
                 if connections_dict.get(route[i]) != route[i-1] and connections_dict.get(route[j]) != route_j_and_one:
                     new_route = route[:i] + list(reversed(route[i:j + 1])) + route[j + 1:]
                     new_score, _, days_track, interpol_tt, spatial_i_tt = calculate_route_score(
-                        new_route, current_day, targets_day_estimates, temperatures, desired_low_temp, desired_high_temp, 
+                        new_route, current_day, targets_day_estimates, temperatures, desired_low_temp, desired_high_temp,
                         min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp, interpol_tt, spatial_i_tt,
-                        city_to_cluster, cluster_info
+                        city_to_cluster, cluster_info, warming_factor
                         )
-                    
+
                     if  new_score < best_score:
                         best_score = new_score
                         best_route = new_route
@@ -749,16 +754,16 @@ def improve_route(route, connections_dict, current_day, targets_day_estimates, t
                         #break
                 #if improved:
                 #   break
-                
+
                 if (connections_dict.get(route[i])!= route[i-1]) & (not connections_dict.get(route[j])):
                     #if j == len(route)-1:
                     #    new_route = route[:i] + route[j:j+1] + route[i:j]
                     #else:
                     new_route = route[:i] + route[j:j+1] + route[i:j] +  route[j + 1:]
                     new_score, _, days_track, interpol_tt, spatial_i_tt = calculate_route_score(
-                        new_route, current_day, targets_day_estimates, temperatures, desired_low_temp, desired_high_temp, 
+                        new_route, current_day, targets_day_estimates, temperatures, desired_low_temp, desired_high_temp,
                         min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp, interpol_tt, spatial_i_tt,
-                        city_to_cluster, cluster_info
+                        city_to_cluster, cluster_info, warming_factor
                         )
                     
                     if  new_score < best_score:
@@ -828,7 +833,7 @@ def optimize_clusters_in_route(main_route, cluster_info, start_city, targets_day
 def solve_cluster_tsp(entry_city = None, exit_city = None, cluster_cities = None, targets_day_estimates = None, city_names = None, temperatures = None,
                      desired_low_temp = None, desired_high_temp = None, min_low_temp = float('-inf'), max_low_temp = float('inf'), min_high_temp = float('-inf'),
                      max_high_temp = float('inf'), max_days = float('inf'), exp = 2,
-                     interpol_tt = None, spatial_i_tt = None):
+                     interpol_tt = None, spatial_i_tt = None, warming_factor=0.0):
     """
     Solves TSP for cluster cities with optional entry/exit constraints.
     Uses your existing algorithm with temp_weight=0 sun_weight=0 and wind_weight=0.
@@ -874,7 +879,8 @@ def solve_cluster_tsp(entry_city = None, exit_city = None, cluster_cities = None
                 sun_weight=0,
                 wind_weight=0,
                 randomization=0.1,
-                exp=exp
+                exp=exp,
+                warming_factor=warming_factor
             )
         
             if route:
@@ -882,6 +888,7 @@ def solve_cluster_tsp(entry_city = None, exit_city = None, cluster_cities = None
                     route, {}, 0, targets_day_estimates, temperatures,
                     desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
                     min_high_temp, max_high_temp, 0, 0, 0, max_days, exp,
+                    warming_factor=warming_factor
                 )
                 
                 
@@ -896,7 +903,8 @@ def solve_cluster_tsp(entry_city = None, exit_city = None, cluster_cities = None
                     desired_low_temp, desired_high_temp,
                     min_low_temp, max_low_temp,
                     min_high_temp, max_high_temp,
-                    0, 0, 0, max_days, exp, interpol_tt, spatial_i_tt
+                    0, 0, 0, max_days, exp, interpol_tt, spatial_i_tt,
+                    warming_factor=warming_factor
                 )
 
                 heapq.heappush(routes, (score, improved_route, days))
@@ -1124,7 +1132,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                       max_days=30, candidate_limit=8,
                       desired_low_temp=15, desired_high_temp=25,
                       temp_weight=0.5, sun_weight=0.5, wind_weight=0.5, auto_threshold_percentile=20, exp=2,
-                      sorted_input=False, city_rest_days=None):
+                      sorted_input=False, city_rest_days=None, warming_factor=0.0):
     """
     Find optimal route considering both distance and temperature preferences.
     temp_weight: Weight factor for temperature score (0.0 to 1.0)
@@ -1273,13 +1281,15 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                         min_low_temp, max_low_temp, min_high_temp, max_high_temp,
                         temp_weight, sun_weight, wind_weight, randomization=0.2, exp=exp,
                         interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
-                        city_to_cluster=city_to_cluster, cluster_info=cluster_info
+                        city_to_cluster=city_to_cluster, cluster_info=cluster_info,
+                        warming_factor=warming_factor
                     )
                     score, _, _, interpol_tt, spatial_i_tt = calculate_route_score(
                         initial_route, sd, targets_day_estimates, temperatures,
                         desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
                         min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight,
-                        max_days, exp, interpol_tt, spatial_i_tt
+                        max_days, exp, interpol_tt, spatial_i_tt,
+                        warming_factor=warming_factor
                     )
                     print("initial route:", [city_names[city] for city in initial_route], score)
 
@@ -1289,7 +1299,8 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                             desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
                             min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight,
                             max_days, exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
-                            city_to_cluster=city_to_cluster, cluster_info=cluster_info
+                            city_to_cluster=city_to_cluster, cluster_info=cluster_info,
+                            warming_factor=warming_factor
                         )
                         heapq.heappush(solutions, (score, improved_route, days_track, sd))
                         print("improved route:", [city_names[city] for city in improved_route], score)
@@ -1319,7 +1330,8 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                 optimized_route, sd, targets_day_estimates, temperatures,
                 desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
                 min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight,
-                max_days, exp, interpol_tt, spatial_i_tt
+                max_days, exp, interpol_tt, spatial_i_tt,
+                warming_factor=warming_factor
             )
             heapq.heappush(final_solutions, (optimized_score, optimized_route, sd))
 
@@ -1421,7 +1433,8 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                         subgraph, from_city, to_city, current_day, temperatures,
                         daily_max_km, expected_travel_days, desired_low_temp, desired_high_temp,
                         min_low_temp, max_low_temp, min_high_temp, max_high_temp,
-                        temp_weight, exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt
+                        temp_weight, exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
+                        warming_factor=warming_factor
                     )
                     total_shortest_path_time += time.time() - t0
                 except Exception as error:
@@ -1494,7 +1507,8 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                 graph, current_route, connections_dict, route_start_day, temperatures,
                 desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
                 min_high_temp, max_high_temp, temp_weight, daily_max_km, max_days,
-                exp=exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt
+                exp=exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
+                warming_factor=warming_factor
             )
             all_evaluated_routes.append((full_score, current_route, route_start_day, full_route))
             print(f"Valid route found with score: {full_score:.2f}, start day: {route_start_day}")
@@ -1535,7 +1549,8 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                         graph, route_order, connections_dict, earlier_day, temperatures,
                         desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
                         min_high_temp, max_high_temp, temp_weight, daily_max_km, max_days,
-                        exp=exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt
+                        exp=exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
+                        warming_factor=warming_factor
                     )
                     print(f"  Day {earlier_day} (−{interval}): score {score_earlier:.2f}")
                     if score_earlier < best_score:
@@ -1549,7 +1564,8 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                         graph, route_order, connections_dict, later_day, temperatures,
                         desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
                         min_high_temp, max_high_temp, temp_weight, daily_max_km, max_days,
-                        exp=exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt
+                        exp=exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
+                        warming_factor=warming_factor
                     )
                     print(f"  Day {later_day} (+{interval}): score {score_later:.2f}")
                     if score_later < best_score:
@@ -2890,7 +2906,7 @@ function updateChart() {
 def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_high_temp,
                      min_low_temp, max_low_temp, min_high_temp, max_high_temp,
                      connections=None, show_elevation=True, routing_mode='car',
-                     elev_points_per_1000km=1000, progress_callback=None):
+                     elev_points_per_1000km=1000, progress_callback=None, warming_factor=0.0):
     """
     Create Folium map with elevation profile.
     Returns: (folium_map, elevation_svg, osrm_distances_km)
@@ -2910,7 +2926,7 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
     for city_id, day, city_name, distance in route:
         try:
             node_data = graph.nodes[city_id]
-            temps = get_interpolated_weather(city_id, day, temperatures)
+            temps = get_interpolated_weather(city_id, day, temperatures, warming_factor)
             temp_score, violated = calculate_temperature_score(
                 temps, exp, desired_low_temp, desired_high_temp,
                 min_low_temp, max_low_temp, min_high_temp, max_high_temp
@@ -3114,7 +3130,7 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
                 for city_id, day in elev_city_id_day:
                     cal_day = ((day + d - 1) % 365) + 1
                     try:
-                        w = get_interpolated_weather(city_id, cal_day, temperatures)
+                        w = get_interpolated_weather(city_id, cal_day, temperatures, warming_factor)
                         temps_for_d.append({
                             "tmin": round(float(w[0]), 2) if w[0] is not None else None,
                             "tmax": round(float(w[1]), 2) if w[1] is not None else None,
@@ -3372,7 +3388,7 @@ def create_route_map(graph, temperatures, route, exp, desired_low_temp, desired_
 
 
 def create_loading_route_map(graph, temperatures, route, exp, desired_low_temp, desired_high_temp,
-                    min_low_temp, max_low_temp, min_high_temp, max_high_temp):
+                    min_low_temp, max_low_temp, min_high_temp, max_high_temp, warming_factor=0.0):
     """
     Returns compact JSON-serializable city data for the loading page map.
     {"cities": [{lat, lon, name, rel_day, day, color, tmin, tmax}, ...], "center": [lat, lon]}
@@ -3383,7 +3399,7 @@ def create_loading_route_map(graph, temperatures, route, exp, desired_low_temp, 
     for city_id, day, city_name, distance in route:
         try:
             graph.nodes[city_id]  # ensure node exists
-            temps = get_interpolated_weather(city_id, day, temperatures)
+            temps = get_interpolated_weather(city_id, day, temperatures, warming_factor)
             temp_score, _ = calculate_temperature_score(
                 temps, exp, desired_low_temp, desired_high_temp,
                 min_low_temp, max_low_temp, min_high_temp, max_high_temp
@@ -3429,7 +3445,7 @@ def create_loading_route_map(graph, temperatures, route, exp, desired_low_temp, 
 
 # Legacy full-map version (kept for reference, not used by app.py)
 def _create_loading_route_map_legacy(graph, temperatures, route, exp, desired_low_temp, desired_high_temp,
-                    min_low_temp, max_low_temp, min_high_temp, max_high_temp):
+                    min_low_temp, max_low_temp, min_high_temp, max_high_temp, warming_factor=0.0):
     """Create Folium map with route markers showing dates and temperatures"""
     route_locations = []
     popups = []
@@ -3446,7 +3462,7 @@ def _create_loading_route_map_legacy(graph, temperatures, route, exp, desired_lo
     for city_id, day, city_name, distance in route:
         try:
             node_data = graph.nodes[city_id]
-            temps = get_interpolated_weather(city_id, day, temperatures)
+            temps = get_interpolated_weather(city_id, day, temperatures, warming_factor)
             temp_score, violated = calculate_temperature_score(
                 temps, exp, desired_low_temp, desired_high_temp,
                 min_low_temp, max_low_temp, min_high_temp, max_high_temp
