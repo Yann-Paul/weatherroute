@@ -927,6 +927,10 @@ def dynamic_cluster_cities(cities, city_coords, temperatures, targets_day_estima
     - Single-city clusters for outliers
     """
     
+    # Short-circuit: single city needs no clustering
+    if len(cities) <= 1:
+        return {0: cities} if cities else {}
+
     # 1. Calculate normalized combined distance matrix
     combined_dist = create_combined_distance_matrix(
         cities, city_coords, temperatures, targets_day_estimates, current_day,
@@ -977,24 +981,27 @@ def create_combined_distance_matrix(cities, city_coords, temperatures, targets_d
                     dist = 20000
                 day_dist[i,j] = day_dist[j,i] = dist
                 day_values.append(dist)
-    
-    # Normalize geographic distances
-    max_day = max(day_values)
-    day_dist = day_dist / max_day
-    
+
+    # Normalize geographic distances (guard against single-city case)
+    if day_values:
+        max_day = max(day_values)
+        if max_day > 0:
+            day_dist = day_dist / max_day
+
     # Calculate temperature compatibility scores
     temp_scores = {}
     for city in cities:
         temps = get_interpolated_temperature(city, current_day, temperatures)
         temp_scores[city] = temps[1]
-    
-    # Normalize temperature differences
+
+    # Normalize temperature differences (guard against all-equal temps)
     all_scores = list(temp_scores.values())
-    max_temp_diff = max(all_scores) - min(all_scores)
-    for i, city1 in enumerate(cities):
-        for j, city2 in enumerate(cities):
-            if i < j:
-                temp_dist[i,j] = temp_dist[j,i] = abs(temp_scores[city1] - temp_scores[city2]) / max_temp_diff
+    max_temp_diff = max(all_scores) - min(all_scores) if len(all_scores) > 1 else 0
+    if max_temp_diff > 0:
+        for i, city1 in enumerate(cities):
+            for j, city2 in enumerate(cities):
+                if i < j:
+                    temp_dist[i,j] = temp_dist[j,i] = abs(temp_scores[city1] - temp_scores[city2]) / max_temp_diff
                 
     #return temp_weight * temp_dist + (1 - temp_weight) * 
     # Combine distances based on temp_weight 
@@ -1772,13 +1779,17 @@ def get_elevation_profile(route_locations, city_names, skip_segments=None, max_e
         indices[-1] = n - 1
         road_coords = [road_coords[i] for i in indices]
     
-    # Open-Elevation lookup
+    # Open-Elevation lookup (batched)
+    _ELEV_BATCH = 512
+    results = []
     try:
-        payload = {"locations": [{"latitude": lat, "longitude": lon}
-                                  for lat, lon in road_coords]}
-        resp = requests.post(OPEN_ELEV, json=payload, timeout=30)
-        resp.raise_for_status()
-        results = resp.json()["results"]
+        for b_start in range(0, len(road_coords), _ELEV_BATCH):
+            batch = road_coords[b_start:b_start + _ELEV_BATCH]
+            payload = {"locations": [{"latitude": lat, "longitude": lon}
+                                      for lat, lon in batch]}
+            resp = requests.post(OPEN_ELEV, json=payload, timeout=30)
+            resp.raise_for_status()
+            results.extend(resp.json()["results"])
     except Exception as e:
         print(f"Open-Elevation request failed: {e}")
         return None
@@ -2607,15 +2618,20 @@ def build_combined_elevation_profile(sub_route_data, max_elev_points=None, point
     print(f"[Höhenprofil] Schritt 2 fertig — {n_sampled} Punkte nach Abtastung "
           f"(Reduktion: {total_coords} → {n_sampled})", flush=True)
 
-    # Step 3: Single Open-Elevation call for all sub-routes
-    print(f"[Höhenprofil] Schritt 3 — Open-Elevation Anfrage mit {n_sampled} Koordinaten …",
-          flush=True)
+    # Step 3: Open-Elevation calls (batched to stay within API payload limits)
+    _ELEV_BATCH = 512
+    n_batches = (n_sampled + _ELEV_BATCH - 1) // _ELEV_BATCH
+    print(f"[Höhenprofil] Schritt 3 — Open-Elevation Anfrage mit {n_sampled} Koordinaten "
+          f"in {n_batches} Batch(es) …", flush=True)
+    all_results = []
     try:
-        payload = {"locations": [{"latitude": lat, "longitude": lon}
-                                  for lat, lon in all_sampled_latlon]}
-        resp = requests.post(OPEN_ELEV, json=payload, timeout=30)
-        resp.raise_for_status()
-        all_results = resp.json()["results"]
+        for b_start in range(0, n_sampled, _ELEV_BATCH):
+            batch = all_sampled_latlon[b_start:b_start + _ELEV_BATCH]
+            payload = {"locations": [{"latitude": lat, "longitude": lon}
+                                      for lat, lon in batch]}
+            resp = requests.post(OPEN_ELEV, json=payload, timeout=30)
+            resp.raise_for_status()
+            all_results.extend(resp.json()["results"])
         print(f"[Höhenprofil] Schritt 3 fertig — {len(all_results)} Höhenwerte empfangen",
               flush=True)
     except Exception as e:

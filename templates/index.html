@@ -271,8 +271,14 @@
     .range-row input { flex: 1; }
     .range-sep { color: var(--muted); font-size: 12px; flex-shrink: 0; }
 
-    /* ── Submit ── */
-    .submit-wrap { margin-top: 24px; text-align: center; }
+    /* ── Submit / advanced area ── */
+    .submit-wrap {
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
     .btn-submit {
       padding: 13px 48px;
       background: var(--accent);
@@ -285,9 +291,40 @@
       letter-spacing: .03em;
       transition: background .15s, transform .1s;
       box-shadow: 0 3px 10px rgba(74,111,165,.35);
+      width: 100%;
+      max-width: 320px;
     }
     .btn-submit:hover { background: var(--accent-h); transform: translateY(-1px); }
     .btn-submit:active { transform: translateY(0); }
+
+    /* ── Advanced toggle button ── */
+    .btn-advanced {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 20px;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .12s, border-color .12s, color .12s;
+    }
+    .btn-advanced:hover { background: #eef2fa; border-color: var(--accent); color: var(--accent); }
+    .btn-advanced .adv-arrow { font-size: 10px; transition: transform .2s; }
+    .btn-advanced.open .adv-arrow { transform: rotate(180deg); }
+
+    /* ── Advanced panel ── */
+    #advanced-panel {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height 0.35s ease;
+    }
+    #advanced-panel.open {
+      max-height: 4000px;
+    }
 
     /* ── Autocomplete ── */
     .ui-autocomplete { max-height: 200px; overflow-y: auto; z-index: 9999; font-size: 13px; }
@@ -335,7 +372,7 @@
       select { padding: 10px 11px; font-size: 14px; }
 
       /* City row: Pausentage-Wrap auf Mobile kompakt halten */
-      .rest-days-wrap span { display: none; }        /* hide "⏸ Pause" labels */
+      .rest-days-wrap span { display: none; }
       .rest-days-wrap { padding: 2px 4px; gap: 1px; }
       .rest-days-wrap::before { content: "⏸"; font-size: 11px; color: var(--muted); }
 
@@ -352,12 +389,12 @@
       /* Slider row: keep on one line but shorten value chip */
       .slider-value { min-width: 42px; font-size: 12px; padding: 3px 5px; }
 
-      /* Country grid: 2 columns always fits on 320 px+ */
+      /* Country grid: 2 columns */
       .country-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
 
-      /* Submit button: full width */
+      /* Submit area */
       .submit-wrap { margin-top: 18px; }
-      .btn-submit { width: 100%; padding: 14px; font-size: 15px; }
+      .btn-submit { max-width: 100%; padding: 14px; font-size: 15px; }
     }
   </style>
 </head>
@@ -376,28 +413,16 @@
       <ul id="error-list"></ul>
     </div>
 
-    <!-- ══ ROUTE ══ -->
+    <!-- ══ ROUTE – immer sichtbar ══ -->
     <div class="card">
       <div class="card-title">📍 Route</div>
 
-      <p style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:14px;line-height:1.5">
-        Füge mindestens zwei Städte hinzu und klick unten auf <em style="color:var(--accent);font-style:normal">Route berechnen</em>.
-      </p>
-
-      <div class="field" style="margin-bottom:10px">
-        <label>Städte (in gewünschter Reihenfolge)</label>
+      <div class="field" style="margin-bottom:14px">
+        <label>Städte</label>
         <div id="cityInputs"></div>
         <div id="err-cities" class="field-msg"></div>
         <button type="button" class="btn-add" onclick="addCityField()">＋ Stadt hinzufügen</button>
-        <div class="hint" style="margin-top:6px">⏸ = Pausentage: Anzahl Tage, die an dieser Stadt verbracht werden, ohne weiterzureisen (z.B. für Ausflüge oder Erholung).</div>
-      </div>
-
-      <div class="toggle-row" style="margin-bottom:14px">
-        <input type="checkbox" id="sorted_input" name="sorted_input" value="true">
-        <div>
-          <label for="sorted_input">Reihenfolge der Städte beibehalten</label>
-          <div class="hint">Wenn aktiviert, wird die oben eingegebene Reihenfolge direkt als Route übernommen (kein Clustering / keine Umsortierung).</div>
-        </div>
+        <div class="hint" style="margin-top:6px">⏸ = Pausentage: Anzahl Tage, die an dieser Stadt verbracht werden, ohne weiterzureisen.</div>
       </div>
 
       <div class="form-row">
@@ -430,15 +455,31 @@
             </select>
           </div>
           <div style="font-size:11px;color:var(--muted);margin-top:4px">
-            Leer lassen → optimaler Starttag im Jahr wird automatisch berechnet
+            Leer lassen → optimaler Starttag wird automatisch berechnet
           </div>
           <input type="hidden" name="start_day" id="start_day_hidden" value="">
         </div>
       </div>
+    </div>
 
-      <div class="field">
-        <label>Direktverbindungen (Flug / Bahn / Fähre)</label>
-        <div class="hint" style="margin-bottom:8px">Städtepaare, die hier eingetragen sind, werden im Reiseplan <strong>direkt miteinander verbunden</strong> – ohne dass eine Fahrroute berechnet wird. Nutze dies für Abschnitte, die du per Flug, Fähre oder Zug zurücklegst.</div>
+    <!-- ══ ERWEITERTE EINSTELLUNGEN (eingeklappt) ══ -->
+    <div id="advanced-panel">
+
+      <!-- Reihenfolge beibehalten -->
+      <div class="card">
+        <div class="toggle-row">
+          <input type="checkbox" id="sorted_input" name="sorted_input" value="true">
+          <div>
+            <label for="sorted_input">Reihenfolge der Städte beibehalten</label>
+            <div class="hint">Wenn aktiviert, wird die oben eingegebene Reihenfolge direkt als Route übernommen (kein Clustering / keine Umsortierung).</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Direktverbindungen -->
+      <div class="card">
+        <div class="card-title">✈ Direktverbindungen</div>
+        <div class="hint" style="margin-bottom:10px">Städtepaare, die hier eingetragen sind, werden im Reiseplan <strong>direkt miteinander verbunden</strong> – ohne Fahrroute. Nutze dies für Flug, Fähre oder Zug.</div>
         <div id="connectionInputs">
           <div class="connection-row">
             <input type="text" class="city-autocomplete" name="connection_start" placeholder="Von…">
@@ -449,151 +490,155 @@
         </div>
         <button type="button" class="btn-add" onclick="addConnectionField()">＋ Verbindung hinzufügen</button>
       </div>
-    </div>
 
-    <!-- ══ TEMPERATUREN ══ -->
-    <div class="card">
-      <div class="card-title">🌡 Temperaturen</div>
+      <!-- Temperaturen -->
+      <div class="card">
+        <div class="card-title">🌡 Temperaturen</div>
 
-      <div class="form-row">
-        <div class="field">
-          <label>Ziel-Tagestemperatur (°C)</label>
-          <input type="number" name="high_temp" value="25" step="0.1">
-          <div id="err-high-temp" class="field-msg"></div>
-        </div>
-        <div class="field">
-          <label>Ziel-Nachttemperatur (°C)</label>
-          <input type="number" name="low_temp" value="12" step="0.1">
-          <div id="err-low-temp" class="field-msg"></div>
-        </div>
-      </div>
-
-      <div class="form-row" style="margin-bottom:6px">
-        <div class="field">
-          <label>Tagestemperatur erlaubter Bereich (°C)</label>
-          <div class="range-row">
-            <input type="number" name="high_temp_min" placeholder="min" step="0.1">
-            <span class="range-sep">bis</span>
-            <input type="number" name="high_temp_max" placeholder="max" step="0.1">
+        <div class="form-row">
+          <div class="field">
+            <label>Ziel-Tagestemperatur (°C)</label>
+            <input type="number" name="high_temp" value="25" step="0.1">
+            <div id="err-high-temp" class="field-msg"></div>
           </div>
-          <div id="err-high-range" class="field-msg"></div>
-        </div>
-        <div class="field">
-          <label>Nachttemperatur erlaubter Bereich (°C)</label>
-          <div class="range-row">
-            <input type="number" name="low_temp_min" placeholder="min" step="0.1">
-            <span class="range-sep">bis</span>
-            <input type="number" name="low_temp_max" placeholder="max" step="0.1">
-          </div>
-          <div id="err-low-range" class="field-msg"></div>
-        </div>
-      </div>
-
-      <div class="field" style="margin-top:10px">
-        <label>Klimaerwärmungsfaktor (°C)</label>
-        <div class="slider-row">
-          <input type="range" name="warming_factor" min="-1" max="4" step="0.1" value="0.6"
-                 oninput="document.getElementById('wf-val').textContent=parseFloat(this.value).toFixed(1)">
-          <div class="slider-value" id="wf-val">0.6</div>
-        </div>
-        <div class="hint" style="margin-top:5px">
-          Der Routenplaner nutzt Durchschnittstemperaturen der Jahre 1990–2020. Der Faktor wird auf alle Wetterdaten addiert, um eine weitere Erwärmung zu berücksichtigen.<br>
-          <strong>0</strong> = Klimadaten unverändert (Referenzzeitraum 1990–2020).<br>
-          <strong>0,6</strong> = Weltweite Temperaturabweichung 2023–2025 gegenüber 1990–2020 (empfohlen).<br>
-          <strong>1,1</strong> = Temperaturabweichung in Europa 2023–2025 gegenüber 1990–2020.
-        </div>
-      </div>
-
-      <div class="field" style="margin-top:10px">
-        <label>Temperatur-Gewichtung</label>
-        <div class="slider-row">
-          <input type="range" name="temp_weight" min="0" max="1" step="0.05" value="0.5"
-                 oninput="document.getElementById('tw-val').textContent=this.value">
-          <div class="slider-value" id="tw-val">0.5</div>
-        </div>
-        <div class="hint" style="margin-top:5px">
-          Steuert, wie stark Wetterwerte die Routenwahl beeinflussen.<br>
-          <strong>0</strong> = nur kürzeste Distanz zählt, Temperaturen werden ignoriert.<br>
-          <strong>0.5</strong> = ausgewogener Kompromiss zwischen Distanz und Wetter (empfohlen).<br>
-          <strong>1</strong> = nur Wetterqualität zählt, auch lange Umwege werden akzeptiert.<br>
-          Bewertet werden Tages- &amp; Nachttemperatur anhand deiner Zielwerte.
-        </div>
-      </div>
-    </div>
-
-    <!-- ══ REISEEINSTELLUNGEN ══ -->
-    <div class="card">
-      <div class="card-title">Reiseeinstellungen</div>
-
-      <input type="hidden" name="routing_mode" value="car">
-      <div class="form-row">
-        <div class="field">
-          <label>Max. Tagesstrecke (km)</label>
-          <input type="number" name="daily_km" value="100" min="1">
-          <div id="err-daily-km" class="field-msg"></div>
-        </div>
-        <div class="field">
-          <label>Max. Reisetage</label>
-          <input type="number" name="max_days" value="200" min="1">
-          <div id="err-max-days" class="field-msg"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ══ HÖHENPROFIL ══ -->
-    <div class="card">
-      <div class="card-title">⛰ Höhenprofil</div>
-
-      <div class="field">
-        <label>Höhenprofil Auflösung (Punkte pro 1 000 km)</label>
-        <div class="slider-row">
-          <input type="range" name="elev_points_per_1000km" min="100" max="3000" step="100" value="1000"
-                 oninput="document.getElementById('ep-val').textContent=this.value">
-          <div class="slider-value" id="ep-val">1 000</div>
-        </div>
-        <div class="hint">Höhere Werte = mehr Detail, langsamere API-Abfrage. ~1 000 ist ein guter Standardwert.</div>
-      </div>
-    </div>
-
-    <!-- ══ GESPERRTE LÄNDER ══ -->
-    <div class="card">
-      <div class="card-title" style="justify-content:space-between">
-        <span>🚫 Gesperrte Länder</span>
-        <button type="button" id="btn-block-all" onclick="toggleBlockAll()"
-                style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:5px;
-                       border:1px solid var(--danger);background:#fef2f2;color:var(--danger);
-                       cursor:pointer;white-space:nowrap;transition:background .12s">
-          Alle sperren
-        </button>
-      </div>
-
-      <div class="country-grid">
-        <label><input type="checkbox" name="blocked_countries" value="RU"><span>Russia</span></label>
-        <label><input type="checkbox" name="blocked_countries" value="UA"><span>Ukraine</span></label>
-        <label><input type="checkbox" name="blocked_countries" value="BY"><span>Belarus</span></label>
-        <label><input type="checkbox" name="blocked_countries" value="SY"><span>Syria</span></label>
-        <label><input type="checkbox" name="blocked_countries" value="LB"><span>Lebanon</span></label>
-        <label><input type="checkbox" name="blocked_countries" value="IL"><span>Israel</span></label>
-        <label><input type="checkbox" name="blocked_countries" value="AF"><span>Afghanistan</span></label>
-        <label><input type="checkbox" name="blocked_countries" value="IR"><span>Iran</span></label>
-        <label><input type="checkbox" name="blocked_countries" value="IQ"><span>Iraq</span></label>
-        <label><input type="checkbox" name="blocked_countries" value="YE"><span>Yemen</span></label>
-        <label><input type="checkbox" name="blocked_countries" value="TM"><span>Turkmenistan</span></label>
-      </div>
-
-      <div class="field">
-        <label>Weitere gesperrte Länder</label>
-        <div id="countryInputs">
-          <div class="city-row">
-            <input type="text" class="country-autocomplete" name="additional_blocked_countries" placeholder="Ländername…">
-            <button type="button" class="btn-icon danger" onclick="removeRow(this)">✕</button>
+          <div class="field">
+            <label>Ziel-Nachttemperatur (°C)</label>
+            <input type="number" name="low_temp" value="12" step="0.1">
+            <div id="err-low-temp" class="field-msg"></div>
           </div>
         </div>
-        <button type="button" class="btn-add" onclick="addCountryField()">＋ Land hinzufügen</button>
+
+        <div class="form-row" style="margin-bottom:6px">
+          <div class="field">
+            <label>Tagestemperatur erlaubter Bereich (°C)</label>
+            <div class="range-row">
+              <input type="number" name="high_temp_min" placeholder="min" step="0.1">
+              <span class="range-sep">bis</span>
+              <input type="number" name="high_temp_max" placeholder="max" step="0.1">
+            </div>
+            <div id="err-high-range" class="field-msg"></div>
+          </div>
+          <div class="field">
+            <label>Nachttemperatur erlaubter Bereich (°C)</label>
+            <div class="range-row">
+              <input type="number" name="low_temp_min" placeholder="min" step="0.1">
+              <span class="range-sep">bis</span>
+              <input type="number" name="low_temp_max" placeholder="max" step="0.1">
+            </div>
+            <div id="err-low-range" class="field-msg"></div>
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:10px">
+          <label>Klimaerwärmungsfaktor (°C)</label>
+          <div class="slider-row">
+            <input type="range" name="warming_factor" min="-1" max="4" step="0.1" value="0.6"
+                   oninput="document.getElementById('wf-val').textContent=parseFloat(this.value).toFixed(1)">
+            <div class="slider-value" id="wf-val">0.6</div>
+          </div>
+          <div class="hint" style="margin-top:5px">
+            Der Routenplaner nutzt Durchschnittstemperaturen der Jahre 1990–2020. Der Faktor wird auf alle Wetterdaten addiert, um eine weitere Erwärmung zu berücksichtigen.<br>
+            <strong>0</strong> = Klimadaten unverändert (Referenzzeitraum 1990–2020).<br>
+            <strong>0,6</strong> = Weltweite Temperaturabweichung 2023–2025 gegenüber 1990–2020 (empfohlen).<br>
+            <strong>1,1</strong> = Temperaturabweichung in Europa 2023–2025 gegenüber 1990–2020.
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:10px">
+          <label>Temperatur-Gewichtung</label>
+          <div class="slider-row">
+            <input type="range" name="temp_weight" min="0" max="1" step="0.05" value="0.5"
+                   oninput="document.getElementById('tw-val').textContent=this.value">
+            <div class="slider-value" id="tw-val">0.5</div>
+          </div>
+          <div class="hint" style="margin-top:5px">
+            Steuert, wie stark Wetterwerte die Routenwahl beeinflussen.<br>
+            <strong>0</strong> = nur kürzeste Distanz zählt, Temperaturen werden ignoriert.<br>
+            <strong>0.5</strong> = ausgewogener Kompromiss zwischen Distanz und Wetter (empfohlen).<br>
+            <strong>1</strong> = nur Wetterqualität zählt, auch lange Umwege werden akzeptiert.<br>
+            Bewertet werden Tages- &amp; Nachttemperatur anhand deiner Zielwerte.
+          </div>
+        </div>
       </div>
-    </div>
+
+      <!-- Reiseeinstellungen -->
+      <div class="card">
+        <div class="card-title">Reiseeinstellungen</div>
+
+        <input type="hidden" name="routing_mode" value="car">
+        <div class="form-row">
+          <div class="field">
+            <label>Max. Tagesstrecke (km)</label>
+            <input type="number" name="daily_km" value="100" min="1">
+            <div id="err-daily-km" class="field-msg"></div>
+          </div>
+          <div class="field">
+            <label>Max. Reisetage</label>
+            <input type="number" name="max_days" value="200" min="1">
+            <div id="err-max-days" class="field-msg"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Höhenprofil -->
+      <div class="card">
+        <div class="card-title">⛰ Höhenprofil</div>
+
+        <div class="field">
+          <label>Höhenprofil Auflösung (Punkte pro 1 000 km)</label>
+          <div class="slider-row">
+            <input type="range" name="elev_points_per_1000km" min="100" max="3000" step="100" value="1000"
+                   oninput="document.getElementById('ep-val').textContent=this.value">
+            <div class="slider-value" id="ep-val">1 000</div>
+          </div>
+          <div class="hint">Höhere Werte = mehr Detail, langsamere API-Abfrage. ~1 000 ist ein guter Standardwert.</div>
+        </div>
+      </div>
+
+      <!-- Gesperrte Länder -->
+      <div class="card">
+        <div class="card-title" style="justify-content:space-between">
+          <span>🚫 Gesperrte Länder</span>
+          <button type="button" id="btn-block-all" onclick="toggleBlockAll()"
+                  style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:5px;
+                         border:1px solid var(--danger);background:#fef2f2;color:var(--danger);
+                         cursor:pointer;white-space:nowrap;transition:background .12s">
+            Alle sperren
+          </button>
+        </div>
+
+        <div class="country-grid">
+          <label><input type="checkbox" name="blocked_countries" value="RU"><span>Russia</span></label>
+          <label><input type="checkbox" name="blocked_countries" value="UA"><span>Ukraine</span></label>
+          <label><input type="checkbox" name="blocked_countries" value="BY"><span>Belarus</span></label>
+          <label><input type="checkbox" name="blocked_countries" value="SY"><span>Syria</span></label>
+          <label><input type="checkbox" name="blocked_countries" value="LB"><span>Lebanon</span></label>
+          <label><input type="checkbox" name="blocked_countries" value="IL"><span>Israel</span></label>
+          <label><input type="checkbox" name="blocked_countries" value="AF"><span>Afghanistan</span></label>
+          <label><input type="checkbox" name="blocked_countries" value="IR"><span>Iran</span></label>
+          <label><input type="checkbox" name="blocked_countries" value="IQ"><span>Iraq</span></label>
+          <label><input type="checkbox" name="blocked_countries" value="YE"><span>Yemen</span></label>
+          <label><input type="checkbox" name="blocked_countries" value="TM"><span>Turkmenistan</span></label>
+        </div>
+
+        <div class="field">
+          <label>Weitere gesperrte Länder</label>
+          <div id="countryInputs">
+            <div class="city-row">
+              <input type="text" class="country-autocomplete" name="additional_blocked_countries" placeholder="Ländername…">
+              <button type="button" class="btn-icon danger" onclick="removeRow(this)">✕</button>
+            </div>
+          </div>
+          <button type="button" class="btn-add" onclick="addCountryField()">＋ Land hinzufügen</button>
+        </div>
+      </div>
+
+    </div><!-- /#advanced-panel -->
 
     <div class="submit-wrap">
+      <button type="button" id="btn-advanced" class="btn-advanced" onclick="toggleAdvanced()">
+        ⚙ Weitere Einstellungen <span class="adv-arrow">▼</span>
+      </button>
       <button type="submit" class="btn-submit">Route berechnen →</button>
     </div>
 
@@ -603,31 +648,38 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 <script>
+  /* ── Advanced panel toggle ── */
+  function toggleAdvanced() {
+    const panel = document.getElementById('advanced-panel');
+    const btn   = document.getElementById('btn-advanced');
+    const open  = panel.classList.toggle('open');
+    btn.classList.toggle('open', open);
+    btn.querySelector('.adv-arrow').textContent = open ? '▲' : '▼';
+  }
+
   /* ── Startdatum → Tag-des-Jahres ── */
   // Non-leap-year month lengths (2026)
   const DAYS_IN_MONTH = [31,28,31,30,31,30,31,31,30,31,30,31];
 
-  function updateDayOptions() {
-    const mSel = document.getElementById('start_month_sel');
+  function populateDays(maxDay) {
     const dSel = document.getElementById('start_day_sel');
-    const m    = parseInt(mSel.value);
     const prev = parseInt(dSel.value) || 0;
-
-    // Reset to placeholder when no month is selected
     dSel.innerHTML = '<option value="" style="color:var(--muted)">Tag</option>';
-    dSel.style.color = 'var(--muted)';
-    mSel.style.color = mSel.value ? '' : 'var(--muted)';
-
-    if (!m) return;   // no month chosen yet
-
-    const max = DAYS_IN_MONTH[m - 1];
-    for (let d = 1; d <= max; d++) {
+    for (let d = 1; d <= maxDay; d++) {
       const opt = document.createElement('option');
       opt.value = d; opt.textContent = d;
-      if (d === Math.min(prev || 1, max)) opt.selected = true;
+      if (prev && d === Math.min(prev, maxDay)) opt.selected = true;
       dSel.appendChild(opt);
     }
-    dSel.style.color = '';
+    dSel.style.color = dSel.value ? '' : 'var(--muted)';
+  }
+
+  function updateDayOptions() {
+    const mSel = document.getElementById('start_month_sel');
+    const m    = parseInt(mSel.value);
+    mSel.style.color = mSel.value ? '' : 'var(--muted)';
+    // Limit days to the selected month's length; if no month chosen, show 1–31
+    populateDays(m ? DAYS_IN_MONTH[m - 1] : 31);
   }
 
   function syncStartDay() {
@@ -641,8 +693,8 @@
     document.getElementById('start_day_sel').style.color = '';
   }
 
-  // No pre-selection on page load – hidden field stays empty → optimal day
-  updateDayOptions();
+  // Pre-fill day dropdown with 1–31; hidden field stays empty → optimal day
+  populateDays(31);
 
   /* ── Validation ── */
   function clearErrors() {
@@ -742,6 +794,9 @@
     });
 
     if (errs.length) {
+      // Open advanced panel so errors in it are visible
+      const panel = document.getElementById('advanced-panel');
+      if (!panel.classList.contains('open')) toggleAdvanced();
       const ul = document.getElementById('error-list');
       ul.innerHTML = errs.map(e => `<li>${e}</li>`).join('');
       const banner = document.getElementById('form-errors');
@@ -802,9 +857,7 @@
     const b  = rows[ti].querySelector('input[name="cities"]');
     const ra = row.querySelector('input[name="city_rest_days"]');
     const rb = rows[ti].querySelector('input[name="city_rest_days"]');
-    // swap city names
     const tmp = a.value; a.value = b.value; b.value = tmp;
-    // swap rest days
     if (ra && rb) { const tr = ra.value; ra.value = rb.value; rb.value = tr; }
     a.focus();
   }
