@@ -93,9 +93,17 @@ export interface MarkerData {
   isRestDay: boolean;
 }
 
+export interface ElevationCityData {
+  km: number;
+  name: string;
+  cityId: string;
+  ele: number;
+}
+
 export interface ElevationProfile {
   points: [number, number][];
   cityMarks: [number, string][];
+  cityData?: ElevationCityData[];
   totalAscent: number;
   totalDescent: number;
   totalKm: number;
@@ -115,6 +123,23 @@ export interface WeatherDay {
   isRestDay: boolean;
 }
 
+export interface WeatherOffsetData {
+  tmin: number | null;
+  tmax: number | null;
+  prcp: number | null;
+  wspd: number | null;
+  wdir: number | null;
+}
+
+export interface WeatherStop {
+  relDay: number;
+  cityId: string;
+  cityName: string;
+  isRestDay: boolean;
+  restDays: number;
+  byOffset: Record<string, WeatherOffsetData>;
+}
+
 export interface RouteStop {
   cityId: string;
   cityName: string;
@@ -124,13 +149,57 @@ export interface RouteStop {
   cumulativeDistance: number;
 }
 
+export interface ForecastHourData {
+  temp: number | null;
+  prcp: number | null;
+  wspd: number | null;
+  wdir: number | null;
+  cloud: number | null;
+  sun: number | null;
+}
+
+export interface ForecastDailyData {
+  prcp: number | null;
+  wspd: number | null;
+  sun: number | null;
+  tmax: number | null;
+  tmin: number | null;
+}
+
+export interface ForecastPointData {
+  ok: boolean;
+  hourly?: Record<string, ForecastHourData>;
+  daily?: ForecastDailyData;
+}
+
+export interface ForecastPoint {
+  km: number;
+  lat: number;
+  lon: number;
+  ele: number;
+  target_date: string;
+  day_offset: number;
+}
+
+export interface ForecastData {
+  points: ForecastPoint[];
+  data: Record<string, ForecastPointData>;
+  miniElev: [number, number, number, number][]; // [km, lat, lon, ele]
+  routeStops: { name: string; lat: number; lon: number; km: number; relDay: number }[];
+  desiredHigh: number;
+  desiredLow: number;
+}
+
 export interface JobResults {
   segments: RouteSegment[];
   markers: MarkerData[];
   elevation: ElevationProfile;
-  weather: WeatherDay[];
+  weather: WeatherStop[];
   route: RouteStop[];
   startDay: number;
   totalDistance: number;
   totalDays: number;
+  forecast: ForecastData | null;
+  desiredHigh: number;
+  desiredLow: number;
 }

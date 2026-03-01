@@ -3976,3 +3976,159 @@ def _create_loading_route_map_legacy(graph, temperatures, route, exp, desired_lo
 
     return m
 
+
+def select_forecast_points(profile, latlons, min_spacing_km=15, max_spacing_km=25):
+    """Select ~20-40 forecast points at elevation extrema along the route."""
+    if not profile or len(profile) < 2 or len(profile) != len(latlons):
+        return []
+
+    total_km = profile[-1][0]
+    max_spacing_km = max(max_spacing_km, total_km / 40) if total_km > 0 else max_spacing_km
+
+    n = len(profile)
+    avg_spacing = total_km / (n - 1) if n > 1 else 1.0
+    window = max(3, round(5.0 / avg_spacing)) if avg_spacing > 0 else 3
+
+    mean_ele = sum(e for _, e in profile) / n
+
+    candidates = set()
+    for i in range(n):
+        lo = max(0, i - window)
+        hi = min(n - 1, i + window)
+        eles = [profile[j][1] for j in range(lo, hi + 1)]
+        e = profile[i][1]
+        if e >= max(eles) or e <= min(eles):
+            candidates.add(i)
+    candidates.add(0)
+    candidates.add(n - 1)
+
+    sorted_cands = sorted(candidates, key=lambda i: profile[i][0])
+
+    merged = []
+    for idx in sorted_cands:
+        if not merged:
+            merged.append(idx)
+        else:
+            prev_km = profile[merged[-1]][0]
+            cur_km  = profile[idx][0]
+            if cur_km - prev_km < min_spacing_km:
+                prev_dev = abs(profile[merged[-1]][1] - mean_ele)
+                cur_dev  = abs(profile[idx][1]        - mean_ele)
+                if cur_dev > prev_dev:
+                    merged[-1] = idx
+            else:
+                merged.append(idx)
+
+    if not merged or merged[0] != 0:
+        merged.insert(0, 0)
+    if merged[-1] != n - 1:
+        merged.append(n - 1)
+    merged = sorted(set(merged), key=lambda i: profile[i][0])
+
+    while True:
+        new_merged = [merged[0]]
+        gap_found  = False
+        for i in range(1, len(merged)):
+            km0 = profile[merged[i - 1]][0]
+            km1 = profile[merged[i]][0]
+            if km1 - km0 > max_spacing_km:
+                gap_found = True
+                mid_km  = (km0 + km1) / 2.0
+                mid_idx = min(range(n), key=lambda j: abs(profile[j][0] - mid_km))
+                new_merged.append(mid_idx)
+            new_merged.append(merged[i])
+        merged = sorted(set(new_merged), key=lambda i: profile[i][0])
+        if not gap_found:
+            break
+
+    return [
+        {
+            "km":  round(profile[idx][0], 2),
+            "lat": round(latlons[idx][0], 6),
+            "lon": round(latlons[idx][1], 6),
+            "ele": round(profile[idx][1], 1),
+        }
+        for idx in merged
+    ]
+
+
+def fetch_open_meteo_forecast(points):
+    """Fetch Open-Meteo forecast for a list of points with target_date."""
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import date as _date
+
+    OPEN_METEO = "https://api.open-meteo.com/v1/forecast"
+    HOUR_STEPS = [0, 6, 12, 18, 24]
+
+    def fetch_one(args):
+        i, pt = args
+        try:
+            target = pt.get("target_date")
+            if not target:
+                return i, {"ok": False}
+            resp = requests.get(OPEN_METEO, params={
+                "latitude":      pt["lat"],
+                "longitude":     pt["lon"],
+                "hourly":        "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration",
+                "daily":         "precipitation_sum,windspeed_10m_max,sunshine_duration,temperature_2m_max,temperature_2m_min",
+                "models":        "best_match",
+                "forecast_days": 16,
+                "timezone":      "auto",
+            }, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+
+            htimes = data.get("hourly", {}).get("time", [])
+            htemp  = data.get("hourly", {}).get("temperature_2m", [])
+            hprcp  = data.get("hourly", {}).get("precipitation", [])
+            hwspd  = data.get("hourly", {}).get("windspeed_10m", [])
+            hwdir  = data.get("hourly", {}).get("winddirection_10m", [])
+            hcloud = data.get("hourly", {}).get("cloudcover", [])
+            hsun   = data.get("hourly", {}).get("sunshine_duration", [])
+
+            dtimes = data.get("daily", {}).get("time", [])
+            dprcp  = data.get("daily", {}).get("precipitation_sum", [])
+            dwspd  = data.get("daily", {}).get("windspeed_10m_max", [])
+            dsun   = data.get("daily", {}).get("sunshine_duration", [])
+            dtmax  = data.get("daily", {}).get("temperature_2m_max", [])
+            dtmin  = data.get("daily", {}).get("temperature_2m_min", [])
+
+            next_str = (_date.fromisoformat(target) + timedelta(days=1)).isoformat()
+
+            hourly_result = {}
+            for h in HOUR_STEPS:
+                lookup = f"{next_str}T00:00" if h == 24 else f"{target}T{h:02d}:00"
+                if lookup in htimes:
+                    idx = htimes.index(lookup)
+                    sun_min = round(hsun[idx] / 60.0, 1) if idx < len(hsun) and hsun[idx] is not None else None
+                    hourly_result[str(h)] = {
+                        "temp":  htemp[idx]  if idx < len(htemp)  else None,
+                        "prcp":  hprcp[idx]  if idx < len(hprcp)  else None,
+                        "wspd":  hwspd[idx]  if idx < len(hwspd)  else None,
+                        "wdir":  hwdir[idx]  if idx < len(hwdir)  else None,
+                        "cloud": hcloud[idx] if idx < len(hcloud) else None,
+                        "sun":   sun_min,
+                    }
+
+            daily_result = {}
+            if target in dtimes:
+                di = dtimes.index(target)
+                daily_result = {
+                    "prcp": dprcp[di] if di < len(dprcp) else None,
+                    "wspd": dwspd[di] if di < len(dwspd) else None,
+                    "sun":  round(dsun[di] / 3600.0, 2) if di < len(dsun) and dsun[di] is not None else None,
+                    "tmax": dtmax[di] if di < len(dtmax) else None,
+                    "tmin": dtmin[di] if di < len(dtmin) else None,
+                }
+
+            return i, {"ok": True, "hourly": hourly_result, "daily": daily_result}
+        except Exception as exc:
+            print(f"[Forecast] Point {i} failed: {exc}")
+            return i, {"ok": False}
+
+    result = {}
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        for i, data in ex.map(fetch_one, enumerate(points)):
+            result[i] = data
+    return result
+

@@ -19,12 +19,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CityCombobox } from "./CityCombobox";
 import { usePlannerStore } from "@/stores/plannerStore";
+import { useT } from "@/i18n/useT";
 import type { CitySearchResult } from "@/api/types";
 
 function SortableCityRow({ index }: { index: number }) {
   const city = usePlannerStore((s) => s.cities[index]);
   const updateCity = usePlannerStore((s) => s.updateCity);
   const removeCity = usePlannerStore((s) => s.removeCity);
+  const t = useT();
   const itemId = `city-${index}`;
 
   const {
@@ -52,7 +54,7 @@ function SortableCityRow({ index }: { index: number }) {
         className="cursor-grab touch-none text-muted-foreground hover:text-foreground"
         {...attributes}
         {...listeners}
-        aria-label="Drag to reorder"
+        aria-label={t.cityList.dragLabel}
       >
         <GripVertical className="h-4 w-4" />
       </button>
@@ -69,7 +71,7 @@ function SortableCityRow({ index }: { index: number }) {
         className="flex-1"
       />
 
-      <div className="flex items-center gap-1">
+      <div className="flex flex-col items-center gap-0.5" title={t.cityList.pauseTitle}>
         <Input
           type="number"
           min={0}
@@ -79,16 +81,16 @@ function SortableCityRow({ index }: { index: number }) {
             updateCity(index, { restDays: parseInt(e.target.value) || 0 })
           }
           className="w-16 text-center"
-          aria-label="Rest days"
+          aria-label={t.cityList.pauseLabel}
         />
-        <span className="text-xs text-muted-foreground">days</span>
+        <span className="text-[10px] text-muted-foreground leading-none">{t.cityList.pauseLabel}</span>
       </div>
 
       <Button
         variant="ghost"
         size="icon"
         onClick={() => removeCity(index)}
-        aria-label="Remove city"
+        aria-label={t.cityList.removeLabel}
         className="h-8 w-8 text-muted-foreground hover:text-destructive"
       >
         <X className="h-4 w-4" />
@@ -101,6 +103,7 @@ export function CityList() {
   const cities = usePlannerStore((s) => s.cities);
   const addCity = usePlannerStore((s) => s.addCity);
   const reorderCities = usePlannerStore((s) => s.reorderCities);
+  const t = useT();
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -141,8 +144,11 @@ export function CityList() {
         className="w-full"
       >
         <Plus className="mr-2 h-4 w-4" />
-        Add city
+        {t.cityList.addCity}
       </Button>
+      <p className="text-xs text-muted-foreground">
+        {t.cityList.helpText}
+      </p>
     </div>
   );
 }

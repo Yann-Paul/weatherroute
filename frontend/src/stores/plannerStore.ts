@@ -43,28 +43,24 @@ interface PlannerState {
   reset: () => void;
 }
 
-const DEFAULT_BLOCKED = [
-  "RU", "UA", "BY", "MD", "TR", "GE", "AM", "AZ", "SY", "IQ", "IR",
-];
-
 const initialState = {
   cities: [] as CityEntry[],
   startCity: "",
   startDay: null as number | null,
   autoDetectStart: true,
   connections: [] as Connection[],
-  desiredDayTemp: 25,
-  desiredNightTemp: 15,
-  dayTempMin: 10,
-  dayTempMax: 40,
-  nightTempMin: 0,
-  nightTempMax: 30,
-  warmingFactor: 1.5,
+  desiredDayTemp: 22,
+  desiredNightTemp: 12,
+  dayTempMin: -20,
+  dayTempMax: 50,
+  nightTempMin: -30,
+  nightTempMax: 40,
+  warmingFactor: 0.6,
   tempWeight: 0.5,
-  maxDailyKm: 120,
+  maxDailyKm: 80,
   maxTravelDays: 365,
   elevResolution: 1000,
-  blockedCountries: [...DEFAULT_BLOCKED],
+  blockedCountries: [] as string[],
   sortedInput: false,
 };
 
@@ -125,6 +121,7 @@ export const usePlannerStore = create<PlannerState>()(
     }),
     {
       name: "weatherroute-planner",
+      version: 1,
       storage: createJSONStorage(() => sessionStorage),
     }
   )

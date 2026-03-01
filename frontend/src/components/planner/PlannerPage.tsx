@@ -19,13 +19,15 @@ import { AdvancedPanel } from "./AdvancedPanel";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { useJobStore } from "@/stores/jobStore";
 import { submitJob } from "@/api/client";
-import { MONTHS, monthDayToDayOfYear } from "@/utils/constants";
+import { monthDayToDayOfYear } from "@/utils/constants";
+import { useT } from "@/i18n/useT";
 import type { CitySearchResult } from "@/api/types";
 
 export function PlannerPage() {
   const store = usePlannerStore();
   const setJobId = useJobStore((s) => s.setJobId);
   const navigate = useNavigate();
+  const t = useT();
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [startMonth, setStartMonth] = useState("4");
@@ -34,21 +36,13 @@ export function PlannerPage() {
   function validate(): string[] {
     const errs: string[] = [];
     const validCities = store.cities.filter((c) => c.id);
-    if (validCities.length < 1) {
-      errs.push("Add at least one city to your route.");
-    }
-    if (store.desiredNightTemp > store.desiredDayTemp) {
-      errs.push("Desired night temperature must not exceed day temperature.");
-    }
-    if (store.dayTempMin > store.dayTempMax) {
-      errs.push("Day temperature minimum must not exceed maximum.");
-    }
-    if (store.nightTempMin > store.nightTempMax) {
-      errs.push("Night temperature minimum must not exceed maximum.");
-    }
+    if (validCities.length < 1) errs.push(t.planner.errors.minOneCity);
+    if (store.desiredNightTemp > store.desiredDayTemp) errs.push(t.planner.errors.nightExceedsDay);
+    if (store.dayTempMin > store.dayTempMax) errs.push(t.planner.errors.dayTempRange);
+    if (store.nightTempMin > store.nightTempMax) errs.push(t.planner.errors.nightTempRange);
     for (const conn of store.connections) {
       if (!conn.fromId || !conn.toId) {
-        errs.push("All connections must have both from and to cities.");
+        errs.push(t.planner.errors.incompleteConnection);
         break;
       }
     }
@@ -79,7 +73,7 @@ export function PlannerPage() {
       setJobId(jobId);
       navigate(`/progress/${jobId}`);
     } catch (err) {
-      setErrors([err instanceof Error ? err.message : "Submission failed"]);
+      setErrors([err instanceof Error ? err.message : t.planner.errors.submissionFailed]);
     } finally {
       setSubmitting(false);
     }
@@ -91,7 +85,7 @@ export function PlannerPage() {
     <div className="mx-auto max-w-3xl space-y-4 p-4 pb-16">
       {errors.length > 0 && (
         <Alert variant="destructive">
-          <AlertTitle>Validation Error</AlertTitle>
+          <AlertTitle>{t.planner.validationError}</AlertTitle>
           <AlertDescription>
             <ul className="list-inside list-disc space-y-1">
               {errors.map((e, i) => (
@@ -107,18 +101,18 @@ export function PlannerPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <RouteIcon className="h-5 w-5 text-primary" />
-            Route
+            {t.planner.heading}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <CityList />
 
           <div className="space-y-2">
-            <Label>Start city (optional)</Label>
+            <Label>{t.planner.startCity}</Label>
             <CityCombobox
               value={store.startCity}
               onSelect={(c: CitySearchResult) => store.setStartCity(c.name)}
-              placeholder="Auto-detect start city..."
+              placeholder={t.planner.startCityPlaceholder}
               className="w-full"
             />
           </div>
@@ -129,7 +123,7 @@ export function PlannerPage() {
                 checked={store.autoDetectStart}
                 onCheckedChange={store.setAutoDetectStart}
               />
-              <Label>Auto-detect best start date</Label>
+              <Label>{t.planner.autoDetectDate}</Label>
             </div>
 
             {!store.autoDetectStart && (
@@ -139,7 +133,7 @@ export function PlannerPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {MONTHS.map((m, i) => (
+                    {t.months.map((m, i) => (
                       <SelectItem key={i} value={String(i + 1)}>
                         {m}
                       </SelectItem>
@@ -174,7 +168,7 @@ export function PlannerPage() {
           disabled={submitting}
           className="px-8 py-3 text-base"
         >
-          {submitting ? "Submitting..." : "Calculate Route"}
+          {submitting ? t.planner.submitting : t.planner.submit}
         </ShimmerButton>
       </div>
     </div>

@@ -2,20 +2,17 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CityCombobox } from "./CityCombobox";
 import { usePlannerStore } from "@/stores/plannerStore";
+import { useT } from "@/i18n/useT";
 import type { CitySearchResult } from "@/api/types";
 
 export function ConnectionList() {
   const connections = usePlannerStore((s) => s.connections);
   const addConnection = usePlannerStore((s) => s.addConnection);
   const removeConnection = usePlannerStore((s) => s.removeConnection);
+  const t = useT();
 
   return (
     <div className="space-y-2">
-      <p className="text-sm text-muted-foreground">
-        Direct connections (flights, trains, ferries) between cities that should
-        be routed without roads.
-      </p>
-
       {connections.map((conn, i) => (
         <div key={i} className="flex items-center gap-2">
           <CityCombobox
@@ -25,7 +22,7 @@ export function ConnectionList() {
               updated[i] = { ...conn, fromId: c.id, fromName: c.name };
               usePlannerStore.setState({ connections: updated });
             }}
-            placeholder="From..."
+            placeholder={t.connections.fromPlaceholder}
             className="flex-1"
           />
           <span className="text-muted-foreground">→</span>
@@ -36,7 +33,7 @@ export function ConnectionList() {
               updated[i] = { ...conn, toId: c.id, toName: c.name };
               usePlannerStore.setState({ connections: updated });
             }}
-            placeholder="To..."
+            placeholder={t.connections.toPlaceholder}
             className="flex-1"
           />
           <Button
@@ -58,7 +55,7 @@ export function ConnectionList() {
         }
       >
         <Plus className="mr-2 h-4 w-4" />
-        Add connection
+        {t.connections.addConnection}
       </Button>
     </div>
   );

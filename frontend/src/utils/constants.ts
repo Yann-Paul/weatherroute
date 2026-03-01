@@ -27,10 +27,10 @@ export function windDegreesToDirection(deg: number): string {
   return WIND_DIRECTIONS[index];
 }
 
-export function dayOfYearToDate(dayOfYear: number, year = 2025): string {
+export function dayOfYearToDate(dayOfYear: number, year = 2025, locale = "en-US"): string {
   const date = new Date(year, 0);
   date.setDate(dayOfYear);
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return date.toLocaleDateString(locale, { month: "short", day: "numeric" });
 }
 
 export function monthDayToDayOfYear(month: number, day: number): number {

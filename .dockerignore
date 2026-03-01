@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Frontend source (only the build output is copied via multi-stage)
+frontend/node_modules/
+frontend/dist/
+
+# Legacy Flask files (not used by FastAPI backend)
+app.py
+templates/
+static/
+
+# Dev & tooling
+.git/
+.env
+*.sh

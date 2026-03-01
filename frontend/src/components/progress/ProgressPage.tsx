@@ -9,6 +9,7 @@ import { StepIndicator } from "./StepIndicator";
 import { PreviewMap } from "./PreviewMap";
 import { useJobStore } from "@/stores/jobStore";
 import { getJobStatus } from "@/api/client";
+import { useT } from "@/i18n/useT";
 
 type StepStatus = "waiting" | "active" | "done" | "error";
 
@@ -38,6 +39,10 @@ export function ProgressPage() {
   const job = useJobStore();
   const pollingRef = useRef<ReturnType<typeof setTimeout>>();
   const retryCount = useRef(0);
+  const t = useT();
+  // Capture strings into ref so poll callback always sees latest lang
+  const tRef = useRef(t);
+  tRef.current = t;
 
   const poll = useCallback(async () => {
     if (!jobId) return;
@@ -69,12 +74,12 @@ export function ProgressPage() {
       if (retryCount.current >= 5) {
         job.updateStatus({
           status: "error",
-          error: "Lost connection to server.",
+          error: tRef.current.progress.lostConnection,
         });
-        toast.error("Connection lost. Please try again.");
+        toast.error(tRef.current.progress.toastError);
         return;
       }
-      toast.warning("Connection lost, retrying...");
+      toast.warning(tRef.current.progress.toastWarning);
       const backoff = Math.min(1000 * Math.pow(2, retryCount.current), 10000);
       pollingRef.current = setTimeout(poll, backoff);
     }
@@ -96,26 +101,26 @@ export function ProgressPage() {
     <div className="mx-auto grid max-w-6xl gap-4 p-4 lg:grid-cols-[360px_1fr]">
       <Card>
         <CardHeader>
-          <CardTitle>Calculating Route</CardTitle>
+          <CardTitle>{t.progress.heading}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1">
           <StepIndicator
-            label="Route calculation"
+            label={t.progress.stepRoute}
             status={getStepStatus(job.step || "route", "route", isError, stepOrder)}
             detail={job.step === "route" ? job.message : undefined}
           />
           <StepIndicator
-            label="Street data (OSRM)"
+            label={t.progress.stepOsrm}
             status={getStepStatus(job.step || "route", "osrm", isError, stepOrder)}
             detail={
               job.step === "osrm" && job.osrmTotal > 0
-                ? `${job.osrmDone} / ${job.osrmTotal} segments`
+                ? t.progress.stepOsrmDetail(job.osrmDone, job.osrmTotal)
                 : undefined
             }
             progress={job.step === "osrm" ? osrmProgress : undefined}
           />
           <StepIndicator
-            label="Elevation profile"
+            label={t.progress.stepElevation}
             status={getStepStatus(job.step || "route", "elevation", isError, stepOrder)}
             detail={job.step === "elevation" ? job.message : undefined}
           />
@@ -123,7 +128,7 @@ export function ProgressPage() {
           {isError && job.error && (
             <Alert variant="destructive" className="mt-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
+              <AlertTitle>{t.progress.errorTitle}</AlertTitle>
               <AlertDescription>{job.error}</AlertDescription>
             </Alert>
           )}

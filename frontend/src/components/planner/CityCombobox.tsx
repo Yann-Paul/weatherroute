@@ -16,6 +16,7 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { searchCities } from "@/api/client";
+import { useT } from "@/i18n/useT";
 import type { CitySearchResult } from "@/api/types";
 
 interface CityComboboxProps {
@@ -28,13 +29,15 @@ interface CityComboboxProps {
 export function CityCombobox({
   value,
   onSelect,
-  placeholder = "Search city...",
+  placeholder,
   className,
 }: CityComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CitySearchResult[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const t = useT();
+  const effectivePlaceholder = placeholder ?? t.cityCombobox.placeholder;
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -64,19 +67,19 @@ export function CityCombobox({
           aria-expanded={open}
           className={cn("justify-between font-normal", className)}
         >
-          {value || placeholder}
+          {value || effectivePlaceholder}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder={placeholder}
+            placeholder={effectivePlaceholder}
             value={query}
             onValueChange={setQuery}
           />
           <CommandList>
             <CommandEmpty>
-              {query.length < 2 ? "Type to search..." : "No cities found."}
+              {query.length < 2 ? t.cityCombobox.typeToSearch : t.cityCombobox.noResults}
             </CommandEmpty>
             <CommandGroup>
               {results.map((city) => (

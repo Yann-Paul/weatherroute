@@ -5,10 +5,13 @@ Serves JSON-only /api/* endpoints for the React SPA frontend.
 Keeps all computation logic in module.py; this file handles HTTP + job management.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import threading
 import uuid
+from datetime import date, timedelta
 from pathlib import Path
 
 import difflib
@@ -17,6 +20,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from typing import List, Optional
 
 from module import (
     find_optimal_route,
@@ -31,6 +35,8 @@ from module import (
     compute_distances_from_chunks,
     build_combined_elevation_profile,
     haversine,
+    select_forecast_points,
+    fetch_open_meteo_forecast,
 )
 
 app = FastAPI()
@@ -87,6 +93,18 @@ def resolve_city_name(raw: str):
     return None, None
 
 
+def interp_route_day(km_target, cum_km, route_days):
+    """Interpolate the absolute travel day for a km position along the route."""
+    for i in range(len(cum_km) - 1):
+        km0, km1 = cum_km[i], cum_km[i + 1]
+        if km0 <= km_target <= km1:
+            t = (km_target - km0) / (km1 - km0) if km1 > km0 else 0.0
+            return route_days[i] + t * (route_days[i + 1] - route_days[i])
+    if cum_km:
+        return route_days[0] if km_target <= cum_km[0] else route_days[-1]
+    return route_days[0] if route_days else 0.0
+
+
 # ---------------------------------------------------------------------------
 # In-memory job store
 # ---------------------------------------------------------------------------
@@ -112,14 +130,14 @@ class Connection(BaseModel):
 
 
 class JobSubmission(BaseModel):
-    cities: list[CityEntry]
+    cities: List[CityEntry]
     startCity: str = ""
-    startDay: int | None = None
+    startDay: Optional[int] = None
     autoDetectStart: bool = True
-    connections: list[Connection] = []
+    connections: List[Connection] = []
     desiredDayTemp: float = 25
     desiredNightTemp: float = 15
-    dayTempMin: float = -20
+    dayTempMin: float #= -20
     dayTempMax: float = 50
     nightTempMin: float = -30
     nightTempMax: float = 40
@@ -128,7 +146,7 @@ class JobSubmission(BaseModel):
     maxDailyKm: float = 120
     maxTravelDays: int = 365
     elevResolution: int = 1000
-    blockedCountries: list[str] = []
+    blockedCountries: List[str] = []
     sortedInput: bool = False
 
 
@@ -482,8 +500,10 @@ def run_calculation(job_id: str, params: dict):
             sub_route_data, points_per_1000km=params["elev_points_per_1000km"]
         )
 
+        city_ids_for_elev = [d[0] for d in all_temps_data]
         elevation_result = None
         if elev_data:
+            cd_list = elev_data.get("city_data", [])
             elevation_result = {
                 "points": [
                     [round(km, 2), round(ele, 1)]
@@ -491,7 +511,16 @@ def run_calculation(job_id: str, params: dict):
                 ],
                 "cityMarks": [
                     [round(cd["km"], 2), cd["name"]]
-                    for cd in elev_data["city_data"]
+                    for cd in cd_list
+                ],
+                "cityData": [
+                    {
+                        "km": round(cd["km"], 2),
+                        "name": cd["name"],
+                        "cityId": city_ids_for_elev[i] if i < len(city_ids_for_elev) else "",
+                        "ele": round(float(cd.get("ele") or 0), 1),
+                    }
+                    for i, cd in enumerate(cd_list)
                 ],
                 "totalKm": round(elev_data["profile"][-1][0], 1)
                 if elev_data["profile"]
@@ -566,34 +595,34 @@ def run_calculation(job_id: str, params: dict):
                 }
             )
 
-        # Build weather data for table (±70 days offset range)
-        weather = []
+        # Build weather data for start day table (±70 days offset range)
+        weather_stops = []
         for city_id, day, city_name, dist, lat, lon, temps, temp_score in all_temps_data:
             rel_day = day - start_day_val
+            by_offset: dict = {}
             for offset in range(-70, 71, 1):
                 cal_day = ((day + offset - 1) % 365) + 1
                 try:
                     w = get_interpolated_weather(
                         city_id, cal_day, temperatures, params["warming_factor"]
                     )
-                    ns = (temp_score - mn) / rng
-                    weather.append(
-                        {
-                            "day": rel_day,
-                            "date": f"day{rel_day}+{offset}",
-                            "cityName": city_name,
-                            "cityId": city_id,
-                            "tmin": round(w[0], 1) if w[0] is not None else 0,
-                            "tmax": round(w[1], 1) if w[1] is not None else 0,
-                            "prcp": round(w[2], 1) if len(w) > 2 and w[2] is not None else 0,
-                            "wspd": round(w[3], 1) if len(w) > 3 and w[3] is not None else 0,
-                            "wdir": round(w[4], 0) if len(w) > 4 and w[4] is not None else 0,
-                            "score": round(ns * 10, 1),
-                            "isRestDay": city_id in rest_days_map,
-                        }
-                    )
+                    by_offset[str(offset)] = {
+                        "tmin": round(w[0], 1) if w[0] is not None else None,
+                        "tmax": round(w[1], 1) if w[1] is not None else None,
+                        "prcp": round(w[2], 1) if len(w) > 2 and w[2] is not None else None,
+                        "wspd": round(w[3], 1) if len(w) > 3 and w[3] is not None else None,
+                        "wdir": round(w[4], 0) if len(w) > 4 and w[4] is not None else None,
+                    }
                 except Exception:
                     pass
+            weather_stops.append({
+                "relDay": rel_day,
+                "cityId": city_id,
+                "cityName": city_name,
+                "isRestDay": city_id in rest_days_map,
+                "restDays": rest_days_map.get(city_id, 0),
+                "byOffset": by_offset,
+            })
 
         # Build route list
         route_list = []
@@ -617,15 +646,69 @@ def run_calculation(job_id: str, params: dict):
         overall_distance = sum(d for d in osrm_distances if d > 0)
         total_days = all_temps_data[-1][1] - start_day_val if all_temps_data else 0
 
+        # --- Live forecast (only when start is within the next 16 days) ---
+        forecast_data = None
+        today = date.today()
+        for yr in [today.year, today.year + 1]:
+            candidate = date(yr, 1, 1) + timedelta(days=start_day - 1)
+            if 0 <= (candidate - today).days <= 16:
+                actual_start = candidate
+                cum_km_list = [0.0]
+                for d in osrm_distances:
+                    cum_km_list.append(cum_km_list[-1] + (d or 0))
+                route_days_list = [day for _, day, _, _ in route]
+
+                profile = (elev_data or {}).get("profile", [])
+                latlons = (elev_data or {}).get("profile_latlons", [])
+                if profile and latlons and len(profile) == len(latlons):
+                    fps = select_forecast_points(profile, latlons)
+                    for fp in fps:
+                        day_f  = interp_route_day(fp["km"], cum_km_list, route_days_list)
+                        offset = round(day_f - route_days_list[0])
+                        fp["target_date"] = (actual_start + timedelta(days=offset)).isoformat()
+                        fp["day_offset"]  = offset
+                    fps = [fp for fp in fps
+                           if (date.fromisoformat(fp["target_date"]) - today).days <= 15]
+                    fdata = fetch_open_meteo_forecast(fps)
+                    mini_elev = [
+                        [round(km, 2), round(lat, 5), round(lon, 5), round(ele, 1)]
+                        for (km, ele), (lat, lon) in zip(profile, latlons)
+                    ][::3]
+                    route_stops = []
+                    for i_s, (city_id, day, city_name, _) in enumerate(route):
+                        nd = city_graph.nodes.get(city_id, {})
+                        lat_n = nd.get("lat")
+                        lon_n = nd.get("lon")
+                        if lat_n is not None and lon_n is not None and i_s < len(cum_km_list):
+                            route_stops.append({
+                                "name":    city_name,
+                                "lat":     round(float(lat_n), 5),
+                                "lon":     round(float(lon_n), 5),
+                                "km":      round(cum_km_list[i_s], 2),
+                                "relDay":  day - route_days_list[0],
+                            })
+                    forecast_data = {
+                        "points":     fps,
+                        "data":       {str(k): v for k, v in fdata.items()},
+                        "miniElev":   mini_elev,
+                        "routeStops": route_stops,
+                        "desiredHigh": params["high_temp"],
+                        "desiredLow":  params["low_temp"],
+                    }
+                break
+
         job["result"] = {
             "segments": segments,
             "markers": markers,
             "elevation": elevation_result,
-            "weather": weather,
+            "weather": weather_stops,
             "route": route_list,
             "startDay": start_day,
             "totalDistance": round(overall_distance, 1),
             "totalDays": total_days,
+            "forecast": forecast_data,
+            "desiredHigh": params["high_temp"],
+            "desiredLow": params["low_temp"],
         }
         update("elevation", "Done!", status="done")
 

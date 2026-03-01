@@ -13,10 +13,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { ConnectionList } from "./ConnectionList";
 import { usePlannerStore } from "@/stores/plannerStore";
+import { useT } from "@/i18n/useT";
 import { PRESET_BLOCKED_COUNTRIES } from "@/utils/constants";
 
 export function AdvancedPanel() {
   const store = usePlannerStore();
+  const t = useT();
+  const tc = t.advanced;
 
   return (
     <Collapsible>
@@ -25,7 +28,7 @@ export function AdvancedPanel() {
           variant="ghost"
           className="flex w-full items-center justify-between p-4 text-sm font-medium"
         >
-          Advanced Settings
+          {tc.title}
           <ChevronDown className="h-4 w-4 transition-transform [[data-state=open]_&]:rotate-180" />
         </Button>
       </CollapsibleTrigger>
@@ -34,9 +37,12 @@ export function AdvancedPanel() {
         {/* Direct Connections */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Direct Connections</CardTitle>
+            <CardTitle className="text-base">{tc.directConnections.heading}</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {t.connections.description}
+            </p>
             <ConnectionList />
           </CardContent>
         </Card>
@@ -44,12 +50,12 @@ export function AdvancedPanel() {
         {/* Temperature Preferences */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Temperature Preferences</CardTitle>
+            <CardTitle className="text-base">{tc.temperature.heading}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Desired day temp (°C)</Label>
+                <Label>{tc.temperature.desiredDay}</Label>
                 <Input
                   type="number"
                   value={store.desiredDayTemp}
@@ -59,7 +65,7 @@ export function AdvancedPanel() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Desired night temp (°C)</Label>
+                <Label>{tc.temperature.desiredNight}</Label>
                 <Input
                   type="number"
                   value={store.desiredNightTemp}
@@ -69,11 +75,15 @@ export function AdvancedPanel() {
                 />
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {tc.temperature.targetDesc}
+            </p>
 
             <div className="space-y-2">
-              <Label>
-                Day temp range: {store.dayTempMin}°C — {store.dayTempMax}°C
-              </Label>
+              <Label>{tc.temperature.dayRange(store.dayTempMin, store.dayTempMax)}</Label>
+              <p className="text-xs text-muted-foreground">
+                {tc.temperature.dayRangeDesc}
+              </p>
               <Slider
                 min={-20}
                 max={50}
@@ -87,9 +97,10 @@ export function AdvancedPanel() {
             </div>
 
             <div className="space-y-2">
-              <Label>
-                Night temp range: {store.nightTempMin}°C — {store.nightTempMax}°C
-              </Label>
+              <Label>{tc.temperature.nightRange(store.nightTempMin, store.nightTempMax)}</Label>
+              <p className="text-xs text-muted-foreground">
+                {tc.temperature.nightRangeDesc}
+              </p>
               <Slider
                 min={-30}
                 max={40}
@@ -103,9 +114,17 @@ export function AdvancedPanel() {
             </div>
 
             <div className="space-y-2">
-              <Label>
-                Climate warming factor: {store.warmingFactor.toFixed(1)}°C
-              </Label>
+              <Label>{tc.temperature.warmingFactor(store.warmingFactor.toFixed(1))}</Label>
+              <p className="text-xs text-muted-foreground">
+                {tc.temperature.warmingFactorDesc1}
+                <br />
+                {tc.temperature.warmingFactorDesc2}
+                <br />
+                {tc.temperature.warmingFactorDesc3}{" "}
+                <span className="font-medium">{tc.temperature.recommended}</span>
+                <br />
+                {tc.temperature.warmingFactorDesc4}
+              </p>
               <Slider
                 min={-1}
                 max={4}
@@ -116,11 +135,14 @@ export function AdvancedPanel() {
             </div>
 
             <div className="space-y-2">
-              <Label>
-                Temperature weighting: {store.tempWeight.toFixed(2)}
-              </Label>
+              <Label>{tc.temperature.tempWeight(store.tempWeight.toFixed(2))}</Label>
               <p className="text-xs text-muted-foreground">
-                0 = distance only, 1 = weather only
+                {tc.temperature.tempWeightDesc1}
+                <br />
+                {tc.temperature.tempWeightDesc2}{" "}
+                <span className="font-medium">{tc.temperature.recommended}</span>
+                <br />
+                {tc.temperature.tempWeightDesc3}
               </p>
               <Slider
                 min={0}
@@ -136,12 +158,12 @@ export function AdvancedPanel() {
         {/* Travel Settings */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Travel Settings</CardTitle>
+            <CardTitle className="text-base">{tc.travel.heading}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Max daily km</Label>
+                <Label>{tc.travel.maxDailyKm}</Label>
                 <Input
                   type="number"
                   min={10}
@@ -149,9 +171,12 @@ export function AdvancedPanel() {
                   value={store.maxDailyKm}
                   onChange={(e) => store.setMaxDailyKm(Number(e.target.value))}
                 />
+                <p className="text-xs text-muted-foreground">
+                  {tc.travel.maxDailyKmDesc}
+                </p>
               </div>
               <div className="space-y-2">
-                <Label>Max travel days</Label>
+                <Label>{tc.travel.maxTravelDays}</Label>
                 <Input
                   type="number"
                   min={1}
@@ -161,14 +186,24 @@ export function AdvancedPanel() {
                     store.setMaxTravelDays(Number(e.target.value))
                   }
                 />
+                <p className="text-xs text-muted-foreground">
+                  {tc.travel.maxTravelDaysDesc}
+                </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Switch
-                checked={store.sortedInput}
-                onCheckedChange={store.setSortedInput}
-              />
-              <Label>Keep cities in input order</Label>
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={store.sortedInput}
+                  onCheckedChange={store.setSortedInput}
+                />
+                <Label>{tc.travel.sortedInput}</Label>
+              </div>
+              <p className="text-xs text-muted-foreground pl-10">
+                {tc.travel.sortedInputDesc1}
+                <br />
+                {tc.travel.sortedInputDesc2}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -176,13 +211,16 @@ export function AdvancedPanel() {
         {/* Elevation Profile */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Elevation Profile</CardTitle>
+            <CardTitle className="text-base">{tc.elevation.heading}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <Label>
-                Resolution: {store.elevResolution} points per 1000 km
+                {tc.elevation.resolution(store.elevResolution.toLocaleString("de-DE"))}
               </Label>
+              <p className="text-xs text-muted-foreground">
+                {tc.elevation.resolutionDesc}
+              </p>
               <Slider
                 min={100}
                 max={3000}
@@ -197,9 +235,12 @@ export function AdvancedPanel() {
         {/* Blocked Countries */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Blocked Countries</CardTitle>
+            <CardTitle className="text-base">{tc.blockedCountries.heading}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              {tc.blockedCountries.description}
+            </p>
             <div className="flex items-center gap-3">
               <Button
                 variant="outline"
@@ -210,14 +251,14 @@ export function AdvancedPanel() {
                   )
                 }
               >
-                Block defaults
+                {tc.blockedCountries.blockDefaults}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => store.setBlockedCountries([])}
               >
-                Unblock all
+                {tc.blockedCountries.unblockAll}
               </Button>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -232,7 +273,7 @@ export function AdvancedPanel() {
                       store.toggleBlockedCountry(country.code)
                     }
                   />
-                  {country.name}
+                  {tc.blockedCountries.names[country.code] ?? country.name}
                 </label>
               ))}
             </div>

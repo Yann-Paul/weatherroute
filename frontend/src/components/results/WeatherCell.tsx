@@ -1,74 +1,90 @@
 import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
-import { scoreToVariant } from "@/utils/weatherScoring";
+import { getWeatherScore, scoreToVariant } from "@/utils/weatherScoring";
 import { windDegreesToDirection } from "@/utils/constants";
-import type { WeatherDay } from "@/api/types";
+import type { WeatherOffsetData } from "@/api/types";
 
 interface WeatherCellProps {
-  day: WeatherDay;
+  cityName: string;
+  isRestDay: boolean;        // true = this is a rest-day row (not arrival)
+  restDayOffset?: number;    // 1, 2, ... for rest days
+  data: WeatherOffsetData | null;
+  desiredHigh: number;
+  desiredLow: number;
 }
 
-export const WeatherCell = memo(function WeatherCell({ day }: WeatherCellProps) {
-  const variant = scoreToVariant(day.score);
+export const WeatherCell = memo(function WeatherCell({
+  cityName,
+  isRestDay,
+  restDayOffset,
+  data,
+  desiredHigh,
+  desiredLow,
+}: WeatherCellProps) {
+  if (!data || data.tmin == null || data.tmax == null) {
+    return <div className="h-16 rounded-md bg-muted/20" />;
+  }
+
+  const score = getWeatherScore(
+    data.tmin,
+    data.tmax,
+    data.prcp ?? 0,
+    data.wspd ?? 0,
+    desiredLow,
+    desiredHigh
+  );
+  const variant = scoreToVariant(score);
   const borderColor =
-    variant === "good"
-      ? "border-l-good"
-      : variant === "warn"
-        ? "border-l-warn"
-        : "border-l-bad";
+    variant === "good" ? "border-l-good" : variant === "warn" ? "border-l-warn" : "border-l-bad";
   const bgTint =
-    variant === "good"
-      ? "bg-good/5"
-      : variant === "warn"
-        ? "bg-warn/5"
-        : "bg-bad/5";
+    variant === "good" ? "bg-good/5" : variant === "warn" ? "bg-warn/5" : "bg-bad/5";
 
   return (
     <div
       className={`space-y-1 rounded-md border-l-4 p-2 transition-colors duration-200 ${borderColor} ${bgTint}`}
     >
-      <p className="text-sm font-medium leading-tight">{day.cityName}</p>
+      <p className="text-sm font-medium leading-tight">{cityName}</p>
 
-      {day.isRestDay && (
+      {isRestDay && restDayOffset != null && (
         <Badge variant="outline" className="text-[10px]">
-          Rest
+          ⏸ Pause +{restDayOffset}
         </Badge>
       )}
 
       <div className="flex items-center gap-1.5">
         <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
-          {day.tmin}°
+          ☽ {data.tmin.toFixed(1)}°
         </Badge>
         <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-          {day.tmax}°
+          ☀ {data.tmax.toFixed(1)}°
         </Badge>
       </div>
 
-      {day.prcp > 0 && (
+      {(data.prcp ?? 0) > 0 && (
         <div className="flex items-center gap-1">
           <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-foreground/25"
-              style={{ width: `${Math.min(day.prcp / 10, 1) * 100}%` }}
+              className="h-full rounded-full bg-blue-400/60"
+              style={{ width: `${Math.min((data.prcp ?? 0) / 10, 1) * 100}%` }}
             />
           </div>
           <span className="text-[10px] text-muted-foreground">
-            {day.prcp.toFixed(1)}mm
+            {(data.prcp ?? 0).toFixed(1)}mm
           </span>
         </div>
       )}
 
-      {day.wspd > 0 && (
+      {(data.wspd ?? 0) > 0 && (
         <div className="flex items-center gap-1">
           <svg
             viewBox="0 0 16 16"
             className="h-3 w-3 text-muted-foreground"
-            style={{ transform: `rotate(${day.wdir}deg)` }}
+            style={{ transform: `rotate(${data.wdir ?? 0}deg)` }}
           >
             <path d="M8 1l3 12H5z" fill="currentColor" />
           </svg>
           <span className="text-[10px] text-muted-foreground">
-            {Math.round(day.wspd)} km/h {windDegreesToDirection(day.wdir)}
+            {Math.round(data.wspd ?? 0)} km/h {windDegreesToDirection(data.wdir ?? 0)}
           </span>
         </div>
       )}
