@@ -1,9 +1,7 @@
 services:
   - type: web
     name: weatherroute
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Render injects PORT automatically; the Dockerfile CMD uses ${PORT:-8000}
+    healthCheckPath: /api/cities/search?q=berlin
