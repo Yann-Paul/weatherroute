@@ -33,6 +33,26 @@ function ChartContainer({
   config: ChartConfig;
   children: React.ComponentProps<typeof RechartsPrimitive.ResponsiveContainer>["children"];
 }) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [dims, setDims] = React.useState({ width: 0, height: 0 });
+
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setDims({ width: Math.floor(width), height: Math.floor(height) });
+        }
+      }
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const colorVars = Object.fromEntries(
     Object.entries(config)
       .filter(([, c]) => c.color)
@@ -42,16 +62,20 @@ function ChartContainer({
   return (
     <ChartContext.Provider value={{ config }}>
       <div
+        ref={containerRef}
         className={cn(
-          "[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line]:stroke-border/50",
+          "[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line]:stroke-border/50 [&_.recharts-surface]:outline-none",
           className,
         )}
         style={{ ...colorVars, ...style }}
         {...props}
       >
-        <RechartsPrimitive.ResponsiveContainer width="100%" height="100%">
-          {children}
-        </RechartsPrimitive.ResponsiveContainer>
+        {dims.width > 0 && dims.height > 0 && React.isValidElement(children)
+          ? React.cloneElement(children as React.ReactElement<{ width: number; height: number }>, {
+              width: dims.width,
+              height: dims.height,
+            })
+          : null}
       </div>
     </ChartContext.Provider>
   );

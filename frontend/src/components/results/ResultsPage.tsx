@@ -83,7 +83,7 @@ export function ResultsPage() {
           <RouteMap />
         </TabsContent>
 
-        <TabsContent value="elevation" forceMount className="data-[state=inactive]:hidden">
+        <TabsContent value="elevation">
           <ElevationChart />
         </TabsContent>
 

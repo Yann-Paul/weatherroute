@@ -13,7 +13,7 @@ import { useResultsStore } from "@/stores/resultsStore";
 const chartConfig = {
   elevation: {
     label: "Elevation",
-    color: "var(--chart-1)",
+    color: "var(--color-chart-1)",
   },
 } satisfies ChartConfig;
 
