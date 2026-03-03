@@ -47,7 +47,7 @@ const initialState = {
   cities: [] as CityEntry[],
   startCity: "",
   startDay: null as number | null,
-  autoDetectStart: true,
+  autoDetectStart: false,
   connections: [] as Connection[],
   desiredDayTemp: 22,
   desiredNightTemp: 12,

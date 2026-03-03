@@ -20,6 +20,16 @@ const MONTH_START_DAYS = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
+function haversineDist(lon1: number, lat1: number, lon2: number, lat2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function geoBearing(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const φ1 = (lat1 * Math.PI) / 180, φ2 = (lat2 * Math.PI) / 180;
   const Δλ = ((lon2 - lon1) * Math.PI) / 180;
@@ -85,8 +95,10 @@ function WindArrow({ wdir, wspd, routeBearing }: { wdir: number; wspd: number; r
 
 function FitBounds({ coordinates }: { coordinates: [number, number][] }) {
   const { map, isLoaded } = useMap();
+  const hasFit = useRef(false);
   useEffect(() => {
-    if (!map || !isLoaded || coordinates.length === 0) return;
+    if (!map || !isLoaded || coordinates.length === 0 || hasFit.current) return;
+    hasFit.current = true;
     const bounds = new maplibregl.LngLatBounds();
     coordinates.forEach((c) => bounds.extend(c));
     map.fitBounds(bounds, { padding: 50 });
@@ -197,6 +209,127 @@ function RouteMapMarkers({
   );
 }
 
+// ─── Map bounds → visible km range (drives MiniElevChart highlight) ──────────
+
+function MapBoundsTracker() {
+  const { map, isLoaded } = useMap();
+  const segments = useResultsStore((s) => s.segments);
+  const elevation = useResultsStore((s) => s.elevation);
+  const setVisibleKmRange = useResultsStore((s) => s.setVisibleKmRange);
+
+  const routePolyline = useMemo(() => {
+    const pts: [number, number, number][] = [];
+    let cumKm = 0;
+    let prev: [number, number] | null = null;
+    for (const seg of segments) {
+      for (const [lon, lat] of seg.coordinates) {
+        if (prev) cumKm += haversineDist(prev[0], prev[1], lon, lat);
+        pts.push([cumKm, lon, lat]);
+        prev = [lon, lat];
+      }
+    }
+    return pts;
+  }, [segments]);
+
+  const polylineRef = useRef(routePolyline);
+  polylineRef.current = routePolyline;
+  const scaleRef = useRef(1);
+  scaleRef.current = (() => {
+    const totalSeg = routePolyline.length > 0 ? routePolyline[routePolyline.length - 1][0] : 0;
+    const totalElev = elevation?.totalKm ?? totalSeg;
+    return totalSeg > 0 && totalElev > 0 ? totalElev / totalSeg : 1;
+  })();
+
+  useEffect(() => {
+    if (!map || !isLoaded) return;
+
+    function update() {
+      const rp = polylineRef.current;
+      const scale = scaleRef.current;
+      if (rp.length < 2) { setVisibleKmRange(null); return; }
+
+      const bounds = map.getBounds();
+      const vis = rp.filter(([, lon, lat]) => bounds.contains([lon, lat]));
+      if (vis.length === 0) { setVisibleKmRange(null); return; }
+
+      const minKm = vis[0][0] * scale;
+      const maxKm = vis[vis.length - 1][0] * scale;
+      const totalKm = rp[rp.length - 1][0] * scale;
+
+      // No highlight when essentially the whole route is visible
+      if (totalKm > 0 && (maxKm - minKm) / totalKm > 0.95) {
+        setVisibleKmRange(null);
+        return;
+      }
+      setVisibleKmRange([minKm, maxKm]);
+    }
+
+    map.on("moveend", update);
+    update();
+    return () => {
+      map.off("moveend", update);
+      setVisibleKmRange(null);
+    };
+  }, [map, isLoaded, setVisibleKmRange]);
+
+  return null;
+}
+
+// ─── Hover dot on the map (synced with MiniElevChart) ────────────────────────
+
+function HoverDotRM() {
+  const hoveredKm = useResultsStore((s) => s.hoveredKm);
+  const segments = useResultsStore((s) => s.segments);
+  const elevation = useResultsStore((s) => s.elevation);
+
+  // Build cumulative-km polyline from actual route coordinates
+  const routePolyline = useMemo(() => {
+    const pts: [number, number, number][] = []; // [cumKm, lon, lat]
+    let cumKm = 0;
+    let prev: [number, number] | null = null;
+    for (const seg of segments) {
+      for (const [lon, lat] of seg.coordinates) {
+        if (prev) cumKm += haversineDist(prev[0], prev[1], lon, lat);
+        pts.push([cumKm, lon, lat]);
+        prev = [lon, lat];
+      }
+    }
+    return pts;
+  }, [segments]);
+
+  if (hoveredKm == null || routePolyline.length < 2) return null;
+
+  // Scale hoveredKm (from elevation profile) to match actual segment distances
+  const totalSegKm = routePolyline[routePolyline.length - 1][0];
+  const totalElevKm = elevation?.totalKm ?? totalSegKm;
+  const scaledKm = totalSegKm > 0 && totalElevKm > 0 ? hoveredKm * (totalSegKm / totalElevKm) : hoveredKm;
+
+  let ci = routePolyline.findIndex((p) => p[0] >= scaledKm);
+  if (ci < 0) ci = routePolyline.length - 1;
+  if (ci === 0) ci = 1;
+  const p0 = routePolyline[ci - 1], p1 = routePolyline[ci];
+  const span = p1[0] - p0[0];
+  const t = span > 0 ? Math.max(0, Math.min(1, (scaledKm - p0[0]) / span)) : 0;
+  const lon = p0[1] + t * (p1[1] - p0[1]);
+  const lat = p0[2] + t * (p1[2] - p0[2]);
+
+  return (
+    <MapMarker longitude={lon} latitude={lat}>
+      <MarkerContent>
+        <div
+          style={{
+            width: 14, height: 14, borderRadius: "50%",
+            background: "rgba(249,115,22,0.95)",
+            border: "2.5px solid white",
+            boxShadow: "0 0 0 5px rgba(249,115,22,0.35), 0 0 12px rgba(249,115,22,0.5)",
+            pointerEvents: "none",
+          }}
+        />
+      </MarkerContent>
+    </MapMarker>
+  );
+}
+
 // ─── Mini elevation chart below the map ───────────────────────────────────────
 
 const LEGEND_GRADIENT =
@@ -207,16 +340,30 @@ function MiniElevChart() {
   const weather = useResultsStore((s) => s.weather);
   const startDay = useResultsStore((s) => s.startDay);
   const desiredHigh = useResultsStore((s) => s.desiredHigh);
+  const setHoveredKm = useResultsStore((s) => s.setHoveredKm);
+  const visibleKmRange = useResultsStore((s) => s.visibleKmRange);
   const lang = useLangStore((s) => s.lang);
   const t = useT();
 
   const svgRef = useRef<SVGSVGElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const chartStateRef = useRef<any>(null);
 
   const weatherByCity = useMemo(() => {
     const m = new globalThis.Map<string, WeatherStop>();
     for (const s of weather) m.set(s.cityId, s);
     return m;
   }, [weather]);
+
+  const weatherByCityRef = useRef(weatherByCity);
+  weatherByCityRef.current = weatherByCity;
+
+  const stateRef = useRef({ elevation, desiredHigh });
+  stateRef.current = { elevation, desiredHigh };
+
+  useEffect(() => {
+    return () => { setHoveredKm(null); };
+  }, [setHoveredKm]);
 
   const drawChart = useCallback(() => {
     const svg = svgRef.current;
@@ -235,17 +382,25 @@ function MiniElevChart() {
       (_, i) => i % stride === 0 || i === profile.length - 1
     );
 
-    const kmMin = drawProfile[0][0], kmMax = drawProfile[drawProfile.length - 1][0];
-    const eles = drawProfile.map((p) => p[1]);
-    const eMin = Math.max(0, Math.min(...eles) - 80);
-    const eMax = Math.max(...eles) + 50;
+    const dataKmMin = drawProfile[0][0], dataKmMax = drawProfile[drawProfile.length - 1][0];
+    const kmMin = visibleKmRange ? Math.max(dataKmMin, visibleKmRange[0]) : dataKmMin;
+    const kmMax = visibleKmRange ? Math.min(dataKmMax, visibleKmRange[1]) : dataKmMax;
+
+    // Elevation range from the visible slice only (gives tighter y-axis when zoomed)
+    const visSlice = drawProfile.filter(([km]) => km >= kmMin && km <= kmMax);
+    const eles = (visSlice.length >= 2 ? visSlice : drawProfile).map((p) => p[1]);
+    const eMin = Math.max(0, Math.min(...eles) - 60);
+    const eMax = Math.max(...eles) + 40;
     const eRange = eMax - eMin || 1;
+
+    chartStateRef.current = { drawProfile, cityData, kmMin, kmMax, eMin, eMax, eRange, PL, cW, PT, cH };
 
     const xp = (km: number) => PL + ((km - kmMin) / (kmMax - kmMin)) * cW;
     const yp = (ele: number) => PT + cH - ((ele - eMin) / eRange) * cH;
     const axY = PT + cH;
 
-    let out = `<rect x="${PL}" y="${PT}" width="${cW}" height="${cH}" fill="#f9fafb" rx="2"/>`;
+    let out = `<defs><clipPath id="mc-clip"><rect x="${PL}" y="${PT}" width="${cW}" height="${cH}"/></clipPath></defs>`;
+    out += `<rect x="${PL}" y="${PT}" width="${cW}" height="${cH}" fill="#f9fafb" rx="2"/>`;
 
     const yTick = eMax <= 200 ? 50 : eMax <= 500 ? 100 : eMax <= 1000 ? 200 : eMax <= 2500 ? 500 : 1000;
     for (let e = Math.ceil(eMin / yTick) * yTick; e <= eMax; e += yTick) {
@@ -254,6 +409,7 @@ function MiniElevChart() {
       out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="#94a3b8" font-family="sans-serif">${e}m</text>`;
     }
 
+    out += `<g clip-path="url(#mc-clip)">`;
     for (let i = 0; i < drawProfile.length - 1; i++) {
       const [km0, e0] = drawProfile[i], [km1, e1] = drawProfile[i + 1];
       const midKm = (km0 + km1) / 2, midEle = (e0 + e1) / 2;
@@ -271,8 +427,10 @@ function MiniElevChart() {
       const y0m = yp(0);
       out += `<line x1="${PL}" y1="${y0m.toFixed(1)}" x2="${PL + cW}" y2="${y0m.toFixed(1)}" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="4,3"/>`;
     }
+    out += `</g>`;
 
     for (const cd of cityData) {
+      if (cd.km < kmMin - 1 || cd.km > kmMax + 1) continue;
       const xv = xp(cd.km);
       let dotEle = cd.ele;
       const pidx = drawProfile.findIndex(([km]) => km >= cd.km);
@@ -297,17 +455,80 @@ function MiniElevChart() {
 
     out += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${axY}" stroke="#94a3b8" stroke-width="1"/>`;
     out += `<line x1="${PL}" y1="${axY}" x2="${PL + cW}" y2="${axY}" stroke="#94a3b8" stroke-width="1"/>`;
+    out += `<line id="mc-cursor" x1="0" y1="${PT}" x2="0" y2="${axY}" stroke="#334155" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>`;
+    out += `<circle id="mc-cursor-dot" cx="0" cy="0" r="3.5" fill="#f97316" stroke="white" stroke-width="1.5" opacity="0.9" visibility="hidden"/>`;
 
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("height", String(H));
     svg.innerHTML = out;
-  }, [elevation, desiredHigh, weatherByCity, startDay, lang]);
+  }, [elevation, desiredHigh, weatherByCity, startDay, lang, visibleKmRange]);
 
   useEffect(() => {
     drawChart();
     window.addEventListener("resize", drawChart);
     return () => window.removeEventListener("resize", drawChart);
   }, [drawChart]);
+
+  function onChartMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    const cs = chartStateRef.current;
+    const svg = svgRef.current;
+    const tooltip = tooltipRef.current;
+    if (!cs || !svg || !tooltip) return;
+
+    const rect = svg.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (x < cs.PL || x > cs.PL + cs.cW) {
+      tooltip.style.display = "none";
+      svg.querySelector("#mc-cursor")?.setAttribute("visibility", "hidden");
+      svg.querySelector("#mc-cursor-dot")?.setAttribute("visibility", "hidden");
+      setHoveredKm(null);
+      return;
+    }
+
+    const km = cs.kmMin + ((x - cs.PL) / cs.cW) * (cs.kmMax - cs.kmMin);
+    let best = cs.drawProfile[0], bestDist = Infinity;
+    for (const p of cs.drawProfile) {
+      const d = Math.abs(p[0] - km);
+      if (d < bestDist) { bestDist = d; best = p; }
+    }
+    const [bestKm, bestEle] = best;
+    const cxFixed = cs.PL + ((km - cs.kmMin) / (cs.kmMax - cs.kmMin)) * cs.cW;
+    const cy = cs.PT + cs.cH - ((bestEle - cs.eMin) / cs.eRange) * cs.cH;
+
+    const cl = svg.querySelector("#mc-cursor");
+    if (cl) { cl.setAttribute("x1", String(cxFixed)); cl.setAttribute("x2", String(cxFixed)); cl.setAttribute("visibility", "visible"); }
+    const cdot = svg.querySelector("#mc-cursor-dot");
+    if (cdot) { cdot.setAttribute("cx", String(cxFixed)); cdot.setAttribute("cy", String(cy)); cdot.setAttribute("visibility", "visible"); }
+
+    const { desiredHigh } = stateRef.current;
+    const temp = interpTempAtKm(bestKm, bestEle, cs.cityData, weatherByCityRef.current, "tmax");
+    let ttHtml = `<div style="color:#64748b;font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
+    ttHtml += `<div style="color:#1e293b">⛰ ${Math.round(bestEle)} m</div>`;
+    if (temp != null) {
+      ttHtml += `<div style="color:${tempToRgb(temp, desiredHigh)}">☀ ${temp.toFixed(1)}°C</div>`;
+    }
+    tooltip.innerHTML = ttHtml;
+    tooltip.style.display = "block";
+    const tw = tooltip.offsetWidth;
+    const panelW = svg.parentElement?.offsetWidth ?? 700;
+    let tx = x + 14;
+    if (tx + tw + 4 > panelW) tx = x - tw - 14;
+    tooltip.style.left = `${tx}px`;
+    tooltip.style.bottom = "26px";
+    tooltip.style.top = "auto";
+
+    setHoveredKm(km);
+  }
+
+  function onChartMouseLeave() {
+    if (tooltipRef.current) tooltipRef.current.style.display = "none";
+    const svg = svgRef.current;
+    if (svg) {
+      svg.querySelector("#mc-cursor")?.setAttribute("visibility", "hidden");
+      svg.querySelector("#mc-cursor-dot")?.setAttribute("visibility", "hidden");
+    }
+    setHoveredKm(null);
+  }
 
   if (!elevation || !elevation.cityData?.length) return null;
 
@@ -316,8 +537,19 @@ function MiniElevChart() {
       <p className="mb-1 text-xs font-medium text-muted-foreground">
         {t.routeMap.elevTitle}
       </p>
-      <div className="relative w-full overflow-hidden">
+      <div className="relative w-full overflow-hidden" onMouseMove={onChartMouseMove} onMouseLeave={onChartMouseLeave}>
         <svg ref={svgRef} width="100%" style={{ display: "block" }} />
+        <div
+          ref={tooltipRef}
+          className="pointer-events-none absolute hidden whitespace-nowrap rounded border px-2 py-1.5 text-[11px] leading-relaxed"
+          style={{
+            background: "rgba(255,255,255,0.96)",
+            borderColor: "#93c5fd",
+            color: "#1e293b",
+            zIndex: 20,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+          }}
+        />
       </div>
       <div className="mt-1 flex items-center gap-2 px-10 text-[9px] text-muted-foreground">
         <span>{t.routeMap.elevCold}</span>
@@ -339,10 +571,10 @@ export function RouteMap() {
   const lang = useLangStore((s) => s.lang);
   const t = useT();
 
-  const allCoords: [number, number][] = [
+  const allCoords = useMemo<[number, number][]>(() => [
     ...segments.flatMap((s) => s.coordinates),
     ...markers.map((m) => [m.lon, m.lat] as [number, number]),
-  ];
+  ], [segments, markers]);
 
   const monthNames = t.monthsShort;
 
@@ -408,39 +640,11 @@ export function RouteMap() {
           lang={lang}
         />
 
+        <HoverDotRM />
+        <MapBoundsTracker />
+
         <MapControls position="bottom-right" showFullscreen />
 
-        {/* Legend */}
-        <div className="absolute left-3 top-3 z-10 rounded-lg border border-border/50 bg-background/80 px-3 py-2.5 text-xs shadow-md backdrop-blur-sm">
-          <p className="mb-2 font-medium text-muted-foreground">{t.routeMap.legendTitle}</p>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <div className="h-1 w-5 rounded-full bg-good" />
-              <span>{t.routeMap.legendGood}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-1 w-5 rounded-full bg-warn" />
-              <span>{t.routeMap.legendModerate}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-1 w-5 rounded-full bg-bad" />
-              <span>{t.routeMap.legendPoor}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <svg width="20" height="4" className="overflow-visible">
-                <line x1="0" y1="2" x2="20" y2="2" strokeWidth="2" strokeDasharray="4 3" className="stroke-muted-foreground" />
-              </svg>
-              <span className="text-muted-foreground">{t.routeMap.legendDirect}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-4 rounded border-2 px-1 text-[9px] font-bold text-white"
-                style={{ background: "rgba(46,204,113,0.95)", borderColor: "#27AE60" }}>
-                {monthNames[2]}
-              </div>
-              <span className="text-muted-foreground">{t.routeMap.legendMonth}</span>
-            </div>
-          </div>
-        </div>
       </MapView>
 
       <MiniElevChart />

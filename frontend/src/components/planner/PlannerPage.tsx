@@ -30,8 +30,8 @@ export function PlannerPage() {
   const t = useT();
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [startMonth, setStartMonth] = useState("4");
-  const [startDay, setStartDay] = useState("15");
+  const [startMonth, setStartMonth] = useState(String(new Date().getMonth() + 1));
+  const [startDay, setStartDay] = useState(String(new Date().getDate()));
 
   function validate(): string[] {
     const errs: string[] = [];

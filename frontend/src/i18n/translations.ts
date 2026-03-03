@@ -106,7 +106,7 @@ const de = {
   results: {
     tabMap: "Karte",
     tabElevation: "Höhenprofil",
-    tabWeather: "Wetter",
+    tabWeather: "Tabelle",
     tabRoute: "Route",
     tabForecast: "Vorhersage",
     stops: "Haltepunkte",

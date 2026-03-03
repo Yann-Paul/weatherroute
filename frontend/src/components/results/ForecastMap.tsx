@@ -238,12 +238,37 @@ function ForecastMarkers({
   );
 }
 
+// ─── Hover dot on the map (synced with elevation chart) ──────────────────────
+
+function HoverDotFM({ miniElev }: { miniElev: [number, number, number, number][] }) {
+  const hoveredKm = useResultsStore((s) => s.hoveredKm);
+  if (hoveredKm == null || !miniElev.length) return null;
+  const [lat, lon] = kmToLatLon(hoveredKm, miniElev);
+  return (
+    <MapMarker longitude={lon} latitude={lat}>
+      <MarkerContent>
+        <div
+          style={{
+            width: 14, height: 14, borderRadius: "50%",
+            background: "rgba(249,115,22,0.95)",
+            border: "2.5px solid white",
+            boxShadow: "0 0 0 5px rgba(249,115,22,0.35), 0 0 12px rgba(249,115,22,0.5)",
+            pointerEvents: "none",
+          }}
+        />
+      </MarkerContent>
+    </MapMarker>
+  );
+}
+
 // ─── FitBounds ───────────────────────────────────────────────────────────────
 
 function FitBounds({ coordinates }: { coordinates: [number, number][] }) {
   const { map, isLoaded } = useMap();
+  const hasFit = useRef(false);
   useEffect(() => {
-    if (!map || !isLoaded || coordinates.length === 0) return;
+    if (!map || !isLoaded || coordinates.length === 0 || hasFit.current) return;
+    hasFit.current = true;
     const bounds = new maplibregl.LngLatBounds();
     coordinates.forEach((c) => bounds.extend(c));
     map.fitBounds(bounds, { padding: 50 });
@@ -251,10 +276,52 @@ function FitBounds({ coordinates }: { coordinates: [number, number][] }) {
   return null;
 }
 
+// ─── Map bounds → visible km range (drives elevation chart zoom) ──────────────
+
+function MapBoundsForecastTracker({ miniElev }: { miniElev: [number, number, number, number][] }) {
+  const { map, isLoaded } = useMap();
+  const setVisibleKmRange = useResultsStore((s) => s.setVisibleKmRange);
+
+  const miniElevRef = useRef(miniElev);
+  miniElevRef.current = miniElev;
+
+  useEffect(() => {
+    if (!map || !isLoaded) return;
+
+    function update() {
+      const me = miniElevRef.current;
+      if (me.length < 2) { setVisibleKmRange(null); return; }
+      const bounds = map.getBounds();
+      // miniElev format: [km, lat, lon, ele] → bounds.contains wants [lon, lat]
+      const vis = me.filter(([, lat, lon]) => bounds.contains([lon, lat]));
+      if (vis.length === 0) { setVisibleKmRange(null); return; }
+      const minKm = vis[0][0];
+      const maxKm = vis[vis.length - 1][0];
+      const totalKm = me[me.length - 1][0];
+      if (totalKm > 0 && (maxKm - minKm) / totalKm > 0.95) {
+        setVisibleKmRange(null);
+        return;
+      }
+      setVisibleKmRange([minKm, maxKm]);
+    }
+
+    map.on("moveend", update);
+    update();
+    return () => {
+      map.off("moveend", update);
+      setVisibleKmRange(null);
+    };
+  }, [map, isLoaded, setVisibleKmRange]);
+
+  return null;
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function ForecastMap() {
   const forecast = useResultsStore((s) => s.forecast);
+  const setHoveredKm = useResultsStore((s) => s.setHoveredKm);
+  const visibleKmRange = useResultsStore((s) => s.visibleKmRange);
   const [hourIdx, setHourIdx] = useState(2);
   const [dailyMode, setDailyMode] = useState(false);
   const t = useT();
@@ -263,6 +330,10 @@ export function ForecastMap() {
   const chartStateRef = useRef<any>(null);
   const stateRef = useRef({ hourIdx, dailyMode, forecast });
   stateRef.current = { hourIdx, dailyMode, forecast };
+
+  useEffect(() => {
+    return () => { setHoveredKm(null); };
+  }, [setHoveredKm]);
 
   const points     = forecast?.points     ?? [];
   const data       = forecast?.data       ?? {};
@@ -305,10 +376,13 @@ export function ForecastMap() {
     const PL = 40, PR = 8, PT = 26, PB = 20;
     const cW = W - PL - PR, cH = H - PT - PB;
 
-    const kmMin = miniElev[0][0], kmMax = miniElev[miniElev.length - 1][0];
-    const eles = miniElev.map((p) => p[3]);
-    const eMin = Math.max(0, Math.min(...eles) - 80);
-    const eMax = Math.max(...eles) + 50;
+    const dataKmMin = miniElev[0][0], dataKmMax = miniElev[miniElev.length - 1][0];
+    const kmMin = visibleKmRange ? Math.max(dataKmMin, visibleKmRange[0]) : dataKmMin;
+    const kmMax = visibleKmRange ? Math.min(dataKmMax, visibleKmRange[1]) : dataKmMax;
+    const visSlice = miniElev.filter(([km]) => km >= kmMin && km <= kmMax);
+    const eles = (visSlice.length >= 2 ? visSlice : miniElev).map((p) => p[3]);
+    const eMin = Math.max(0, Math.min(...eles) - 60);
+    const eMax = Math.max(...eles) + 40;
     const eRange = eMax - eMin || 1;
     chartStateRef.current = { miniElev, kmMin, kmMax, eMin, eMax, eRange, PL, cW, PT, PB, cH, H };
 
@@ -348,9 +422,10 @@ export function ForecastMap() {
       return d0[key]! + tv * (d1[key]! - d0[key]!) - (ele - eleRef) / 100;
     }
 
-    let out = "";
+    let out = `<defs><clipPath id="fc-clip"><rect x="${PL}" y="${PT}" width="${cW}" height="${cH}"/></clipPath></defs>`;
     const BAND = 10;
 
+    out += `<g clip-path="url(#fc-clip)">`;
     if (dailyMode) {
       for (let i = 0; i < miniElev.length - 1; i++) {
         const [km0,,, e0] = miniElev[i], [km1,,, e1] = miniElev[i + 1];
@@ -381,6 +456,7 @@ export function ForecastMap() {
       out += `<polyline points="${outline}" fill="none" stroke="#475569" stroke-width="1"/>`;
     }
 
+    out += `</g>`;
     out += `<line x1="${PL}" y1="${PT}" x2="${W-PR}" y2="${PT}" stroke="#e2e8f0" stroke-width="0.8"/>`;
     out += `<line x1="${PL}" y1="${H-PB}" x2="${W-PR}" y2="${H-PB}" stroke="#e2e8f0" stroke-width="0.8"/>`;
     out += `<text x="${PL-4}" y="${PT+5}" text-anchor="end" font-size="8.5" fill="#64748b" font-family="sans-serif">${Math.round(eMax)}m</text>`;
@@ -392,7 +468,7 @@ export function ForecastMap() {
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("height", String(H));
     svg.innerHTML = out;
-  }, [miniElev, dailyMode, currentHour, points, data, desiredHigh, desiredLow]);
+  }, [miniElev, dailyMode, currentHour, points, data, desiredHigh, desiredLow, visibleKmRange]);
 
   useEffect(() => {
     drawChart();
@@ -485,6 +561,8 @@ export function ForecastMap() {
     tooltip.style.left = `${tx}px`;
     tooltip.style.bottom = "26px";
     tooltip.style.top = "auto";
+
+    setHoveredKm(km);
   }
 
   function onChartMouseLeave() {
@@ -494,6 +572,7 @@ export function ForecastMap() {
       svg.querySelector("#fc-cursor")?.setAttribute("visibility", "hidden");
       svg.querySelector("#fc-cursor-dot")?.setAttribute("visibility", "hidden");
     }
+    setHoveredKm(null);
   }
 
   function buildPopupContent(pt: ForecastPoint, fd: ForecastPointData): string {
@@ -632,6 +711,9 @@ export function ForecastMap() {
           desiredLow={desiredLow}
           buildPopupContent={buildPopupContent}
         />
+
+        <HoverDotFM miniElev={miniElev} />
+        <MapBoundsForecastTracker miniElev={miniElev} />
 
         <MapControls position="bottom-right" showFullscreen />
       </MapView>

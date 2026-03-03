@@ -16,7 +16,7 @@ import { useT } from "@/i18n/useT";
 
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
-  const { setResults, activeTab, setActiveTab, forecast } = useResultsStore();
+  const { setResults, activeTab, setActiveTab } = useResultsStore();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const t = useT();
@@ -68,6 +68,10 @@ export function ResultsPage() {
             <Map className="h-4 w-4" />
             {t.results.tabMap}
           </TabsTrigger>
+          <TabsTrigger value="forecast" className="gap-1.5">
+            <Radar className="h-4 w-4" />
+            {t.results.tabForecast}
+          </TabsTrigger>
           <TabsTrigger value="elevation" className="gap-1.5">
             <Mountain className="h-4 w-4" />
             {t.results.tabElevation}
@@ -80,12 +84,6 @@ export function ResultsPage() {
             <List className="h-4 w-4" />
             {t.results.tabRoute}
           </TabsTrigger>
-          {forecast && (
-            <TabsTrigger value="forecast" className="gap-1.5">
-              <Radar className="h-4 w-4" />
-              {t.results.tabForecast}
-            </TabsTrigger>
-          )}
         </TabsList>
 
         <TabsContent value="map">
@@ -104,11 +102,9 @@ export function ResultsPage() {
           <RouteList />
         </TabsContent>
 
-        {forecast && (
-          <TabsContent value="forecast">
-            <ForecastMap />
-          </TabsContent>
-        )}
+        <TabsContent value="forecast">
+          <ForecastMap />
+        </TabsContent>
       </Tabs>
     </div>
   );

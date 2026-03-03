@@ -39,10 +39,15 @@ interface ResultsState {
     desiredHigh: number;
     desiredLow: number;
   }) => void;
+  hoveredKm: number | null;
+  visibleKmRange: [number, number] | null;
+
   setActiveTab: (tab: string) => void;
   setDateOffset: (offset: number) => void;
   setTableStep: (step: number) => void;
   setTableColumns: (cols: number) => void;
+  setHoveredKm: (km: number | null) => void;
+  setVisibleKmRange: (range: [number, number] | null) => void;
   reset: () => void;
 }
 
@@ -62,6 +67,8 @@ const initialState = {
   dateOffset: 0,
   tableStep: 7,
   tableColumns: 7,
+  hoveredKm: null as number | null,
+  visibleKmRange: null as [number, number] | null,
 };
 
 export const useResultsStore = create<ResultsState>()((set) => ({
@@ -73,6 +80,8 @@ export const useResultsStore = create<ResultsState>()((set) => ({
   setDateOffset: (dateOffset) => set({ dateOffset }),
   setTableStep: (tableStep) => set({ tableStep }),
   setTableColumns: (tableColumns) => set({ tableColumns }),
+  setHoveredKm: (hoveredKm) => set({ hoveredKm }),
+  setVisibleKmRange: (visibleKmRange) => set({ visibleKmRange }),
 
   reset: () => set(initialState),
 }));
