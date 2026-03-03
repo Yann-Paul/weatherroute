@@ -242,13 +242,14 @@ function MapBoundsTracker() {
 
   useEffect(() => {
     if (!map || !isLoaded) return;
+    const m = map;
 
     function update() {
       const rp = polylineRef.current;
       const scale = scaleRef.current;
       if (rp.length < 2) { setVisibleKmRange(null); return; }
 
-      const bounds = map.getBounds();
+      const bounds = m.getBounds();
       const vis = rp.filter(([, lon, lat]) => bounds.contains([lon, lat]));
       if (vis.length === 0) { setVisibleKmRange(null); return; }
 

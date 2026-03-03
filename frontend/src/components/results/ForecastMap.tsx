@@ -287,11 +287,12 @@ function MapBoundsForecastTracker({ miniElev }: { miniElev: [number, number, num
 
   useEffect(() => {
     if (!map || !isLoaded) return;
+    const m = map;
 
     function update() {
       const me = miniElevRef.current;
       if (me.length < 2) { setVisibleKmRange(null); return; }
-      const bounds = map.getBounds();
+      const bounds = m.getBounds();
       // miniElev format: [km, lat, lon, ele] → bounds.contains wants [lon, lat]
       const vis = me.filter(([, lat, lon]) => bounds.contains([lon, lat]));
       if (vis.length === 0) { setVisibleKmRange(null); return; }
