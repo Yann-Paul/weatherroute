@@ -644,12 +644,12 @@ def run_calculation(job_id: str, params: dict):
         overall_distance = sum(d for d in osrm_distances if d > 0)
         total_days = all_temps_data[-1][1] - start_day_val if all_temps_data else 0
 
-        # --- Live forecast (only when start is within the next 16 days) ---
+        # --- Live forecast (when route starts today or in the future) ---
         forecast_data = None
         today = date.today()
         for yr in [today.year, today.year + 1]:
             candidate = date(yr, 1, 1) + timedelta(days=start_day - 1)
-            if 0 <= (candidate - today).days <= 16:
+            if (candidate - today).days >= 0:
                 actual_start = candidate
                 cum_km_list = [0.0]
                 for d in osrm_distances:
