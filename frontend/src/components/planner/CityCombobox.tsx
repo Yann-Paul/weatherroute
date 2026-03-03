@@ -35,7 +35,7 @@ export function CityCombobox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CitySearchResult[]>([]);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const t = useT();
   const effectivePlaceholder = placeholder ?? t.cityCombobox.placeholder;
 

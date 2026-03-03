@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/map";
 import { useResultsStore } from "@/stores/resultsStore";
 import { useT } from "@/i18n/useT";
-import type { ForecastPoint, ForecastPointData } from "@/api/types";
+import type { ForecastPoint, ForecastPointData, ForecastDailyData, ForecastHourData } from "@/api/types";
 
 const HOUR_STEPS = [0, 6, 12, 18, 24];
 
@@ -507,17 +507,17 @@ export function ForecastMap() {
     lines.push(`<hr style="margin:6px 0;border-color:#e2e8f0">`);
     if (!fd.ok) { lines.push(`${t.forecastMap.noData}</div>`); return lines.join(""); }
     if (dailyMode) {
-      const d = fd.daily ?? {};
+      const d = (fd.daily ?? {}) as ForecastDailyData;
       if (d.tmax != null) lines.push(`${lbl("#f97316","☀ Tmax:")} ${val(d.tmax.toFixed(1)+"°C")}<br>`);
       if (d.tmin != null) lines.push(`${lbl("#3b82f6","☽ Tmin:")} ${val(d.tmin.toFixed(1)+"°C")}<br>`);
       if (d.prcp != null) lines.push(`${lbl("#60a5fa","☂ Regen:")} ${val(d.prcp.toFixed(1)+" mm")}<br>`);
       if (d.wspd != null) lines.push(`${lbl("#6b7280","☴ Windmax:")} ${val(d.wspd.toFixed(1)+" km/h")}<br>`);
       if (d.sun  != null) lines.push(`${lbl("#f59e0b","☀ Sonne:")} ${val(d.sun.toFixed(1)+" h")}<br>`);
     } else {
-      const h = fd.hourly?.[String(currentHour)] ?? {};
+      const h = (fd.hourly?.[String(currentHour)] ?? {}) as ForecastHourData;
       lines.push(`<b style="color:#1e293b">${t.forecastMap.hourLabel(currentHour)}</b><br>`);
       if (h.temp  != null) {
-        const tColor = tempToRgb(h.temp, (desiredHigh + desiredLow) / 2);
+        const tColor = tempToRgb(h.temp, desiredAvg);
         lines.push(`${lbl("#64748b","Temp:")} <b style="color:${tColor}">${h.temp.toFixed(1)}°C</b><br>`);
       }
       if (h.prcp  != null) lines.push(`${lbl("#60a5fa","☂:")} ${val(h.prcp.toFixed(1)+" mm")}<br>`);

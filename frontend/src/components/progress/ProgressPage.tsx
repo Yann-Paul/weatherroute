@@ -37,7 +37,7 @@ export function ProgressPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const job = useJobStore();
-  const pollingRef = useRef<ReturnType<typeof setTimeout>>();
+  const pollingRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const retryCount = useRef(0);
   const t = useT();
   // Capture strings into ref so poll callback always sees latest lang

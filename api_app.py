@@ -24,7 +24,6 @@ from typing import List, Optional
 
 from module import (
     find_optimal_route,
-    create_route_map,
     load_data,
     load_city_ids_by_country,
     get_interpolated_weather,
@@ -34,7 +33,6 @@ from module import (
     get_osrm_route,
     compute_distances_from_chunks,
     build_combined_elevation_profile,
-    haversine,
     select_forecast_points,
     fetch_open_meteo_forecast,
 )
@@ -735,3 +733,8 @@ if FRONTEND_DIST.exists():
         if file_path.is_file():
             return FileResponse(str(file_path))
         return FileResponse(str(FRONTEND_DIST / "index.html"))
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("api_app:app", host="0.0.0.0", port=8000, reload=False)
