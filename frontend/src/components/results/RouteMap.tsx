@@ -339,6 +339,7 @@ const LEGEND_GRADIENT =
 
 function MiniElevChart() {
   const elevation = useResultsStore((s) => s.elevation);
+  const elevationError = useResultsStore((s) => s.elevationError);
   const weather = useResultsStore((s) => s.weather);
   const startDay = useResultsStore((s) => s.startDay);
   const desiredHigh = useResultsStore((s) => s.desiredHigh);
@@ -532,7 +533,17 @@ function MiniElevChart() {
     setHoveredKm(null);
   }
 
-  if (!elevation || !elevation.cityData?.length) return null;
+  if (!elevation || !elevation.cityData?.length) {
+    if (!elevationError) return null;
+    return (
+      <div className="rounded-2xl border border-border bg-card p-3">
+        <p className="mb-1 text-xs font-medium text-muted-foreground">{t.routeMap.elevTitle}</p>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          ⚠ {elevationError}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-border bg-card p-3">

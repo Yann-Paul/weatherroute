@@ -256,6 +256,7 @@ function ElevationSegment({
 
 export function ElevationChart() {
   const elevation = useResultsStore((s) => s.elevation);
+  const elevationError = useResultsStore((s) => s.elevationError);
   const weather = useResultsStore((s) => s.weather);
   const startDay = useResultsStore((s) => s.startDay);
   const desiredHigh = useResultsStore((s) => s.desiredHigh);
@@ -299,7 +300,14 @@ export function ElevationChart() {
     });
   }, [elevation]);
 
-  if (!elevation) return null;
+  if (!elevation) {
+    if (!elevationError) return null;
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        ⚠ {elevationError}
+      </div>
+    );
+  }
 
   const desired = tempKey === "tmax" ? desiredHigh : desiredLow;
   const allCityData = elevation.cityData ?? [];

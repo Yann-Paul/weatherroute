@@ -322,6 +322,7 @@ function MapBoundsForecastTracker({ miniElev }: { miniElev: [number, number, num
 
 export function ForecastMap() {
   const forecast = useResultsStore((s) => s.forecast);
+  const forecastError = useResultsStore((s) => s.forecastError);
   const setHoveredKm = useResultsStore((s) => s.setHoveredKm);
   const visibleKmRange = useResultsStore((s) => s.visibleKmRange);
   const [hourIdx, setHourIdx] = useState(2);
@@ -630,9 +631,17 @@ export function ForecastMap() {
   }
 
   if (!forecast) {
+    const msg = forecastError ?? t.forecastMap.noForecast;
+    const isError = !!forecastError;
     return (
-      <div className="flex h-64 items-center justify-center rounded-2xl border border-border bg-muted/30 text-muted-foreground">
-        {t.forecastMap.noForecast}
+      <div className={[
+        "rounded-2xl border px-6 py-8 text-sm",
+        isError
+          ? "border-amber-200 bg-amber-50 text-amber-800"
+          : "border-border bg-muted/30 text-muted-foreground flex h-64 items-center justify-center",
+      ].join(" ")}>
+        {isError && <div className="mb-1 font-semibold">⚠ Vorhersage nicht verfügbar</div>}
+        <div>{msg}</div>
       </div>
     );
   }

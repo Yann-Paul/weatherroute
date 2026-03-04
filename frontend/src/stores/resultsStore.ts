@@ -12,12 +12,14 @@ interface ResultsState {
   segments: RouteSegment[];
   markers: MarkerData[];
   elevation: ElevationProfile | null;
+  elevationError: string | null;
   weather: WeatherStop[];
   route: RouteStop[];
   startDay: number;
   totalDistance: number;
   totalDays: number;
   forecast: ForecastData | null;
+  forecastError: string | null;
   desiredHigh: number;
   desiredLow: number;
 
@@ -29,13 +31,15 @@ interface ResultsState {
   setResults: (data: {
     segments: RouteSegment[];
     markers: MarkerData[];
-    elevation: ElevationProfile;
+    elevation: ElevationProfile | null;
+    elevationError: string | null;
     weather: WeatherStop[];
     route: RouteStop[];
     startDay: number;
     totalDistance: number;
     totalDays: number;
     forecast: ForecastData | null;
+    forecastError: string | null;
     desiredHigh: number;
     desiredLow: number;
   }) => void;
@@ -55,12 +59,14 @@ const initialState = {
   segments: [] as RouteSegment[],
   markers: [] as MarkerData[],
   elevation: null as ElevationProfile | null,
+  elevationError: null as string | null,
   weather: [] as WeatherStop[],
   route: [] as RouteStop[],
   startDay: 1,
   totalDistance: 0,
   totalDays: 0,
   forecast: null as ForecastData | null,
+  forecastError: null as string | null,
   desiredHigh: 25,
   desiredLow: 15,
   activeTab: "map",

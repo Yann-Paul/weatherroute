@@ -494,9 +494,17 @@ def run_calculation(job_id: str, params: dict):
                 }
             )
 
-        elev_data = build_combined_elevation_profile(
-            sub_route_data, points_per_1000km=params["elev_points_per_1000km"]
-        )
+        elevation_error = None
+        try:
+            elev_data = build_combined_elevation_profile(
+                sub_route_data, points_per_1000km=params["elev_points_per_1000km"]
+            )
+            if elev_data is None:
+                elevation_error = "Open-Elevation API nicht erreichbar (Timeout oder Netzwerkfehler)"
+        except Exception as elev_exc:
+            elev_data = None
+            elevation_error = f"Höhenprofil-Fehler: {elev_exc}"
+            print(f"[Elevation] Exception: {elev_exc}", flush=True)
 
         city_ids_for_elev = [d[0] for d in all_temps_data]
         elevation_result = None
@@ -646,10 +654,13 @@ def run_calculation(job_id: str, params: dict):
 
         # --- Live forecast (when route starts today or in the future) ---
         forecast_data = None
+        forecast_error = None
         today = date.today()
+        found_future_start = False
         for yr in [today.year, today.year + 1]:
             candidate = date(yr, 1, 1) + timedelta(days=start_day - 1)
             if (candidate - today).days >= 0:
+                found_future_start = True
                 actual_start = candidate
                 cum_km_list = [0.0]
                 for d in osrm_distances:
@@ -658,53 +669,76 @@ def run_calculation(job_id: str, params: dict):
 
                 profile = (elev_data or {}).get("profile", [])
                 latlons = (elev_data or {}).get("profile_latlons", [])
-                if profile and latlons and len(profile) == len(latlons):
-                    fps = select_forecast_points(profile, latlons)
-                    for fp in fps:
-                        day_f  = interp_route_day(fp["km"], cum_km_list, route_days_list)
-                        offset = round(day_f - route_days_list[0])
-                        fp["target_date"] = (actual_start + timedelta(days=offset)).isoformat()
-                        fp["day_offset"]  = offset
-                    fps = [fp for fp in fps
-                           if (date.fromisoformat(fp["target_date"]) - today).days <= 15]
-                    fdata = fetch_open_meteo_forecast(fps)
-                    mini_elev = [
-                        [round(km, 2), round(lat, 5), round(lon, 5), round(ele, 1)]
-                        for (km, ele), (lat, lon) in zip(profile, latlons)
-                    ][::3]
-                    route_stops = []
-                    for i_s, (city_id, day, city_name, _) in enumerate(route):
-                        nd = city_graph.nodes.get(city_id, {})
-                        lat_n = nd.get("lat")
-                        lon_n = nd.get("lon")
-                        if lat_n is not None and lon_n is not None and i_s < len(cum_km_list):
-                            route_stops.append({
-                                "name":    city_name,
-                                "lat":     round(float(lat_n), 5),
-                                "lon":     round(float(lon_n), 5),
-                                "km":      round(cum_km_list[i_s], 2),
-                                "relDay":  day - route_days_list[0],
-                            })
-                    forecast_data = {
-                        "points":     fps,
-                        "data":       {str(k): v for k, v in fdata.items()},
-                        "miniElev":   mini_elev,
-                        "routeStops": route_stops,
-                        "desiredHigh": params["high_temp"],
-                        "desiredLow":  params["low_temp"],
-                    }
+                if not profile or not latlons or len(profile) != len(latlons):
+                    forecast_error = (
+                        "Vorhersage nicht verfügbar: Höhenprofil fehlt "
+                        f"(Open-Elevation API Fehler: {elevation_error or 'unbekannt'})"
+                    )
+                else:
+                    try:
+                        fps = select_forecast_points(profile, latlons)
+                        for fp in fps:
+                            day_f  = interp_route_day(fp["km"], cum_km_list, route_days_list)
+                            offset = round(day_f - route_days_list[0])
+                            fp["target_date"] = (actual_start + timedelta(days=offset)).isoformat()
+                            fp["day_offset"]  = offset
+                        fps_filtered = [fp for fp in fps
+                               if (date.fromisoformat(fp["target_date"]) - today).days <= 15]
+                        if not fps_filtered:
+                            forecast_error = (
+                                f"Alle Routenpunkte liegen mehr als 16 Tage in der Zukunft "
+                                f"(Startdatum: {actual_start.isoformat()}, "
+                                f"Serverdatum: {today.isoformat()})"
+                            )
+                        else:
+                            fdata = fetch_open_meteo_forecast(fps_filtered)
+                            mini_elev = [
+                                [round(km, 2), round(lat, 5), round(lon, 5), round(ele, 1)]
+                                for (km, ele), (lat, lon) in zip(profile, latlons)
+                            ][::3]
+                            route_stops = []
+                            for i_s, (city_id, day, city_name, _) in enumerate(route):
+                                nd = city_graph.nodes.get(city_id, {})
+                                lat_n = nd.get("lat")
+                                lon_n = nd.get("lon")
+                                if lat_n is not None and lon_n is not None and i_s < len(cum_km_list):
+                                    route_stops.append({
+                                        "name":    city_name,
+                                        "lat":     round(float(lat_n), 5),
+                                        "lon":     round(float(lon_n), 5),
+                                        "km":      round(cum_km_list[i_s], 2),
+                                        "relDay":  day - route_days_list[0],
+                                    })
+                            forecast_data = {
+                                "points":     fps_filtered,
+                                "data":       {str(k): v for k, v in fdata.items()},
+                                "miniElev":   mini_elev,
+                                "routeStops": route_stops,
+                                "desiredHigh": params["high_temp"],
+                                "desiredLow":  params["low_temp"],
+                            }
+                    except Exception as fc_exc:
+                        forecast_error = f"Vorhersage-Fehler: {fc_exc}"
+                        print(f"[Forecast] Exception: {fc_exc}", flush=True)
                 break
+        if not found_future_start:
+            forecast_error = (
+                f"Startdatum (Tag {start_day}) liegt nicht in der Zukunft "
+                f"(Serverdatum: {today.isoformat()})"
+            )
 
         job["result"] = {
             "segments": segments,
             "markers": markers,
             "elevation": elevation_result,
+            "elevationError": elevation_error,
             "weather": weather_stops,
             "route": route_list,
             "startDay": start_day,
             "totalDistance": round(overall_distance, 1),
             "totalDays": total_days,
             "forecast": forecast_data,
+            "forecastError": forecast_error,
             "desiredHigh": params["high_temp"],
             "desiredLow": params["low_temp"],
         }

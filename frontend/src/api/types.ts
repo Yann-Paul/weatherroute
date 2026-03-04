@@ -193,13 +193,15 @@ export interface ForecastData {
 export interface JobResults {
   segments: RouteSegment[];
   markers: MarkerData[];
-  elevation: ElevationProfile;
+  elevation: ElevationProfile | null;
+  elevationError: string | null;
   weather: WeatherStop[];
   route: RouteStop[];
   startDay: number;
   totalDistance: number;
   totalDays: number;
   forecast: ForecastData | null;
+  forecastError: string | null;
   desiredHigh: number;
   desiredLow: number;
 }
