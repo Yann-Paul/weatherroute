@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import {
   Map as MapView,
@@ -325,7 +326,15 @@ export function ForecastMap() {
   const visibleKmRange = useResultsStore((s) => s.visibleKmRange);
   const [hourIdx, setHourIdx] = useState(2);
   const [dailyMode, setDailyMode] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [elevExpanded, setElevExpanded] = useState(true);
   const t = useT();
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartStateRef = useRef<any>(null);
@@ -476,6 +485,11 @@ export function ForecastMap() {
     window.addEventListener("resize", drawChart);
     return () => window.removeEventListener("resize", drawChart);
   }, [drawChart]);
+
+  // Re-draw after fullscreen toggle or expand — SVG element is remounted
+  useEffect(() => {
+    drawChart();
+  }, [isFullscreen, elevExpanded, drawChart]);
 
   function onChartMouseMove(e: React.MouseEvent<HTMLDivElement>) {
     const cs = chartStateRef.current;
@@ -717,28 +731,67 @@ export function ForecastMap() {
         <MapBoundsForecastTracker miniElev={miniElev} />
 
         <MapControls position="bottom-right" showFullscreen />
+
+        {isFullscreen && (
+          <div className="absolute bottom-0 left-0 right-0 z-10">
+            <div
+              className="flex cursor-pointer items-center justify-between border-t border-slate-200 bg-white/90 px-3 py-1 backdrop-blur-sm"
+              onClick={() => setElevExpanded((v) => !v)}
+            >
+              <span className="text-xs font-medium text-slate-600">{t.routeMap.elevTitle}</span>
+              {elevExpanded
+                ? <ChevronDown className="size-4 text-slate-500" />
+                : <ChevronUp className="size-4 text-slate-500" />}
+            </div>
+            {elevExpanded && (
+              <div className="bg-white/95 p-2">
+                <div
+                  className="relative w-full overflow-hidden rounded-lg border border-slate-200"
+                  style={{ background: "#f8fafc" }}
+                  onMouseMove={onChartMouseMove}
+                  onMouseLeave={onChartMouseLeave}
+                >
+                  <svg ref={svgRef} width="100%" height="180" style={{ display: "block" }} />
+                  <div
+                    ref={tooltipRef}
+                    className="pointer-events-none absolute hidden whitespace-nowrap rounded border px-2 py-1.5 text-[11px] leading-relaxed"
+                    style={{
+                      background: "rgba(255,255,255,0.96)",
+                      borderColor: "#93c5fd",
+                      color: "#1e293b",
+                      zIndex: 20,
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </MapView>
 
-      {/* Elevation chart */}
-      <div
-        className="relative w-full overflow-hidden rounded-lg border border-slate-200"
-        style={{ background: "#f8fafc" }}
-        onMouseMove={onChartMouseMove}
-        onMouseLeave={onChartMouseLeave}
-      >
-        <svg ref={svgRef} width="100%" height="180" style={{ display: "block" }} />
+      {/* Elevation chart - shown below map when not fullscreen */}
+      {!isFullscreen && (
         <div
-          ref={tooltipRef}
-          className="pointer-events-none absolute hidden whitespace-nowrap rounded border px-2 py-1.5 text-[11px] leading-relaxed"
-          style={{
-            background: "rgba(255,255,255,0.96)",
-            borderColor: "#93c5fd",
-            color: "#1e293b",
-            zIndex: 20,
-            boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-          }}
-        />
-      </div>
+          className="relative w-full overflow-hidden rounded-lg border border-slate-200"
+          style={{ background: "#f8fafc" }}
+          onMouseMove={onChartMouseMove}
+          onMouseLeave={onChartMouseLeave}
+        >
+          <svg ref={svgRef} width="100%" height="180" style={{ display: "block" }} />
+          <div
+            ref={tooltipRef}
+            className="pointer-events-none absolute hidden whitespace-nowrap rounded border px-2 py-1.5 text-[11px] leading-relaxed"
+            style={{
+              background: "rgba(255,255,255,0.96)",
+              borderColor: "#93c5fd",
+              color: "#1e293b",
+              zIndex: 20,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

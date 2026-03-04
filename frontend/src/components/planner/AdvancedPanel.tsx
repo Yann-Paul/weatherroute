@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
@@ -190,20 +189,6 @@ export function AdvancedPanel() {
                   {tc.travel.maxTravelDaysDesc}
                 </p>
               </div>
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={store.sortedInput}
-                  onCheckedChange={store.setSortedInput}
-                />
-                <Label>{tc.travel.sortedInput}</Label>
-              </div>
-              <p className="text-xs text-muted-foreground pl-10">
-                {tc.travel.sortedInputDesc1}
-                <br />
-                {tc.travel.sortedInputDesc2}
-              </p>
             </div>
           </CardContent>
         </Card>

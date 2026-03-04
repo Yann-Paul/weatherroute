@@ -164,19 +164,25 @@ export function WeatherGrid() {
                     row.restDayOffset > 0 ? "bg-amber-50/30" : "",
                   ].join(" ")}
                 >
-                  <td className="sticky left-0 z-10 bg-background px-3 py-1 font-medium whitespace-nowrap">
-                    {row.relDay}
-                    {row.restDayOffset > 0 && (
-                      <span className="ml-1 text-[10px] text-amber-600">⏸</span>
-                    )}
+                  <td className="sticky left-0 z-10 bg-background px-3 py-1 whitespace-nowrap">
+                    <div className="font-medium leading-tight">{row.stop.cityName}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {t.weatherGrid.dayHeader} {row.relDay}
+                      {row.restDayOffset > 0 && (
+                        <span className="ml-1 text-amber-600">⏸</span>
+                      )}
+                    </div>
                   </td>
                   {columns.map((col) => {
                     const lookupOffset = col.colOffset + row.restDayOffset;
                     const data = row.stop.byOffset[String(lookupOffset)] ?? null;
+                    const calDay = ((startDay + col.colOffset + row.relDay - 1 + 3650) % 365) + 1;
+                    const dateStr = dayOfYearToDate(calDay, 2025, t.dateLocale);
                     return (
                       <td key={col.colOffset} className="px-1 py-1">
                         <WeatherCell
                           cityName={row.stop.cityName}
+                          date={dateStr}
                           isRestDay={row.restDayOffset > 0}
                           restDayOffset={row.restDayOffset > 0 ? row.restDayOffset : undefined}
                           data={data}

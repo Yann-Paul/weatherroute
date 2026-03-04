@@ -107,6 +107,14 @@ export function PlannerPage() {
         <CardContent className="space-y-4">
           <CityList />
 
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={store.sortedInput}
+              onCheckedChange={store.setSortedInput}
+            />
+            <Label>{t.advanced.travel.sortedInput}</Label>
+          </div>
+
           <div className="space-y-2">
             <Label>{t.planner.startCity}</Label>
             <CityCombobox

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useCallback, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import {
   Map as MapView,
@@ -571,6 +572,14 @@ export function RouteMap() {
   const desiredLow = useResultsStore((s) => s.desiredLow);
   const lang = useLangStore((s) => s.lang);
   const t = useT();
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [elevExpanded, setElevExpanded] = useState(true);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
 
   const allCoords = useMemo<[number, number][]>(() => [
     ...segments.flatMap((s) => s.coordinates),
@@ -646,9 +655,27 @@ export function RouteMap() {
 
         <MapControls position="bottom-right" showFullscreen />
 
+        {isFullscreen && (
+          <div className="absolute bottom-0 left-0 right-0 z-10">
+            <div
+              className="flex cursor-pointer items-center justify-between border-t border-slate-200 bg-white/90 px-3 py-1 backdrop-blur-sm"
+              onClick={() => setElevExpanded((v) => !v)}
+            >
+              <span className="text-xs font-medium text-slate-600">{t.routeMap.elevTitle}</span>
+              {elevExpanded
+                ? <ChevronDown className="size-4 text-slate-500" />
+                : <ChevronUp className="size-4 text-slate-500" />}
+            </div>
+            {elevExpanded && (
+              <div className="bg-white/95 p-2">
+                <MiniElevChart />
+              </div>
+            )}
+          </div>
+        )}
       </MapView>
 
-      <MiniElevChart />
+      {!isFullscreen && <MiniElevChart />}
     </div>
   );
 }

@@ -40,7 +40,7 @@ export function ResultsPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-6xl space-y-4 p-4">
+      <div className="space-y-4 p-4">
         <Skeleton className="h-16 w-full rounded-3xl" />
         <Skeleton className="h-[500px] w-full rounded-3xl" />
       </div>
@@ -59,7 +59,7 @@ export function ResultsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-4 pb-16">
+    <div className="space-y-4 p-4 pb-16">
       <ResultsHeader />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
