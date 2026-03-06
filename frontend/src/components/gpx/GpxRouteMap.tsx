@@ -126,11 +126,12 @@ function GpxBoundsTracker({
 
   useEffect(() => {
     if (!map || !isLoaded) return;
+    const m = map;
     function update() {
       const rp = polyRef.current;
       const total = totalRef.current;
       if (rp.length < 2) { cbRef.current(null); return; }
-      const bounds = map.getBounds();
+      const bounds = m.getBounds();
       const vis = rp.filter(([, lat, lon]) => bounds.contains([lon, lat]));
       if (vis.length === 0) { cbRef.current(null); return; }
       const minKm = vis[0][0];
@@ -138,10 +139,10 @@ function GpxBoundsTracker({
       if (total > 0 && (maxKm - minKm) / total > 0.95) { cbRef.current(null); return; }
       cbRef.current([minKm, maxKm]);
     }
-    map.on("moveend", update);
+    m.on("moveend", update);
     update();
     return () => {
-      map.off("moveend", update);
+      m.off("moveend", update);
       cbRef.current(null);
     };
   }, [map, isLoaded]);
