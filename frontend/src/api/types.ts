@@ -45,16 +45,21 @@ export interface PlannerFormData {
   sortedInput: boolean;
 }
 
-export type JobStatus = "pending" | "running" | "done" | "error";
+export type JobStatus = "pending" | "running" | "done" | "preview" | "error";
 
 export interface JobStatusResponse {
   status: JobStatus;
   step: string;
   message: string;
+  jobType?: string;
   osrmDone: number;
   osrmTotal: number;
   roughMap: RoughMapData | null;
   error: string | null;
+  elevationBatchDone: number;
+  elevationBatchTotal: number;
+  forecastDone: number;
+  forecastTotal: number;
 }
 
 export interface RoughMapData {
@@ -190,11 +195,37 @@ export interface ForecastData {
   desiredLow: number;
 }
 
+export interface GpxWeatherPoint {
+  km: number;
+  lat: number;
+  lon: number;
+  ele: number;
+  arrivalTime: string;
+  type: "start" | "end" | "pass" | "valley" | "regular";
+  temp: number | null;    // temperature at arrival hour
+  prcp: number | null;    // precipitation at arrival hour (mm/h)
+  wspd: number | null;
+  wdir: number | null;
+  cloud: number | null;   // cloud cover % (forecast only)
+  isForecast: boolean;
+}
+
+export interface GpxJobResults {
+  jobType: "gpx";
+  elevation: ElevationProfile;
+  weatherPoints: GpxWeatherPoint[];
+  totalKm: number;
+  startDate: string;
+  startTime: string;
+  trackPoints: [number, number][];
+}
+
 export interface JobResults {
   segments: RouteSegment[];
   markers: MarkerData[];
   elevation: ElevationProfile | null;
   elevationError: string | null;
+  elevationComplete: boolean;
   weather: WeatherStop[];
   route: RouteStop[];
   startDay: number;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { Map, Mountain, CloudSun, List, Radar } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,15 +11,17 @@ import { WeatherGrid } from "./WeatherGrid";
 import { RouteList } from "./RouteList";
 import { ForecastMap } from "./ForecastMap";
 import { useResultsStore } from "@/stores/resultsStore";
-import { getJobResults } from "@/api/client";
+import { getJobResults, getJobStatus } from "@/api/client";
 import { useT } from "@/i18n/useT";
 
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
-  const { setResults, activeTab, setActiveTab } = useResultsStore();
+  const { setResults, updateElevation, activeTab, setActiveTab } = useResultsStore();
+  const elevationComplete = useResultsStore((s) => s.elevationComplete);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const t = useT();
+  const elevPollingRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!jobId) return;
@@ -37,6 +39,31 @@ export function ResultsPage() {
 
     fetchResults();
   }, [jobId, setResults]);
+
+  useEffect(() => {
+    if (!jobId || elevationComplete !== false) return;
+
+    async function pollElevation() {
+      try {
+        const status = await getJobStatus(jobId!);
+        if (status.status === "done") {
+          const data = await getJobResults(jobId!);
+          updateElevation({
+            elevation: data.elevation,
+            elevationError: data.elevationError,
+            elevationComplete: data.elevationComplete,
+          });
+        } else {
+          elevPollingRef.current = setTimeout(pollElevation, 2000);
+        }
+      } catch {
+        elevPollingRef.current = setTimeout(pollElevation, 5000);
+      }
+    }
+
+    elevPollingRef.current = setTimeout(pollElevation, 2000);
+    return () => { if (elevPollingRef.current) clearTimeout(elevPollingRef.current); };
+  }, [jobId, elevationComplete, updateElevation]);
 
   if (loading) {
     return (
@@ -61,6 +88,12 @@ export function ResultsPage() {
   return (
     <div className="space-y-4 p-4 pb-16">
       <ResultsHeader />
+
+      {elevationComplete === false && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+          {t.results.elevationLoading}
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start">

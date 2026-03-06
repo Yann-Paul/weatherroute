@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import { MapPin, Plus } from "lucide-react";
+import { MapPin, Plus, FileUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLangStore } from "@/i18n/store";
 import { useT } from "@/i18n/useT";
@@ -7,6 +7,7 @@ import { useT } from "@/i18n/useT";
 export function TopBar() {
   const location = useLocation();
   const showNewRoute = location.pathname !== "/";
+  const showGpx = !location.pathname.startsWith("/gpx");
   const { lang, setLang } = useLangStore();
   const t = useT();
 
@@ -42,6 +43,14 @@ export function TopBar() {
               EN
             </button>
           </div>
+          {showGpx && (
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/gpx">
+                <FileUp className="h-4 w-4" />
+                {t.nav.gpx}
+              </Link>
+            </Button>
+          )}
           {showNewRoute && (
             <Button variant="outline" size="sm" asChild>
               <Link to="/">

@@ -5,6 +5,8 @@ import { TopBar } from "@/components/layout/TopBar";
 import { PlannerPage } from "@/components/planner/PlannerPage";
 import { ProgressPage } from "@/components/progress/ProgressPage";
 import { ResultsPage } from "@/components/results/ResultsPage";
+import { GpxPage } from "@/components/gpx/GpxPage";
+import { GpxResultsPage } from "@/components/gpx/GpxResultsPage";
 
 export default function App() {
   return (
@@ -17,6 +19,8 @@ export default function App() {
               <Route path="/" element={<PlannerPage />} />
               <Route path="/progress/:jobId" element={<ProgressPage />} />
               <Route path="/results/:jobId" element={<ResultsPage />} />
+              <Route path="/gpx" element={<GpxPage />} />
+              <Route path="/gpx/results/:jobId" element={<GpxResultsPage />} />
             </Routes>
           </main>
         </div>

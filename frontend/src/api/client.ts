@@ -4,6 +4,7 @@ import type {
   JobStatusResponse,
   JobResults,
   PlannerFormData,
+  GpxJobResults,
 } from "./types";
 
 const BASE = "/api";
@@ -42,5 +43,28 @@ export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
 }
 
 export async function getJobResults(jobId: string): Promise<JobResults> {
+  return request(`/jobs/${jobId}/results`);
+}
+
+export async function submitGpxJob(
+  file: File,
+  startDate: string,
+  startTime: string,
+  avgSpeedKmh: number
+): Promise<{ jobId: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("startDate", startDate);
+  form.append("startTime", startTime);
+  form.append("avgSpeedKmh", String(avgSpeedKmh));
+  const res = await fetch("/api/gpx/jobs", { method: "POST", body: form });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { detail?: string }).detail ?? `Request failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getGpxResults(jobId: string): Promise<GpxJobResults> {
   return request(`/jobs/${jobId}/results`);
 }

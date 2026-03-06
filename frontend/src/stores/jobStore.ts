@@ -6,10 +6,15 @@ interface JobState {
   status: JobStatus;
   step: string;
   message: string;
+  jobType: string;
   osrmDone: number;
   osrmTotal: number;
   roughMap: RoughMapData | null;
   error: string | null;
+  elevationBatchDone: number;
+  elevationBatchTotal: number;
+  forecastDone: number;
+  forecastTotal: number;
 
   setJobId: (id: string) => void;
   updateStatus: (update: Partial<JobState>) => void;
@@ -21,10 +26,15 @@ const initialState = {
   status: "pending" as JobStatus,
   step: "",
   message: "",
+  jobType: "route",
   osrmDone: 0,
   osrmTotal: 0,
   roughMap: null as RoughMapData | null,
   error: null as string | null,
+  elevationBatchDone: 0,
+  elevationBatchTotal: 0,
+  forecastDone: 0,
+  forecastTotal: 0,
 };
 
 export const useJobStore = create<JobState>()((set) => ({

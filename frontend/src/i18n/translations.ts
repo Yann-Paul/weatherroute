@@ -3,6 +3,7 @@ export type Lang = "de" | "en";
 const de = {
   nav: {
     newRoute: "Neue Route",
+    gpx: "GPX",
   },
   planner: {
     heading: "Route",
@@ -98,6 +99,7 @@ const de = {
     stepOsrm: "Straßendaten (OSRM)",
     stepOsrmDetail: (done: number, total: number) => `${done} / ${total} Segmente`,
     stepElevation: "Höhenprofil",
+    stepForecast: "Wetterdaten abrufen",
     errorTitle: "Fehler",
     lostConnection: "Verbindung zum Server verloren.",
     toastError: "Verbindung verloren. Bitte erneut versuchen.",
@@ -113,6 +115,7 @@ const de = {
     days: "Tage",
     errorTitle: "Fehler",
     loadFailed: "Ergebnisse konnten nicht geladen werden",
+    elevationLoading: "Höhenprofil wird noch geladen...",
   },
   routeMap: {
     legendTitle: "Routenqualität",
@@ -160,6 +163,36 @@ const de = {
     noData: "Keine Daten",
     hourLabel: (h: number) => (h === 24 ? "0:00 +1T" : `${h}:00`),
   },
+  gpx: {
+    heading: "GPX Route analysieren",
+    uploadLabel: "GPX-Datei",
+    uploadButton: "Datei wählen...",
+    dropHint: "GPX-Datei hier ablegen oder klicken",
+    startDate: "Startdatum",
+    startTime: "Startzeit",
+    avgSpeed: "Ø Geschwindigkeit (km/h)",
+    avgSpeedDesc: "Für Ankunftszeitberechnung",
+    submit: "Route analysieren",
+    submitting: "Wird analysiert...",
+    errors: {
+      noFile: "Bitte eine GPX-Datei auswählen.",
+      noDate: "Bitte ein Startdatum angeben.",
+      submissionFailed: "Übermittlung fehlgeschlagen",
+    },
+    results: {
+      tabMap: "Karte",
+      tabElevation: "Höhenprofil",
+      tabWeather: "Wetter",
+      totalKm: "Gesamt",
+      ascent: "Aufstieg",
+      descent: "Abstieg",
+      typePass: "Pass",
+      typeValley: "Tal",
+      typeRegular: "Strecke",
+      sourceClimatic: "Klimanorm",
+      sourceForecast: "Vorhersage",
+    },
+  },
   months: [
     "Januar", "Februar", "März", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember",
@@ -171,6 +204,7 @@ const de = {
 const en = {
   nav: {
     newRoute: "New Route",
+    gpx: "GPX",
   },
   planner: {
     heading: "Route",
@@ -266,6 +300,7 @@ const en = {
     stepOsrm: "Street data (OSRM)",
     stepOsrmDetail: (done: number, total: number) => `${done} / ${total} segments`,
     stepElevation: "Elevation profile",
+    stepForecast: "Fetching weather data",
     errorTitle: "Error",
     lostConnection: "Lost connection to server.",
     toastError: "Connection lost. Please try again.",
@@ -281,6 +316,7 @@ const en = {
     days: "days",
     errorTitle: "Error",
     loadFailed: "Failed to load results",
+    elevationLoading: "Elevation profile is still loading...",
   },
   routeMap: {
     legendTitle: "Route quality",
@@ -327,6 +363,36 @@ const en = {
     dayMarker: (n: number) => `Day ${n}`,
     noData: "No data",
     hourLabel: (h: number) => (h === 24 ? "0:00 +1d" : `${h}:00`),
+  },
+  gpx: {
+    heading: "Analyse GPX Route",
+    uploadLabel: "GPX File",
+    uploadButton: "Choose file...",
+    dropHint: "Drop GPX file here or click",
+    startDate: "Start date",
+    startTime: "Start time",
+    avgSpeed: "Avg. speed (km/h)",
+    avgSpeedDesc: "Used to estimate arrival times",
+    submit: "Analyse route",
+    submitting: "Analysing...",
+    errors: {
+      noFile: "Please select a GPX file.",
+      noDate: "Please specify a start date.",
+      submissionFailed: "Submission failed",
+    },
+    results: {
+      tabMap: "Map",
+      tabElevation: "Elevation",
+      tabWeather: "Weather",
+      totalKm: "Total",
+      ascent: "Ascent",
+      descent: "Descent",
+      typePass: "Pass",
+      typeValley: "Valley",
+      typeRegular: "Route",
+      sourceClimatic: "Climate norm",
+      sourceForecast: "Forecast",
+    },
   },
   months: [
     "January", "February", "March", "April", "May", "June",

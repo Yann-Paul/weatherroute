@@ -55,14 +55,20 @@ export function ProgressPage() {
         status: data.status,
         step: data.step,
         message: data.message,
+        jobType: data.jobType ?? job.jobType,
         osrmDone: data.osrmDone,
         osrmTotal: data.osrmTotal,
         roughMap: data.roughMap ?? job.roughMap,
         error: data.error,
+        elevationBatchDone: data.elevationBatchDone ?? 0,
+        elevationBatchTotal: data.elevationBatchTotal ?? 0,
+        forecastDone: data.forecastDone ?? 0,
+        forecastTotal: data.forecastTotal ?? 0,
       });
 
-      if (data.status === "done") {
-        setTimeout(() => navigate(`/results/${jobId}`), 600);
+      if (data.status === "done" || data.status === "preview") {
+        const isGpx = (data.jobType ?? job.jobType) === "gpx";
+        setTimeout(() => navigate(isGpx ? `/gpx/results/${jobId}` : `/results/${jobId}`), 600);
         return;
       }
 
@@ -92,7 +98,11 @@ export function ProgressPage() {
     };
   }, [poll]);
 
-  const stepOrder = ["route", "osrm", "elevation"];
+  const isGpxJob = job.jobType === "gpx";
+  const stepOrder = isGpxJob
+    ? ["elevation", "forecast"]
+    : ["route", "osrm", "elevation", "forecast"];
+  const defaultStep = isGpxJob ? "elevation" : "route";
   const isError = job.status === "error";
   const osrmProgress =
     job.osrmTotal > 0 ? (job.osrmDone / job.osrmTotal) * 100 : 0;
@@ -104,25 +114,48 @@ export function ProgressPage() {
           <CardTitle>{t.progress.heading}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1">
-          <StepIndicator
-            label={t.progress.stepRoute}
-            status={getStepStatus(job.step || "route", "route", isError, stepOrder)}
-            detail={job.step === "route" ? job.message : undefined}
-          />
-          <StepIndicator
-            label={t.progress.stepOsrm}
-            status={getStepStatus(job.step || "route", "osrm", isError, stepOrder)}
-            detail={
-              job.step === "osrm" && job.osrmTotal > 0
-                ? t.progress.stepOsrmDetail(job.osrmDone, job.osrmTotal)
-                : undefined
-            }
-            progress={job.step === "osrm" ? osrmProgress : undefined}
-          />
+          {!isGpxJob && (
+            <>
+              <StepIndicator
+                label={t.progress.stepRoute}
+                status={getStepStatus(job.step || defaultStep, "route", isError, stepOrder)}
+                detail={job.step === "route" ? job.message : undefined}
+              />
+              <StepIndicator
+                label={t.progress.stepOsrm}
+                status={getStepStatus(job.step || defaultStep, "osrm", isError, stepOrder)}
+                detail={
+                  job.step === "osrm" && job.osrmTotal > 0
+                    ? t.progress.stepOsrmDetail(job.osrmDone, job.osrmTotal)
+                    : undefined
+                }
+                progress={job.step === "osrm" ? osrmProgress : undefined}
+              />
+            </>
+          )}
           <StepIndicator
             label={t.progress.stepElevation}
-            status={getStepStatus(job.step || "route", "elevation", isError, stepOrder)}
+            status={getStepStatus(job.step || defaultStep, "elevation", isError, stepOrder)}
             detail={job.step === "elevation" ? job.message : undefined}
+            progress={
+              job.step === "elevation" && job.elevationBatchTotal > 0
+                ? (job.elevationBatchDone / job.elevationBatchTotal) * 100
+                : undefined
+            }
+          />
+          <StepIndicator
+            label={t.progress.stepForecast}
+            status={getStepStatus(job.step || defaultStep, "forecast", isError, stepOrder)}
+            detail={
+              job.step === "forecast" && job.forecastTotal > 0
+                ? `${job.forecastDone}/${job.forecastTotal} Punkte`
+                : undefined
+            }
+            progress={
+              job.step === "forecast" && job.forecastTotal > 0
+                ? (job.forecastDone / job.forecastTotal) * 100
+                : undefined
+            }
           />
 
           {isError && job.error && (

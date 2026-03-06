@@ -13,6 +13,7 @@ interface ResultsState {
   markers: MarkerData[];
   elevation: ElevationProfile | null;
   elevationError: string | null;
+  elevationComplete: boolean;
   weather: WeatherStop[];
   route: RouteStop[];
   startDay: number;
@@ -33,6 +34,7 @@ interface ResultsState {
     markers: MarkerData[];
     elevation: ElevationProfile | null;
     elevationError: string | null;
+    elevationComplete: boolean;
     weather: WeatherStop[];
     route: RouteStop[];
     startDay: number;
@@ -42,6 +44,11 @@ interface ResultsState {
     forecastError: string | null;
     desiredHigh: number;
     desiredLow: number;
+  }) => void;
+  updateElevation: (data: {
+    elevation: ElevationProfile | null;
+    elevationError: string | null;
+    elevationComplete: boolean;
   }) => void;
   hoveredKm: number | null;
   visibleKmRange: [number, number] | null;
@@ -60,6 +67,7 @@ const initialState = {
   markers: [] as MarkerData[],
   elevation: null as ElevationProfile | null,
   elevationError: null as string | null,
+  elevationComplete: true,
   weather: [] as WeatherStop[],
   route: [] as RouteStop[],
   startDay: 1,
@@ -81,6 +89,8 @@ export const useResultsStore = create<ResultsState>()((set) => ({
   ...initialState,
 
   setResults: (data) => set({ ...data, activeTab: "map" }),
+
+  updateElevation: (data) => set(data),
 
   setActiveTab: (activeTab) => set({ activeTab }),
   setDateOffset: (dateOffset) => set({ dateOffset }),

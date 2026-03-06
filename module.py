@@ -1845,6 +1845,204 @@ def compute_distances_from_chunks(road_chunks, route_locations, skip_segments=No
     return distances_km
 
 
+def prepare_elevation_sampling(sub_route_data, points_per_1000km=1000):
+    """
+    Steps 1+2 of build_combined_elevation_profile: build route geometry and subsample.
+    Returns a dict with sampling data (no API calls), or None on failure.
+    """
+    print(f"[Höhenprofil] Vorbereitung für {len(sub_route_data)} Teilroute(n)", flush=True)
+
+    # Step 1: For each sub-route build a (lat, lon, cum_km) list from the full
+    # road geometry and compute leg distances for city markers from the same source.
+    sub_info = []
+    total_coords = 0
+    for item in sub_route_data:
+        coords_km = []
+        cum_km = 0.0
+        prev = None
+        for chunk in item['chunks']:
+            for point in chunk:
+                if not (isinstance(point, (list, tuple)) and len(point) == 2):
+                    continue
+                lat, lon = float(point[0]), float(point[1])
+                if prev is not None:
+                    cum_km += haversine(prev, (lat, lon))
+                coords_km.append((lat, lon, cum_km))
+                prev = (lat, lon)
+
+        leg_distances_km = []
+        locs = item['locations']
+        for ci in range(len(locs) - 1):
+            if ci < len(item['chunks']):
+                chunk = item['chunks'][ci]
+                d = sum(haversine((chunk[j][0], chunk[j][1]),
+                                  (chunk[j+1][0], chunk[j+1][1]))
+                        for j in range(len(chunk) - 1))
+                leg_distances_km.append(d)
+            else:
+                leg_distances_km.append(0.0)
+
+        route_km = coords_km[-1][2] if coords_km else 0.0
+        sub_info.append({
+            'coords_km': coords_km,
+            'leg_distances_km': leg_distances_km,
+            'city_names': item['city_names'],
+            'city_temps': item.get('city_temps', []),
+        })
+        total_coords += len(coords_km)
+
+    if total_coords == 0:
+        print("[Höhenprofil] Keine Koordinaten gefunden — Abbruch", flush=True)
+        return None
+
+    # Derive max_elev_points from total route distance and desired density.
+    total_km = sum(
+        info['coords_km'][-1][2] for info in sub_info if info['coords_km']
+    )
+    max_elev_points = max(200, round(total_km * points_per_1000km / 1000))
+
+    print(f"[Höhenprofil] Vorbereitung Schritt 1 — {total_coords} Punkte, "
+          f"{total_km:.1f} km, Ziel: {max_elev_points} Höhenpunkte", flush=True)
+
+    # Step 2: Proportional subsampling
+    all_sampled_latlon = []
+    all_sub_sampled_kms = []
+    all_sub_sampled_latlons = []
+    sub_sample_counts = []
+    for info in sub_info:
+        coords_km = info['coords_km']
+        n = len(coords_km)
+        if n == 0:
+            sub_sample_counts.append(0)
+            all_sub_sampled_kms.append([])
+            all_sub_sampled_latlons.append([])
+            continue
+        n_alloc = max(2, round(n / total_coords * max_elev_points))
+        if n > n_alloc:
+            step = n / n_alloc
+            indices = [int(i * step) for i in range(n_alloc)]
+            indices[-1] = n - 1
+        else:
+            indices = list(range(n))
+        seg_latlons = [(coords_km[idx][0], coords_km[idx][1]) for idx in indices]
+        all_sampled_latlon.extend(seg_latlons)
+        all_sub_sampled_kms.append([coords_km[idx][2] for idx in indices])
+        all_sub_sampled_latlons.append(seg_latlons)
+        sub_sample_counts.append(len(indices))
+
+    n_sampled = len(all_sampled_latlon)
+    print(f"[Höhenprofil] Vorbereitung Schritt 2 — {n_sampled} Punkte nach Abtastung", flush=True)
+
+    # Build flat_km: absolute km for each point in all_sampled_latlon
+    flat_km = []
+    km_off = 0.0
+    for kms in all_sub_sampled_kms:
+        if kms:
+            flat_km.extend(km_off + k for k in kms)
+            km_off += kms[-1]
+
+    return {
+        "sub_info": sub_info,
+        "all_sampled_latlon": all_sampled_latlon,
+        "sub_sample_counts": sub_sample_counts,
+        "all_sub_sampled_kms": all_sub_sampled_kms,
+        "all_sub_sampled_latlons": all_sub_sampled_latlons,
+        "n_sampled": n_sampled,
+        "total_km": total_km,
+        "flat_km": flat_km,
+    }
+
+
+def assemble_elevation_profile(api_results, prep):
+    """
+    Step 4 of build_combined_elevation_profile: assemble the profile from API results.
+    api_results: list of {"elevation": float} dicts (may be partial).
+    prep: dict returned by prepare_elevation_sampling.
+    Returns same dict format as build_combined_elevation_profile, or None.
+    """
+    sub_info = prep["sub_info"]
+    sub_sample_counts = prep["sub_sample_counts"]
+    all_sub_sampled_kms = prep["all_sub_sampled_kms"]
+    all_sub_sampled_latlons = prep["all_sub_sampled_latlons"]
+
+    combined_profile = []
+    combined_latlons = []
+    combined_city_marks = []
+    combined_city_data = []
+    km_offset = 0.0
+    result_offset = 0
+
+    for info, count, sampled_kms, seg_latlons in zip(
+            sub_info, sub_sample_counts, all_sub_sampled_kms, all_sub_sampled_latlons):
+        if count == 0:
+            continue
+        available = len(api_results) - result_offset
+        if available <= 0:
+            break
+        take = min(count, available)
+        sub_results = api_results[result_offset:result_offset + take]
+        result_offset += take
+
+        for (slat, slon), km, r in zip(seg_latlons[:take], sampled_kms[:take], sub_results):
+            combined_profile.append((km_offset + km, r["elevation"]))
+            combined_latlons.append((slat, slon))
+
+        if not combined_profile:
+            continue
+
+        # Determine how far we have elevation data
+        covered_km = combined_profile[-1][0]
+
+        city_temps_sub = info.get('city_temps', [])
+        t0 = city_temps_sub[0] if city_temps_sub else (None, None, None)
+        combined_city_marks.append((km_offset, info['city_names'][0]))
+        combined_city_data.append({"km": km_offset, "name": info['city_names'][0],
+                                   "tmin": t0[0], "tmax": t0[1],
+                                   "prcp": t0[2] if len(t0) > 2 else None,
+                                   "ele": None})
+        cum = 0.0
+        for i, d in enumerate(info['leg_distances_km']):
+            cum += d
+            if i + 1 < len(info['city_names']):
+                city_km = km_offset + cum
+                # Only include cities within covered elevation data
+                if city_km <= covered_km + 1:
+                    combined_city_marks.append((city_km, info['city_names'][i + 1]))
+                    tp = city_temps_sub[i + 1] if i + 1 < len(city_temps_sub) else (None, None, None)
+                    combined_city_data.append({"km": city_km,
+                                               "name": info['city_names'][i + 1],
+                                               "tmin": tp[0], "tmax": tp[1],
+                                               "prcp": tp[2] if len(tp) > 2 else None,
+                                               "ele": None})
+
+        km_offset += sampled_kms[-1] if sampled_kms else 0.0
+
+    if not combined_profile:
+        return None
+
+    # Fill in city elevations by interpolating from the completed profile
+    def _interp_profile_ele(km_target):
+        for i in range(len(combined_profile) - 1):
+            km0, e0 = combined_profile[i]
+            km1, e1 = combined_profile[i + 1]
+            if km0 <= km_target <= km1:
+                t = (km_target - km0) / (km1 - km0) if km1 > km0 else 0.0
+                return e0 + t * (e1 - e0)
+        return combined_profile[-1][1]
+
+    for cd in combined_city_data:
+        cd["ele"] = _interp_profile_ele(cd["km"])
+
+    max_ele = max((e for _, e in combined_profile), default=0)
+    min_ele = min((e for _, e in combined_profile), default=0)
+    print(f"[Höhenprofil] Assemblierung — {len(combined_profile)} Profilpunkte, "
+          f"{len(combined_city_data)} Städte, "
+          f"Höhe: {min_ele:.0f}–{max_ele:.0f} m", flush=True)
+
+    return {"profile": combined_profile, "profile_latlons": combined_latlons,
+            "city_marks": combined_city_marks, "city_data": combined_city_data}
+
+
 def build_combined_elevation_profile(sub_route_data, max_elev_points=None, points_per_1000km=1000):
     """
     Build a combined elevation profile from multiple continuous road sub-routes
@@ -1954,19 +2152,42 @@ def build_combined_elevation_profile(sub_route_data, max_elev_points=None, point
           f"(Reduktion: {total_coords} → {n_sampled})", flush=True)
 
     # Step 3: Open-Elevation calls (batched to stay within API payload limits)
-    _ELEV_BATCH = 512
+    import time as _time
+    _ELEV_BATCH = 256          # smaller batches → less likely to hit rate limits
+    _BATCH_DELAY = 1.5         # seconds between batches (rate limit: 1 req/s per IP)
+    _MAX_RETRIES = 4
+    _RETRY_DELAYS = [5, 15, 30, 60]   # backoff schedule for 429 / transient errors
     n_batches = (n_sampled + _ELEV_BATCH - 1) // _ELEV_BATCH
     print(f"[Höhenprofil] Schritt 3 — Open-Elevation Anfrage mit {n_sampled} Koordinaten "
           f"in {n_batches} Batch(es) …", flush=True)
     all_results = []
     try:
-        for b_start in range(0, n_sampled, _ELEV_BATCH):
+        for batch_idx, b_start in enumerate(range(0, n_sampled, _ELEV_BATCH)):
+            if batch_idx > 0:
+                _time.sleep(_BATCH_DELAY)
             batch = all_sampled_latlon[b_start:b_start + _ELEV_BATCH]
             payload = {"locations": [{"latitude": lat, "longitude": lon}
                                       for lat, lon in batch]}
-            resp = requests.post(OPEN_ELEV, json=payload, timeout=30)
-            resp.raise_for_status()
-            all_results.extend(resp.json()["results"])
+            for attempt in range(_MAX_RETRIES):
+                try:
+                    resp = requests.post(OPEN_ELEV, json=payload, timeout=45)
+                    resp.raise_for_status()
+                    all_results.extend(resp.json()["results"])
+                    break
+                except Exception as batch_err:
+                    is_rate_limit = (
+                        hasattr(batch_err, "response")
+                        and batch_err.response is not None
+                        and batch_err.response.status_code == 429
+                    )
+                    if attempt < _MAX_RETRIES - 1:
+                        wait = _RETRY_DELAYS[attempt] if is_rate_limit else _RETRY_DELAYS[0]
+                        print(f"[Höhenprofil] Batch {batch_idx+1}/{n_batches} Fehler "
+                              f"(Versuch {attempt+1}/{_MAX_RETRIES}): {batch_err} — "
+                              f"warte {wait}s …", flush=True)
+                        _time.sleep(wait)
+                    else:
+                        raise
         print(f"[Höhenprofil] Schritt 3 fertig — {len(all_results)} Höhenwerte empfangen",
               flush=True)
     except Exception as e:
@@ -2172,7 +2393,7 @@ def select_forecast_points(profile, latlons, min_spacing_km=15, max_spacing_km=2
     ]
 
 
-def fetch_open_meteo_forecast(points):
+def fetch_open_meteo_forecast(points, on_progress=None):
     """Fetch Open-Meteo forecast for a list of points with target_date."""
     from concurrent.futures import ThreadPoolExecutor
     from datetime import date as _date
@@ -2246,9 +2467,15 @@ def fetch_open_meteo_forecast(points):
             print(f"[Forecast] Point {i} failed: {exc}")
             return i, {"ok": False}
 
+    def fetch_one_tracked(args):
+        result = fetch_one(args)
+        if on_progress:
+            on_progress()
+        return result
+
     result = {}
     with ThreadPoolExecutor(max_workers=3) as ex:
-        for i, data in ex.map(fetch_one, enumerate(points)):
+        for i, data in ex.map(fetch_one_tracked, enumerate(points)):
             result[i] = data
     return result
 

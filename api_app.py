@@ -11,16 +11,20 @@ import json
 import os
 import threading
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, time as _time_cls
 from pathlib import Path
 
 import difflib
+import math
+import xml.etree.ElementTree as ET
 import pycountry
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
+
+import requests
 
 from module import (
     find_optimal_route,
@@ -33,9 +37,13 @@ from module import (
     get_osrm_route,
     compute_distances_from_chunks,
     build_combined_elevation_profile,
+    prepare_elevation_sampling,
+    assemble_elevation_profile,
     select_forecast_points,
     fetch_open_meteo_forecast,
 )
+
+OPEN_ELEV = "https://api.open-elevation.com/api/v1/lookup"
 
 app = FastAPI()
 
@@ -256,6 +264,10 @@ def submit_job(data: JobSubmission):
         "rough_map": None,
         "result": None,
         "error": None,
+        "elevation_batch_done": 0,
+        "elevation_batch_total": 0,
+        "forecast_done": 0,
+        "forecast_total": 0,
     }
 
     t = threading.Thread(target=run_calculation, args=(job_id, params), daemon=True)
@@ -275,19 +287,60 @@ def job_status(job_id: str):
         "status": job["status"],
         "step": job["step"],
         "message": job["message"],
+        "jobType": job.get("jobType", "route"),
         "osrmDone": job["osrm_done"],
         "osrmTotal": job["osrm_total"],
         "roughMap": rough_map,
         "error": job.get("error"),
+        "elevationBatchDone": job.get("elevation_batch_done", 0),
+        "elevationBatchTotal": job.get("elevation_batch_total", 0),
+        "forecastDone": job.get("forecast_done", 0),
+        "forecastTotal": job.get("forecast_total", 0),
     }
 
 
 @app.get("/api/jobs/{job_id}/results")
 def job_results(job_id: str):
     job = jobs.get(job_id)
-    if not job or job["status"] != "done" or not job.get("result"):
+    if not job or job["status"] not in ("done", "preview") or not job.get("result"):
         raise HTTPException(404, "Results not available")
     return job["result"]
+
+
+@app.post("/api/gpx/jobs")
+async def submit_gpx_job(
+    file: UploadFile = File(...),
+    startDate: str = Form(...),
+    startTime: str = Form("09:00"),
+    avgSpeedKmh: float = Form(15.0),
+):
+    content = await file.read()
+    latlons = parse_gpx(content)
+    if len(latlons) < 2:
+        raise HTTPException(400, "GPX-Datei enthält keine gültige Route")
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {
+        "status": "pending",
+        "step": "elevation",
+        "message": "Starte Analyse...",
+        "jobType": "gpx",
+        "osrm_done": 0,
+        "osrm_total": 0,
+        "rough_map": None,
+        "result": None,
+        "error": None,
+        "elevation_batch_done": 0,
+        "elevation_batch_total": 0,
+        "forecast_done": 0,
+        "forecast_total": 0,
+    }
+    t = threading.Thread(
+        target=run_gpx_analysis,
+        args=(job_id, latlons, startDate, startTime, avgSpeedKmh),
+        daemon=True,
+    )
+    t.start()
+    return {"jobId": job_id}
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +359,149 @@ def _score_color(ns: float) -> str:
         g = int((1 - (ns - 0.5) * 2) * 200)
         b = 50
     return f"rgb({r},{g},{b})"
+
+
+# ---------------------------------------------------------------------------
+# GPX helpers
+# ---------------------------------------------------------------------------
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6371.0
+    lat1r, lon1r, lat2r, lon2r = (math.radians(x) for x in [lat1, lon1, lat2, lon2])
+    dlat = lat2r - lat1r
+    dlon = lon2r - lon1r
+    a = math.sin(dlat / 2) ** 2 + math.cos(lat1r) * math.cos(lat2r) * math.sin(dlon / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(max(0.0, a)))
+
+
+def parse_gpx(content: bytes) -> List[tuple]:
+    """Parse GPX XML, return list of (lat, lon) tuples."""
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return []
+    ns = "{http://www.topografix.com/GPX/1/1}"
+    trkpts = root.findall(f".//{ns}trkpt")
+    if not trkpts:
+        trkpts = root.findall(".//trkpt")
+    if not trkpts:
+        wpts = root.findall(f".//{ns}wpt") or root.findall(".//wpt")
+        trkpts = wpts
+    latlons: List[tuple] = []
+    for pt in trkpts:
+        try:
+            lat = float(pt.get("lat"))  # type: ignore
+            lon = float(pt.get("lon"))  # type: ignore
+            latlons.append((lat, lon))
+        except (TypeError, ValueError):
+            continue
+    return latlons
+
+
+def gpx_subsample(latlons: List[tuple], n_target: int) -> tuple:
+    """Subsample lat/lon list to n_target evenly distributed points.
+    Returns (sampled_latlons, sampled_km)."""
+    if len(latlons) == 0:
+        return [], []
+    cum_km = [0.0]
+    for i in range(1, len(latlons)):
+        cum_km.append(cum_km[-1] + _haversine_km(
+            latlons[i - 1][0], latlons[i - 1][1], latlons[i][0], latlons[i][1]
+        ))
+    total_km = cum_km[-1]
+    if len(latlons) <= n_target or total_km == 0:
+        return list(latlons), list(cum_km)
+    target_kms = [total_km * i / (n_target - 1) for i in range(n_target)]
+    sampled_latlons: List[tuple] = []
+    sampled_km: List[float] = []
+    j = 0
+    for tkm in target_kms:
+        while j < len(cum_km) - 2 and cum_km[j + 1] < tkm:
+            j += 1
+        if j >= len(latlons) - 1:
+            sampled_latlons.append(latlons[-1])
+            sampled_km.append(cum_km[-1])
+        elif cum_km[j + 1] == cum_km[j]:
+            sampled_latlons.append(latlons[j])
+            sampled_km.append(cum_km[j])
+        else:
+            t = (tkm - cum_km[j]) / (cum_km[j + 1] - cum_km[j])
+            lat = latlons[j][0] + t * (latlons[j + 1][0] - latlons[j][0])
+            lon = latlons[j][1] + t * (latlons[j + 1][1] - latlons[j][1])
+            sampled_latlons.append((lat, lon))
+            sampled_km.append(tkm)
+    return sampled_latlons, sampled_km
+
+
+def select_gpx_weather_points(
+    profile: List[tuple], spacing_km: float = 10.0, min_spacing_km: float = 5.0
+) -> List[tuple]:
+    """Select weather points along the GPX profile.
+    profile: list of (km, ele) pairs.
+    Returns list of (index, type) tuples sorted by index.
+    type: 'start' | 'end' | 'pass' | 'valley' | 'regular'
+    """
+    import numpy as np
+    from scipy.signal import find_peaks
+
+    n = len(profile)
+    if n == 0:
+        return []
+    if n == 1:
+        return [(0, "start")]
+    if n == 2:
+        return [(0, "start"), (1, "end")]
+
+    total_km = profile[-1][0]
+    idx_per_km = n / total_km if total_km > 0 else 1.0
+    ele_arr = np.array([e for _, e in profile])
+    min_dist = max(1, int(5 * idx_per_km))
+
+    peaks, _ = find_peaks(ele_arr, prominence=30, distance=min_dist)
+    valleys, _ = find_peaks(-ele_arr, prominence=30, distance=min_dist)
+
+    peaks_set: set = set(peaks.tolist())
+    valleys_set: set = set(valleys.tolist())
+    extrema = peaks_set | valleys_set
+
+    result: dict = {0: "start", n - 1: "end"}
+    for idx in peaks_set:
+        result[idx] = "pass"
+    for idx in valleys_set:
+        if idx not in result:
+            result[idx] = "valley"
+
+    if total_km > 0:
+        n_intervals = max(1, int(total_km / spacing_km))
+        for i in range(1, n_intervals):
+            km_target = i * spacing_km
+            closest = min(range(n), key=lambda j: abs(profile[j][0] - km_target))
+            km_closest = profile[closest][0]
+            is_close = any(
+                abs(km_closest - profile[e][0]) < min_spacing_km for e in extrema
+            )
+            if not is_close and closest not in result:
+                result[closest] = "regular"
+
+    return [(k, result[k]) for k in sorted(result.keys())]
+
+
+def find_nearest_city_id(lat: float, lon: float, graph) -> Optional[str]:
+    """Return the city_id of the nearest node in the graph."""
+    best_id = None
+    best_dist = float("inf")
+    for node_id, data in graph.nodes(data=True):
+        try:
+            nlat = float(data.get("lat", 0))
+            nlon = float(data.get("lon", 0))
+            d = _haversine_km(lat, lon, nlat, nlon)
+            if d < best_dist:
+                best_dist = d
+                best_id = node_id
+        except Exception:
+            continue
+    return best_id
 
 
 def run_calculation(job_id: str, params: dict):
@@ -494,58 +690,7 @@ def run_calculation(job_id: str, params: dict):
                 }
             )
 
-        elevation_error = None
-        try:
-            elev_data = build_combined_elevation_profile(
-                sub_route_data, points_per_1000km=params["elev_points_per_1000km"]
-            )
-            if elev_data is None:
-                elevation_error = "Open-Elevation API nicht erreichbar (Timeout oder Netzwerkfehler)"
-        except Exception as elev_exc:
-            elev_data = None
-            elevation_error = f"Höhenprofil-Fehler: {elev_exc}"
-            print(f"[Elevation] Exception: {elev_exc}", flush=True)
-
         city_ids_for_elev = [d[0] for d in all_temps_data]
-        elevation_result = None
-        if elev_data:
-            cd_list = elev_data.get("city_data", [])
-            elevation_result = {
-                "points": [
-                    [round(km, 2), round(ele, 1)]
-                    for km, ele in elev_data["profile"]
-                ],
-                "cityMarks": [
-                    [round(cd["km"], 2), cd["name"]]
-                    for cd in cd_list
-                ],
-                "cityData": [
-                    {
-                        "km": round(cd["km"], 2),
-                        "name": cd["name"],
-                        "cityId": city_ids_for_elev[i] if i < len(city_ids_for_elev) else "",
-                        "ele": round(float(cd.get("ele") or 0), 1),
-                    }
-                    for i, cd in enumerate(cd_list)
-                ],
-                "totalKm": round(elev_data["profile"][-1][0], 1)
-                if elev_data["profile"]
-                else 0,
-                "totalAscent": round(
-                    sum(
-                        max(0, elev_data["profile"][i + 1][1] - elev_data["profile"][i][1])
-                        for i in range(len(elev_data["profile"]) - 1)
-                    ),
-                    0,
-                ),
-                "totalDescent": round(
-                    sum(
-                        max(0, elev_data["profile"][i][1] - elev_data["profile"][i + 1][1])
-                        for i in range(len(elev_data["profile"]) - 1)
-                    ),
-                    0,
-                ),
-            }
 
         # Build segments for map
         segments = []
@@ -652,97 +797,513 @@ def run_calculation(job_id: str, params: dict):
         overall_distance = sum(d for d in osrm_distances if d > 0)
         total_days = all_temps_data[-1][1] - start_day_val if all_temps_data else 0
 
-        # --- Live forecast (when route starts today or in the future) ---
+        # --- Helper: format elev_data dict into the JSON result shape ---
+        def _fmt_elev(elev_data, city_ids_for_elev):
+            if not elev_data:
+                return None
+            cd_list = elev_data.get("city_data", [])
+            profile = elev_data["profile"]
+            return {
+                "points": [[round(km, 2), round(ele, 1)] for km, ele in profile],
+                "cityMarks": [[round(cd["km"], 2), cd["name"]] for cd in cd_list],
+                "cityData": [
+                    {
+                        "km": round(cd["km"], 2),
+                        "name": cd["name"],
+                        "cityId": city_ids_for_elev[i] if i < len(city_ids_for_elev) else "",
+                        "ele": round(float(cd.get("ele") or 0), 1),
+                    }
+                    for i, cd in enumerate(cd_list)
+                ],
+                "totalAscent": round(sum(max(0, profile[i+1][1] - profile[i][1]) for i in range(len(profile)-1)), 0),
+                "totalDescent": round(sum(max(0, profile[i][1] - profile[i+1][1]) for i in range(len(profile)-1)), 0),
+                "totalKm": round(profile[-1][0], 1) if profile else 0,
+            }
+
+        # --- Helper: build forecast_data from elev_data ---
+        def _build_forecast(elev_data, start_day, osrm_distances, route,
+                            route_locations, city_graph, params, job):
+            today = date.today()
+            for yr in [today.year, today.year + 1]:
+                candidate = date(yr, 1, 1) + timedelta(days=start_day - 1)
+                if (candidate - today).days >= 0:
+                    actual_start = candidate
+                    cum_km_list = [0.0]
+                    for d in osrm_distances:
+                        cum_km_list.append(cum_km_list[-1] + (d or 0))
+                    route_days_list = [day for _, day, _, _ in route]
+                    profile = (elev_data or {}).get("profile", [])
+                    latlons = (elev_data or {}).get("profile_latlons", [])
+                    if not profile or not latlons or len(profile) != len(latlons):
+                        return None, "Vorhersage nicht verfügbar: Höhenprofil fehlt"
+                    fps = select_forecast_points(profile, latlons)
+                    for fp in fps:
+                        day_f = interp_route_day(fp["km"], cum_km_list, route_days_list)
+                        offset = round(day_f - route_days_list[0])
+                        fp["target_date"] = (actual_start + timedelta(days=offset)).isoformat()
+                        fp["day_offset"] = offset
+                    fps_filtered = [fp for fp in fps if (date.fromisoformat(fp["target_date"]) - today).days <= 15]
+                    if not fps_filtered:
+                        return None, (
+                            f"Alle Routenpunkte liegen mehr als 16 Tage in der Zukunft "
+                            f"(Startdatum: {actual_start.isoformat()}, Serverdatum: {today.isoformat()})"
+                        )
+                    job["step"] = "forecast"
+                    job["forecast_total"] = len(fps_filtered)
+                    job["forecast_done"] = 0
+                    completed = [0]
+                    def on_progress():
+                        completed[0] += 1
+                        job["forecast_done"] = completed[0]
+                        job["message"] = f"Vorhersage: {completed[0]}/{len(fps_filtered)} Punkte"
+                    try:
+                        fdata = fetch_open_meteo_forecast(fps_filtered, on_progress=on_progress)
+                    except Exception as fc_exc:
+                        print(f"[Forecast] Exception: {fc_exc}", flush=True)
+                        return None, f"Vorhersage-Fehler: {fc_exc}"
+                    mini_elev = [
+                        [round(km, 2), round(lat, 5), round(lon, 5), round(ele, 1)]
+                        for (km, ele), (lat, lon) in zip(profile, latlons)
+                    ][::3]
+                    route_stops = []
+                    for i_s, (city_id, day, city_name, _) in enumerate(route):
+                        nd = city_graph.nodes.get(city_id, {})
+                        lat_n = nd.get("lat"); lon_n = nd.get("lon")
+                        if lat_n is not None and lon_n is not None and i_s < len(cum_km_list):
+                            route_stops.append({
+                                "name": city_name, "lat": round(float(lat_n), 5),
+                                "lon": round(float(lon_n), 5), "km": round(cum_km_list[i_s], 2),
+                                "relDay": day - route_days_list[0],
+                            })
+                    return {
+                        "points": fps_filtered,
+                        "data": {str(k): v for k, v in fdata.items()},
+                        "miniElev": mini_elev,
+                        "routeStops": route_stops,
+                        "desiredHigh": params["high_temp"],
+                        "desiredLow": params["low_temp"],
+                    }, None
+            return None, f"Startdatum (Tag {start_day}) liegt nicht in der Zukunft (Serverdatum: {date.today().isoformat()})"
+
+        # Compute km threshold for forecast (first 16 days)
+        total_km_est = sum(d or 0 for d in osrm_distances)
+        total_days_est = all_temps_data[-1][1] - start_day_val if all_temps_data else 1
+        forecast_km_threshold = (total_km_est / max(1, total_days_est)) * 16
+
+        import time as _time
+
+        _BATCH_SIZE = 512
+        _BATCH_DELAY = 1.5
+        _MAX_RETRIES = 4
+        _RETRY_DELAYS = [5, 15, 30, 60]
+
+        # --- Prepare sampling (no API calls) ---
+        update("elevation", "Vorbereitung Höhenprofil...", status="running")
+        elevation_error = None
+        prep_data = None
+        try:
+            prep_data = prepare_elevation_sampling(
+                sub_route_data, points_per_1000km=params["elev_points_per_1000km"]
+            )
+            if prep_data is None:
+                elevation_error = "Keine Routenkoordinaten für Höhenprofil"
+        except Exception as prep_exc:
+            elevation_error = f"Höhenprofil-Vorbereitung fehlgeschlagen: {prep_exc}"
+            print(f"[Elevation] Prep exception: {prep_exc}", flush=True)
+
+        # --- Batch loop ---
+        all_api_results = []
         forecast_data = None
         forecast_error = None
-        today = date.today()
-        found_future_start = False
-        for yr in [today.year, today.year + 1]:
-            candidate = date(yr, 1, 1) + timedelta(days=start_day - 1)
-            if (candidate - today).days >= 0:
-                found_future_start = True
-                actual_start = candidate
-                cum_km_list = [0.0]
-                for d in osrm_distances:
-                    cum_km_list.append(cum_km_list[-1] + (d or 0))
-                route_days_list = [day for _, day, _, _ in route]
+        elevation_result = None
+        preview_emitted = False
 
-                profile = (elev_data or {}).get("profile", [])
-                latlons = (elev_data or {}).get("profile_latlons", [])
-                if not profile or not latlons or len(profile) != len(latlons):
-                    forecast_error = (
-                        "Vorhersage nicht verfügbar: Höhenprofil fehlt "
-                        f"(Open-Elevation API Fehler: {elevation_error or 'unbekannt'})"
-                    )
-                else:
+        if prep_data:
+            n_batches = (prep_data["n_sampled"] + _BATCH_SIZE - 1) // _BATCH_SIZE
+            job["elevation_batch_total"] = n_batches
+
+            for batch_idx in range(n_batches):
+                if batch_idx > 0:
+                    _time.sleep(_BATCH_DELAY)
+
+                b_start = batch_idx * _BATCH_SIZE
+                b_end = min(b_start + _BATCH_SIZE, prep_data["n_sampled"])
+                batch = prep_data["all_sampled_latlon"][b_start:b_end]
+                payload = {"locations": [{"latitude": lat, "longitude": lon} for lat, lon in batch]}
+
+                batch_results = None
+                for attempt in range(_MAX_RETRIES):
                     try:
-                        fps = select_forecast_points(profile, latlons)
-                        for fp in fps:
-                            day_f  = interp_route_day(fp["km"], cum_km_list, route_days_list)
-                            offset = round(day_f - route_days_list[0])
-                            fp["target_date"] = (actual_start + timedelta(days=offset)).isoformat()
-                            fp["day_offset"]  = offset
-                        fps_filtered = [fp for fp in fps
-                               if (date.fromisoformat(fp["target_date"]) - today).days <= 15]
-                        if not fps_filtered:
-                            forecast_error = (
-                                f"Alle Routenpunkte liegen mehr als 16 Tage in der Zukunft "
-                                f"(Startdatum: {actual_start.isoformat()}, "
-                                f"Serverdatum: {today.isoformat()})"
-                            )
+                        resp = requests.post(OPEN_ELEV, json=payload, timeout=45)
+                        resp.raise_for_status()
+                        batch_results = resp.json()["results"]
+                        break
+                    except Exception as batch_err:
+                        wait = _RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS)-1)]
+                        if attempt < _MAX_RETRIES - 1:
+                            print(f"[Elevation] Batch {batch_idx+1} attempt {attempt+1}: {batch_err} — wait {wait}s", flush=True)
+                            _time.sleep(wait)
                         else:
-                            fdata = fetch_open_meteo_forecast(fps_filtered)
-                            mini_elev = [
-                                [round(km, 2), round(lat, 5), round(lon, 5), round(ele, 1)]
-                                for (km, ele), (lat, lon) in zip(profile, latlons)
-                            ][::3]
-                            route_stops = []
-                            for i_s, (city_id, day, city_name, _) in enumerate(route):
-                                nd = city_graph.nodes.get(city_id, {})
-                                lat_n = nd.get("lat")
-                                lon_n = nd.get("lon")
-                                if lat_n is not None and lon_n is not None and i_s < len(cum_km_list):
-                                    route_stops.append({
-                                        "name":    city_name,
-                                        "lat":     round(float(lat_n), 5),
-                                        "lon":     round(float(lon_n), 5),
-                                        "km":      round(cum_km_list[i_s], 2),
-                                        "relDay":  day - route_days_list[0],
-                                    })
-                            forecast_data = {
-                                "points":     fps_filtered,
-                                "data":       {str(k): v for k, v in fdata.items()},
-                                "miniElev":   mini_elev,
-                                "routeStops": route_stops,
-                                "desiredHigh": params["high_temp"],
-                                "desiredLow":  params["low_temp"],
-                            }
-                    except Exception as fc_exc:
-                        forecast_error = f"Vorhersage-Fehler: {fc_exc}"
-                        print(f"[Forecast] Exception: {fc_exc}", flush=True)
-                break
-        if not found_future_start:
-            forecast_error = (
-                f"Startdatum (Tag {start_day}) liegt nicht in der Zukunft "
-                f"(Serverdatum: {today.isoformat()})"
+                            elevation_error = f"Open-Elevation API fehlgeschlagen (Batch {batch_idx+1}/{n_batches}): {batch_err}"
+                            print(f"[Elevation] Batch {batch_idx+1} failed: {batch_err}", flush=True)
+
+                if batch_results is None:
+                    break
+
+                all_api_results.extend(batch_results)
+                job["elevation_batch_done"] = batch_idx + 1
+                update("elevation", f"Höhenprofil: Batch {batch_idx+1}/{n_batches}", status="running")
+
+                # Check if we have enough elevation to do forecast preview
+                if not preview_emitted:
+                    covered_km = prep_data["flat_km"][len(all_api_results) - 1] if prep_data["flat_km"] else 0
+                    is_last_batch = (batch_idx == n_batches - 1)
+                    if covered_km >= forecast_km_threshold or is_last_batch:
+                        partial_elev_data = assemble_elevation_profile(all_api_results, prep_data)
+                        partial_elev_result = _fmt_elev(partial_elev_data, city_ids_for_elev) if partial_elev_data else None
+                        forecast_data, forecast_error = _build_forecast(
+                            partial_elev_data, start_day, osrm_distances, route,
+                            route_locations, city_graph, params, job
+                        )
+                        update("elevation", f"Höhenprofil: Batch {batch_idx+1}/{n_batches}", status="running")
+
+                        # Emit preview result
+                        job["result"] = {
+                            "segments": segments,
+                            "markers": markers,
+                            "elevation": partial_elev_result,
+                            "elevationError": elevation_error if partial_elev_result is None else None,
+                            "elevationComplete": is_last_batch,
+                            "weather": weather_stops,
+                            "route": route_list,
+                            "startDay": start_day,
+                            "totalDistance": round(overall_distance, 1),
+                            "totalDays": total_days,
+                            "forecast": forecast_data,
+                            "forecastError": forecast_error,
+                            "desiredHigh": params["high_temp"],
+                            "desiredLow": params["low_temp"],
+                        }
+                        job["status"] = "preview" if not is_last_batch else "done"
+                        preview_emitted = True
+
+            # Build full elevation if we have more batches after preview
+            if all_api_results and preview_emitted and job["status"] != "done":
+                update("elevation", f"Höhenprofil: Batch {n_batches}/{n_batches}", status="running")
+                full_elev_data = assemble_elevation_profile(all_api_results, prep_data)
+                elevation_result = _fmt_elev(full_elev_data, city_ids_for_elev)
+                if not elevation_result and not elevation_error:
+                    elevation_error = "Höhenprofil enthält keine Daten"
+                # Update result with full elevation
+                job["result"] = {
+                    **job["result"],
+                    "elevation": elevation_result,
+                    "elevationError": elevation_error if elevation_result is None else None,
+                    "elevationComplete": True,
+                }
+
+        elif not prep_data:
+            # No elevation at all — still need to try forecast
+            forecast_data, forecast_error = _build_forecast(
+                None, start_day, osrm_distances, route,
+                route_locations, city_graph, params, job
             )
+            job["result"] = {
+                "segments": segments,
+                "markers": markers,
+                "elevation": None,
+                "elevationError": elevation_error,
+                "elevationComplete": True,
+                "weather": weather_stops,
+                "route": route_list,
+                "startDay": start_day,
+                "totalDistance": round(overall_distance, 1),
+                "totalDays": total_days,
+                "forecast": forecast_data,
+                "forecastError": forecast_error,
+                "desiredHigh": params["high_temp"],
+                "desiredLow": params["low_temp"],
+            }
+
+        update("elevation", "Fertig!", status="done")
+        job["status"] = "done"
+        # Make sure result has elevationComplete=True
+        if job.get("result"):
+            job["result"]["elevationComplete"] = True
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        job["status"] = "error"
+        job["error"] = str(e)
+
+
+# ---------------------------------------------------------------------------
+# GPX background task
+# ---------------------------------------------------------------------------
+
+
+def run_gpx_analysis(
+    job_id: str,
+    latlons: List[tuple],
+    start_date_str: str,
+    start_time_str: str,
+    avg_speed_kmh: float,
+):
+    import time as _time
+
+    job = jobs[job_id]
+
+    def update(step: str, message: str, **kwargs):
+        job["step"] = step
+        job["message"] = message
+        for k, v in kwargs.items():
+            job[k] = v
+
+    try:
+        job["status"] = "running"
+
+        # Parse start datetime
+        try:
+            start_date = date.fromisoformat(start_date_str)
+        except ValueError:
+            job["status"] = "error"
+            job["error"] = f"Ungültiges Datum: {start_date_str}"
+            return
+        try:
+            h_str, m_str = start_time_str.split(":")
+            start_time_val = _time_cls(int(h_str), int(m_str))
+        except Exception:
+            start_time_val = _time_cls(9, 0)
+        start_dt = datetime.combine(start_date, start_time_val)
+
+        # Cumulative km of raw track
+        cum_km_raw = [0.0]
+        for i in range(1, len(latlons)):
+            cum_km_raw.append(
+                cum_km_raw[-1]
+                + _haversine_km(latlons[i - 1][0], latlons[i - 1][1], latlons[i][0], latlons[i][1])
+            )
+        total_km = cum_km_raw[-1]
+        if total_km < 0.01:
+            job["status"] = "error"
+            job["error"] = "GPX-Track hat keine messbare Länge"
+            return
+
+        # Subsample
+        n_target = max(100, min(1000, int(total_km * 1.5)))
+        sampled_latlons, sampled_km = gpx_subsample(latlons, n_target)
+        n_sampled = len(sampled_latlons)
+
+        update("elevation", "Höhenprofil wird geladen...")
+
+        _BATCH_SIZE = 512
+        _BATCH_DELAY = 1.5
+        _MAX_RETRIES = 4
+        _RETRY_DELAYS = [5, 15, 30, 60]
+
+        n_batches = max(1, (n_sampled + _BATCH_SIZE - 1) // _BATCH_SIZE)
+        job["elevation_batch_total"] = n_batches
+
+        all_api_results: list = []
+        elevation_error = None
+
+        for batch_idx in range(n_batches):
+            if batch_idx > 0:
+                _time.sleep(_BATCH_DELAY)
+
+            b_start = batch_idx * _BATCH_SIZE
+            b_end = min(b_start + _BATCH_SIZE, n_sampled)
+            batch = sampled_latlons[b_start:b_end]
+            payload = {"locations": [{"latitude": lat, "longitude": lon} for lat, lon in batch]}
+
+            batch_results = None
+            for attempt in range(_MAX_RETRIES):
+                try:
+                    resp = requests.post(OPEN_ELEV, json=payload, timeout=45)
+                    resp.raise_for_status()
+                    batch_results = resp.json()["results"]
+                    break
+                except Exception as batch_err:
+                    wait = _RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)]
+                    if attempt < _MAX_RETRIES - 1:
+                        print(
+                            f"[GPX Elevation] Batch {batch_idx+1} attempt {attempt+1}: {batch_err} — wait {wait}s",
+                            flush=True,
+                        )
+                        _time.sleep(wait)
+                    else:
+                        elevation_error = (
+                            f"Open-Elevation API fehlgeschlagen (Batch {batch_idx+1}/{n_batches}): {batch_err}"
+                        )
+                        print(f"[GPX Elevation] Batch {batch_idx+1} failed: {batch_err}", flush=True)
+
+            if batch_results is None:
+                break
+            all_api_results.extend(batch_results)
+            job["elevation_batch_done"] = batch_idx + 1
+            update("elevation", f"Höhenprofil: Batch {batch_idx+1}/{n_batches}")
+
+        if len(all_api_results) < 2:
+            job["status"] = "error"
+            job["error"] = elevation_error or "Höhenprofil konnte nicht geladen werden"
+            return
+
+        # Build elevation profile
+        n_valid = min(len(all_api_results), len(sampled_km))
+        raw_eles = [r["elevation"] for r in all_api_results[:n_valid]]
+        # Smooth with rolling mean of 3
+        smoothed_eles = []
+        for i in range(n_valid):
+            s = max(0, i - 1)
+            e = min(n_valid, i + 2)
+            smoothed_eles.append(sum(raw_eles[s:e]) / (e - s))
+        profile = [(sampled_km[i], smoothed_eles[i]) for i in range(n_valid)]
+
+        # Select weather points
+        weather_point_indices = select_gpx_weather_points(profile)
+
+        update("forecast", f"Wetterdaten für {len(weather_point_indices)} Punkte...")
+        job["forecast_total"] = len(weather_point_indices)
+        job["forecast_done"] = 0
+
+        today = date.today()
+        weather_points: list = []
+        # Each entry: (pt_idx, arrival_hour_frac, forecast_point_dict)
+        forecast_pts: list = []
+
+        for pt_idx, (idx, label) in enumerate(weather_point_indices):
+            km = profile[idx][0]
+            ele = profile[idx][1]
+            lat, lon = sampled_latlons[idx]
+            arrival_hours = km / avg_speed_kmh if avg_speed_kmh > 0 else 0.0
+            arrival_dt = start_dt + timedelta(hours=arrival_hours)
+            days_away = (arrival_dt.date() - today).days
+            is_forecast = days_away <= 15
+            arrival_hour_frac = arrival_dt.hour + arrival_dt.minute / 60.0
+            if is_forecast:
+                forecast_pts.append((pt_idx, arrival_hour_frac, {
+                    "km": km, "lat": lat, "lon": lon, "ele": ele,
+                    "target_date": arrival_dt.date().isoformat(),
+                    "day_offset": days_away,
+                }))
+            weather_points.append({
+                "km": round(km, 2),
+                "lat": round(lat, 5),
+                "lon": round(lon, 5),
+                "ele": round(ele, 1),
+                "arrivalTime": arrival_dt.isoformat(),
+                "type": label,
+                "temp": None, "prcp": None,
+                "wspd": None, "wdir": None,
+                "cloud": None,
+                "isForecast": is_forecast,
+            })
+
+        done_count = [0]
+
+        # Hourly steps available from fetch_open_meteo_forecast
+        _HOUR_STEPS = [0, 6, 12, 18]
+
+        def _nearest_hour_key(hour_frac: float) -> str:
+            step = min(_HOUR_STEPS, key=lambda h: abs(hour_frac - h))
+            return str(step)
+
+        # Fetch forecast data for points <= 15 days away
+        if forecast_pts:
+            pts_for_meteo = [fp for _, _, fp in forecast_pts]
+
+            def on_progress():
+                done_count[0] += 1
+                job["forecast_done"] = done_count[0]
+                job["message"] = f"Vorhersage: {done_count[0]}/{job['forecast_total']} Punkte"
+
+            try:
+                fdata = fetch_open_meteo_forecast(pts_for_meteo, on_progress=on_progress)
+                for i, (pt_idx, arrival_hour_frac, _fp) in enumerate(forecast_pts):
+                    pdata = fdata.get(i, {})
+                    if pdata.get("ok", False):
+                        hourly = pdata.get("hourly") or {}
+                        step_key = _nearest_hour_key(arrival_hour_frac)
+                        h_data = hourly.get(step_key) or {}
+                        weather_points[pt_idx]["temp"] = h_data.get("temp")
+                        weather_points[pt_idx]["prcp"] = h_data.get("prcp")
+                        weather_points[pt_idx]["wspd"] = h_data.get("wspd")
+                        weather_points[pt_idx]["wdir"] = h_data.get("wdir")
+                        weather_points[pt_idx]["cloud"] = h_data.get("cloud")
+            except Exception as exc:
+                print(f"[GPX Forecast] Exception: {exc}", flush=True)
+
+        done_count[0] = len(forecast_pts)
+
+        # Fetch climate data for points > 15 days away
+        forecast_pt_set = {pt_idx for pt_idx, _, _ in forecast_pts}
+        for pt_idx, (idx, label) in enumerate(weather_point_indices):
+            if pt_idx in forecast_pt_set:
+                continue
+            lat, lon = sampled_latlons[idx]
+            km = profile[idx][0]
+            arrival_hours = km / avg_speed_kmh if avg_speed_kmh > 0 else 0.0
+            arrival_dt = start_dt + timedelta(hours=arrival_hours)
+            day_of_year = arrival_dt.timetuple().tm_yday
+            hour_frac = arrival_dt.hour + arrival_dt.minute / 60.0
+            nearest_city = find_nearest_city_id(lat, lon, city_graph)
+            if nearest_city:
+                try:
+                    w = get_interpolated_weather(nearest_city, day_of_year, temperatures, 0.0)
+                    tmin_c = w[0] if w[0] is not None else 5.0
+                    tmax_c = w[1] if w[1] is not None else 15.0
+                    # Diurnal model: peak at 14:00, trough at 02:00
+                    mean_t = (tmin_c + tmax_c) / 2.0
+                    amplitude = (tmax_c - tmin_c) / 2.0
+                    temp_at_hour = mean_t + amplitude * math.cos(
+                        2 * math.pi * (hour_frac - 14.0) / 24.0
+                    )
+                    weather_points[pt_idx]["temp"] = round(temp_at_hour, 1)
+                    # Daily prcp divided by daylight hours as hourly estimate
+                    daily_prcp = w[2] if len(w) > 2 and w[2] is not None else None
+                    weather_points[pt_idx]["prcp"] = round(daily_prcp / 24.0, 2) if daily_prcp is not None else None
+                    weather_points[pt_idx]["wspd"] = round(w[3], 1) if len(w) > 3 and w[3] is not None else None
+                    weather_points[pt_idx]["wdir"] = round(w[4], 0) if len(w) > 4 and w[4] is not None else None
+                except Exception as exc:
+                    print(f"[GPX Climate] Point {pt_idx} failed: {exc}", flush=True)
+            done_count[0] += 1
+            job["forecast_done"] = done_count[0]
+            job["message"] = f"Klimadaten: {done_count[0]}/{len(weather_point_indices)} Punkte"
+
+        # Build elevation result
+        total_ascent = sum(
+            max(0, profile[i + 1][1] - profile[i][1]) for i in range(len(profile) - 1)
+        )
+        total_descent = sum(
+            max(0, profile[i][1] - profile[i + 1][1]) for i in range(len(profile) - 1)
+        )
+        city_marks = [[round(profile[idx][0], 2), label] for idx, label in weather_point_indices]
+
+        # Downsample track points to max 2000 for the map
+        if len(sampled_latlons) > 2000:
+            step = len(sampled_latlons) / 2000
+            track_pts = [sampled_latlons[int(i * step)] for i in range(2000)]
+        else:
+            track_pts = list(sampled_latlons)
 
         job["result"] = {
-            "segments": segments,
-            "markers": markers,
-            "elevation": elevation_result,
-            "elevationError": elevation_error,
-            "weather": weather_stops,
-            "route": route_list,
-            "startDay": start_day,
-            "totalDistance": round(overall_distance, 1),
-            "totalDays": total_days,
-            "forecast": forecast_data,
-            "forecastError": forecast_error,
-            "desiredHigh": params["high_temp"],
-            "desiredLow": params["low_temp"],
+            "jobType": "gpx",
+            "elevation": {
+                "points": [[round(km, 2), round(ele, 1)] for km, ele in profile],
+                "cityMarks": city_marks,
+                "totalAscent": round(total_ascent, 0),
+                "totalDescent": round(total_descent, 0),
+                "totalKm": round(total_km, 1),
+            },
+            "weatherPoints": weather_points,
+            "totalKm": round(total_km, 1),
+            "startDate": start_date_str,
+            "startTime": start_time_str,
+            "trackPoints": [[round(lat, 5), round(lon, 5)] for lat, lon in track_pts],
         }
-        update("elevation", "Done!", status="done")
+        job["status"] = "done"
+        update("forecast", "Fertig!")
 
     except Exception as e:
         import traceback
