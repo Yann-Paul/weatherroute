@@ -1078,6 +1078,30 @@ def _gpx_arrival_dt(km: float, daily_configs: List[dict], start_date) -> "dateti
     return datetime.combine(start_date, _time_cls(9, 0))
 
 
+def _interp_profile_at_km(
+    km_target: float, profile: list, sampled_latlons: list
+) -> "tuple":
+    """Linearly interpolate (lat, lon, ele) at km_target along the elevation profile."""
+    n = len(profile)
+    if n == 0 or len(sampled_latlons) == 0:
+        return 0.0, 0.0, 0.0
+    if km_target <= profile[0][0]:
+        return sampled_latlons[0][0], sampled_latlons[0][1], profile[0][1]
+    for i in range(1, n):
+        km0, e0 = profile[i - 1]
+        km1, e1 = profile[i]
+        if km1 >= km_target or i == n - 1:
+            t = (km_target - km0) / (km1 - km0) if km1 > km0 else 0.0
+            t = max(0.0, min(1.0, t))
+            i0 = min(i - 1, len(sampled_latlons) - 1)
+            i1 = min(i, len(sampled_latlons) - 1)
+            lat = sampled_latlons[i0][0] + t * (sampled_latlons[i1][0] - sampled_latlons[i0][0])
+            lon = sampled_latlons[i0][1] + t * (sampled_latlons[i1][1] - sampled_latlons[i0][1])
+            return lat, lon, e0 + t * (e1 - e0)
+    j = min(n - 1, len(sampled_latlons) - 1)
+    return sampled_latlons[j][0], sampled_latlons[j][1], profile[-1][1]
+
+
 def run_gpx_analysis(
     job_id: str,
     latlons: List[tuple],
@@ -1296,6 +1320,93 @@ def run_gpx_analysis(
             done_count[0] += 1
             job["forecast_done"] = done_count[0]
             job["message"] = f"Klimadaten: {done_count[0]}/{len(weather_point_indices)} Punkte"
+
+        # Add stop weather points for day-change camps
+        if len(daily_configs) > 1:
+            cum_stop_km = 0.0
+            for stop_day_idx in range(len(daily_configs) - 1):
+                s_cfg = daily_configs[stop_day_idx]
+                s_day_km = max(0.01, float(s_cfg.get("dailyKm", 90.0)))
+                cum_stop_km += s_day_km
+                stop_km = cum_stop_km
+                if stop_km >= total_km - 0.1:
+                    break
+                stop_lat, stop_lon, stop_ele = _interp_profile_at_km(stop_km, profile, sampled_latlons)
+                stop_dt = _gpx_arrival_dt(stop_km, daily_configs, start_date)
+                nxt_cfg = daily_configs[stop_day_idx + 1]
+                try:
+                    _nh, _nm = nxt_cfg.get("startTime", "09:00").split(":")
+                    nxt_start_time = _time_cls(int(_nh), int(_nm))
+                except Exception:
+                    nxt_start_time = _time_cls(9, 0)
+                nxt_start_dt = datetime.combine(
+                    start_date + timedelta(days=stop_day_idx + 1), nxt_start_time
+                )
+                stop_is_forecast = (stop_dt.date() - today).days <= 15
+                s_city = find_nearest_city_id(stop_lat, stop_lon, city_graph)
+                stop_temp = stop_prcp = stop_wspd = None
+                if s_city:
+                    try:
+                        ws = get_interpolated_weather(s_city, stop_dt.timetuple().tm_yday, temperatures, 0.0)
+                        s_tmin = ws[0] if ws[0] is not None else 5.0
+                        s_tmax = ws[1] if ws[1] is not None else 15.0
+                        s_mean = (s_tmin + s_tmax) / 2.0
+                        s_amp = (s_tmax - s_tmin) / 2.0
+                        s_hf = stop_dt.hour + stop_dt.minute / 60.0
+                        stop_temp = round(s_mean + s_amp * math.cos(2 * math.pi * (s_hf - 14.0) / 24.0), 1)
+                        s_prcp_day = ws[2] if len(ws) > 2 and ws[2] is not None else None
+                        stop_prcp = round(s_prcp_day / 24.0, 2) if s_prcp_day is not None else None
+                        stop_wspd = round(ws[3], 1) if len(ws) > 3 and ws[3] is not None else None
+                    except Exception:
+                        pass
+                night_data: list = []
+                slot = stop_dt
+                while slot <= nxt_start_dt + timedelta(minutes=1):
+                    slot_doy = slot.timetuple().tm_yday
+                    slot_hf = slot.hour + slot.minute / 60.0
+                    sl_temp = sl_prcp = sl_wspd = None
+                    if s_city:
+                        try:
+                            w2 = get_interpolated_weather(s_city, slot_doy, temperatures, 0.0)
+                            sl_tmin = w2[0] if w2[0] is not None else 5.0
+                            sl_tmax = w2[1] if w2[1] is not None else 15.0
+                            sl_mean = (sl_tmin + sl_tmax) / 2.0
+                            sl_amp = (sl_tmax - sl_tmin) / 2.0
+                            sl_temp = round(sl_mean + sl_amp * math.cos(2 * math.pi * (slot_hf - 14.0) / 24.0), 1)
+                            sl_prcp_day = w2[2] if len(w2) > 2 and w2[2] is not None else None
+                            sl_prcp = round(sl_prcp_day / 24.0, 2) if sl_prcp_day is not None else None
+                            sl_wspd = round(w2[3], 1) if len(w2) > 3 and w2[3] is not None else None
+                        except Exception:
+                            pass
+                    night_data.append({
+                        "hour": slot.strftime("%H:%M"),
+                        "date": slot.date().isoformat(),
+                        "temp": sl_temp,
+                        "prcp": sl_prcp,
+                        "wspd": sl_wspd,
+                    })
+                    slot = slot + timedelta(hours=3)
+                night_temps_arr = [d["temp"] for d in night_data if d["temp"] is not None]
+                night_low = round(min(night_temps_arr), 1) if night_temps_arr else None
+                weather_points.append({
+                    "km": round(stop_km, 2),
+                    "lat": round(stop_lat, 5),
+                    "lon": round(stop_lon, 5),
+                    "ele": round(stop_ele, 1),
+                    "arrivalTime": stop_dt.isoformat(),
+                    "type": "stop",
+                    "temp": stop_temp,
+                    "prcp": stop_prcp,
+                    "wspd": stop_wspd,
+                    "wdir": None,
+                    "cloud": None,
+                    "isForecast": stop_is_forecast,
+                    "dayNumber": stop_day_idx + 1,
+                    "stopTime": stop_dt.isoformat(),
+                    "nextStartTime": nxt_start_dt.isoformat(),
+                    "nightData": night_data,
+                    "nightLow": night_low,
+                })
 
         # Build elevation result
         total_ascent = sum(

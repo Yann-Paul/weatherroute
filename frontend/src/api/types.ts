@@ -201,19 +201,33 @@ export interface GpxDayConfig {
   dailyKm: number;
 }
 
+export interface GpxNightHour {
+  hour: string;
+  date: string;
+  temp: number | null;
+  prcp: number | null;
+  wspd: number | null;
+}
+
 export interface GpxWeatherPoint {
   km: number;
   lat: number;
   lon: number;
   ele: number;
   arrivalTime: string;
-  type: "start" | "end" | "pass" | "valley" | "regular";
+  type: "start" | "end" | "pass" | "valley" | "regular" | "stop";
   temp: number | null;    // temperature at arrival hour
   prcp: number | null;    // precipitation at arrival hour (mm/h)
   wspd: number | null;
   wdir: number | null;
   cloud: number | null;   // cloud cover % (forecast only)
   isForecast: boolean;
+  // Stop-specific fields:
+  dayNumber?: number;
+  stopTime?: string;
+  nextStartTime?: string;
+  nightData?: GpxNightHour[];
+  nightLow?: number | null;
 }
 
 export interface GpxJobResults {

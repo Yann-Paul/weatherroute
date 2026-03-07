@@ -86,6 +86,8 @@ export function GpxResultsPage() {
                 <GpxElevationChart
                   elevation={elevation}
                   weatherPoints={results.weatherPoints}
+                  dailyConfigs={results.dailyConfigs}
+                  startDate={results.startDate}
                 />
               ) : (
                 <p className="text-muted-foreground">{t.results.elevationLoading}</p>

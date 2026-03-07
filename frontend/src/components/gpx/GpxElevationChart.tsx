@@ -1,8 +1,29 @@
 import { useCallback, useEffect, useRef } from "react";
-import type { ElevationProfile, GpxWeatherPoint } from "@/api/types";
+import type { ElevationProfile, GpxDayConfig, GpxWeatherPoint } from "@/api/types";
 import { useT } from "@/i18n/useT";
 
+function gpxArrivalTime(km: number, dailyConfigs: GpxDayConfig[], startDate: string): Date {
+  const base = new Date(startDate + "T00:00:00");
+  let cum = 0;
+  for (let di = 0; di < dailyConfigs.length; di++) {
+    const cfg = dailyConfigs[di];
+    const dayKm = Math.max(0.01, cfg.dailyKm);
+    const speed = Math.max(0.01, cfg.speed);
+    const [h, m] = cfg.startTime.split(":").map(Number);
+    const dayStart = new Date(base);
+    dayStart.setDate(dayStart.getDate() + di);
+    dayStart.setHours(h, m, 0, 0);
+    const isLast = di === dailyConfigs.length - 1;
+    if (isLast || cum + dayKm >= km - 0.001) {
+      return new Date(dayStart.getTime() + (Math.max(0, km - cum) / speed) * 3600e3);
+    }
+    cum += dayKm;
+  }
+  return base;
+}
+
 function markerColor(type: GpxWeatherPoint["type"]): string {
+  if (type === "stop") return "#7c3aed";
   if (type === "pass") return "#f97316";
   if (type === "valley") return "#3b82f6";
   if (type === "start") return "#22c55e";
@@ -10,14 +31,25 @@ function markerColor(type: GpxWeatherPoint["type"]): string {
   return "#9ca3af";
 }
 
-export function GpxElevationChart({
-  elevation,
+// ─── DayChart ─────────────────────────────────────────────────────────────────
+
+function DayChart({
+  points,
+  startKm,
+  endKm,
   weatherPoints,
+  height = 180,
+  dailyConfigs,
+  startDate,
 }: {
-  elevation: ElevationProfile;
+  points: [number, number][];
+  startKm: number;
+  endKm: number;
   weatherPoints: GpxWeatherPoint[];
+  height?: number;
+  dailyConfigs?: GpxDayConfig[];
+  startDate?: string;
 }) {
-  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hovRef = useRef<{ x: number; label: string } | null>(null);
 
@@ -34,20 +66,19 @@ export function GpxElevationChart({
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
 
-    const PAD = { top: 24, right: 16, bottom: 36, left: 52 };
+    const PAD = { top: 20, right: 16, bottom: 36, left: 52 };
     const cw = W - PAD.left - PAD.right;
     const ch = H - PAD.top - PAD.bottom;
 
-    const points = elevation.points;
     if (points.length < 2 || cw <= 0 || ch <= 0) return;
 
-    const maxKm = points[points.length - 1][0];
+    const kmRange = endKm - startKm || 1;
     const eles = points.map((p) => p[1]);
-    const minEle = Math.min(...eles);
-    const maxEle = Math.max(...eles);
+    const minEle = Math.max(0, Math.min(...eles) - 40);
+    const maxEle = Math.max(...eles) + 30;
     const eleRange = maxEle - minEle || 1;
 
-    const toX = (km: number) => PAD.left + (km / maxKm) * cw;
+    const toX = (km: number) => PAD.left + ((km - startKm) / kmRange) * cw;
     const toY = (ele: number) => PAD.top + ch - ((ele - minEle) / eleRange) * ch;
 
     // Gradient fill
@@ -60,7 +91,7 @@ export function GpxElevationChart({
     for (let i = 1; i < points.length; i++) {
       ctx.lineTo(toX(points[i][0]), toY(points[i][1]));
     }
-    ctx.lineTo(toX(maxKm), PAD.top + ch);
+    ctx.lineTo(toX(endKm), PAD.top + ch);
     ctx.lineTo(PAD.left, PAD.top + ch);
     ctx.closePath();
     ctx.fillStyle = grad;
@@ -76,16 +107,17 @@ export function GpxElevationChart({
     }
     ctx.stroke();
 
-    // Weather point vertical markers
+    // Weather point markers
     for (const wp of weatherPoints) {
-      if (wp.km > maxKm) continue;
+      if (wp.km < startKm - 0.1 || wp.km > endKm + 0.1) continue;
       const x = toX(wp.km);
       const color = markerColor(wp.type);
+
       ctx.save();
       ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([3, 3]);
-      ctx.globalAlpha = 0.7;
+      ctx.lineWidth = wp.type === "stop" ? 2 : 1.5;
+      ctx.setLineDash(wp.type === "stop" ? [5, 3] : [3, 3]);
+      ctx.globalAlpha = wp.type === "stop" ? 0.85 : 0.7;
       ctx.beginPath();
       ctx.moveTo(x, PAD.top);
       ctx.lineTo(x, PAD.top + ch);
@@ -94,9 +126,10 @@ export function GpxElevationChart({
 
       if (wp.type !== "regular") {
         ctx.fillStyle = color;
-        ctx.font = "9px sans-serif";
+        ctx.font = wp.type === "stop" ? "bold 9px sans-serif" : "9px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(`${Math.round(wp.km)}`, x, PAD.top - 6);
+        const label = wp.type === "stop" ? `N${wp.dayNumber ?? ""}` : `${Math.round(wp.km)}`;
+        ctx.fillText(label, x, PAD.top - 4);
       }
     }
 
@@ -110,7 +143,7 @@ export function GpxElevationChart({
     ctx.stroke();
 
     // Y-axis ticks and grid
-    const nTicks = 4;
+    const nTicks = 3;
     ctx.fillStyle = "#64748b";
     ctx.font = "11px sans-serif";
     ctx.textAlign = "right";
@@ -132,8 +165,8 @@ export function GpxElevationChart({
     ctx.font = "11px sans-serif";
     ctx.strokeStyle = "#94a3b8";
     ctx.lineWidth = 1;
-    const xStep = Math.ceil(maxKm / 8 / 10) * 10 || 1;
-    for (let km = 0; km <= maxKm; km += xStep) {
+    const xStep = Math.max(1, Math.ceil(kmRange / 5 / 5) * 5);
+    for (let km = Math.ceil(startKm / xStep) * xStep; km <= endKm; km += xStep) {
       const x = toX(km);
       ctx.fillText(`${Math.round(km)}`, x, PAD.top + ch + 18);
       ctx.beginPath();
@@ -159,7 +192,7 @@ export function GpxElevationChart({
       ctx.textAlign = x > W / 2 ? "right" : "left";
       ctx.fillText(label, x + (x > W / 2 ? -8 : 8), PAD.top + 14);
     }
-  }, [elevation, weatherPoints]);
+  }, [points, startKm, endKm, weatherPoints]);
 
   useEffect(() => {
     drawChart();
@@ -175,20 +208,24 @@ export function GpxElevationChart({
     const PAD_LEFT = 52;
     const PAD_RIGHT = 16;
     const cw = canvas.offsetWidth - PAD_LEFT - PAD_RIGHT;
-    const points = elevation.points;
-    const maxKm = points[points.length - 1][0];
-    const km = Math.max(0, Math.min(maxKm, ((x - PAD_LEFT) / cw) * maxKm));
+    const kmRange = endKm - startKm || 1;
+    const km = Math.max(startKm, Math.min(endKm, startKm + ((x - PAD_LEFT) / cw) * kmRange));
     let closestIdx = 0;
     let minDist = Infinity;
     for (let i = 0; i < points.length; i++) {
       const d = Math.abs(points[i][0] - km);
-      if (d < minDist) {
-        minDist = d;
-        closestIdx = i;
-      }
+      if (d < minDist) { minDist = d; closestIdx = i; }
     }
     const ele = points[closestIdx][1];
-    hovRef.current = { x, label: `${Math.round(km)} km · ${Math.round(ele)} m` };
+    let label = `${Math.round(km)} km · ${Math.round(ele)} m`;
+    if (dailyConfigs && startDate) {
+      const arrival = gpxArrivalTime(km, dailyConfigs, startDate);
+      const timeStr = arrival.toLocaleString(undefined, {
+        month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+      });
+      label += ` · ${timeStr}`;
+    }
+    hovRef.current = { x, label };
     drawChart();
   }
 
@@ -198,27 +235,113 @@ export function GpxElevationChart({
   }
 
   return (
-    <div>
-      <canvas
-        ref={canvasRef}
-        style={{ width: "100%", height: "280px", display: "block" }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-      />
-      <div className="mt-2 flex flex-wrap gap-6 text-sm text-muted-foreground">
-        <span>
-          {t.gpx.results.totalKm}:{" "}
-          <strong>{elevation.totalKm} km</strong>
-        </span>
-        <span>
-          {t.gpx.results.ascent}:{" "}
-          <strong>↑{elevation.totalAscent} m</strong>
-        </span>
-        <span>
-          {t.gpx.results.descent}:{" "}
-          <strong>↓{elevation.totalDescent} m</strong>
-        </span>
+    <canvas
+      ref={canvasRef}
+      style={{ width: "100%", height: `${height}px`, display: "block" }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    />
+  );
+}
+
+// ─── GpxElevationChart ────────────────────────────────────────────────────────
+
+export function GpxElevationChart({
+  elevation,
+  weatherPoints,
+  dailyConfigs,
+  startDate,
+}: {
+  elevation: ElevationProfile;
+  weatherPoints: GpxWeatherPoint[];
+  dailyConfigs?: GpxDayConfig[];
+  startDate?: string;
+}) {
+  const t = useT();
+
+  // Derive day boundaries from stop points
+  const stopPoints = [...weatherPoints.filter((wp) => wp.type === "stop")].sort(
+    (a, b) => a.km - b.km
+  );
+
+  const totalKm = elevation.totalKm || (elevation.points.at(-1)?.[0] ?? 0);
+  const boundaries = [0, ...stopPoints.map((sp) => sp.km), totalKm];
+  const multiDay = stopPoints.length > 0;
+
+  const stats = (
+    <div className="mt-2 flex flex-wrap gap-6 text-sm text-muted-foreground">
+      <span>
+        {t.gpx.results.totalKm}: <strong>{elevation.totalKm} km</strong>
+      </span>
+      <span>
+        {t.gpx.results.ascent}: <strong>↑{elevation.totalAscent} m</strong>
+      </span>
+      <span>
+        {t.gpx.results.descent}: <strong>↓{elevation.totalDescent} m</strong>
+      </span>
+    </div>
+  );
+
+  if (!multiDay) {
+    // Single-day: original full chart
+    return (
+      <div>
+        <DayChart
+          points={elevation.points}
+          startKm={0}
+          endKm={totalKm}
+          weatherPoints={weatherPoints}
+          height={260}
+          dailyConfigs={dailyConfigs}
+          startDate={startDate}
+        />
+        {stats}
       </div>
+    );
+  }
+
+  // Multi-day: one chart per day
+  return (
+    <div>
+      {boundaries.slice(0, -1).map((startKm, i) => {
+        const endKm = boundaries[i + 1];
+        const dayNum = i + 1;
+        const dayPts = elevation.points.filter(([km]) => km >= startKm - 0.01 && km <= endKm + 0.01);
+        const dayWps = weatherPoints.filter((wp) => wp.km >= startKm - 0.01 && wp.km <= endKm + 0.01);
+        const dayKm = Math.round(endKm - startKm);
+        // Ascent/descent for this day
+        let asc = 0, desc = 0;
+        for (let j = 1; j < dayPts.length; j++) {
+          const diff = dayPts[j][1] - dayPts[j - 1][1];
+          if (diff > 0) asc += diff; else desc -= diff;
+        }
+        return (
+          <div key={dayNum} className="mb-4">
+            <div className="flex items-center gap-3 mb-1">
+              <span
+                className="text-xs font-bold px-2 py-0.5 rounded-full text-white"
+                style={{ background: "#7c3aed" }}
+              >
+                {t.gpx.day} {dayNum}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {Math.round(startKm)}–{Math.round(endKm)} km
+                {" · "}↑{Math.round(asc)} m ↓{Math.round(desc)} m
+              </span>
+            </div>
+            <DayChart
+              points={dayPts}
+              startKm={startKm}
+              endKm={endKm}
+              weatherPoints={dayWps}
+              height={160}
+              dailyConfigs={dailyConfigs}
+              startDate={startDate}
+            />
+          </div>
+        );
+      })}
+      {stats}
     </div>
   );
 }
