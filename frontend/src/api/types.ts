@@ -195,6 +195,12 @@ export interface ForecastData {
   desiredLow: number;
 }
 
+export interface GpxDayConfig {
+  startTime: string;
+  speed: number;
+  dailyKm: number;
+}
+
 export interface GpxWeatherPoint {
   km: number;
   lat: number;
@@ -217,6 +223,7 @@ export interface GpxJobResults {
   totalKm: number;
   startDate: string;
   startTime: string;
+  dailyConfigs: GpxDayConfig[];
   trackPoints: [number, number][];
 }
 

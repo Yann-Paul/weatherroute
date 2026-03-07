@@ -260,34 +260,31 @@ function GpxMarkers({
     [weatherPoints, trackPoints]
   );
 
+  // Stride = how many 10-km regular slots to skip between shown points.
+  // stride 1 → every 10 km, stride 2 → every 20 km, stride 4 → every 40 km …
+  const boxStride =
+    zoom >= 11 ? 1 :
+    zoom >= 9  ? 2 :
+    zoom >= 7  ? 4 :
+    zoom >= 5  ? 8 :
+    0; // only start/end/pass visible
+
+  // Arrows follow a tighter stride (half of box stride, min 1).
+  const arrowStride =
+    zoom >= 10 ? 1 :
+    zoom >= 8  ? 2 :
+    zoom >= 6  ? 4 :
+    zoom >= 4  ? 8 :
+    0;
+
   const textShadow = "0 1px 3px rgba(0,0,0,0.65)";
 
   return (
     <>
       {weatherPoints.map((pt, idx) => {
-        const isImportant =
-          pt.type === "pass" ||
-          pt.type === "valley" ||
-          pt.type === "start" ||
-          pt.type === "end";
-
         const hasWind = pt.wspd != null && pt.wspd > 0 && pt.wdir != null;
-
-        // Wind arrows: shown more frequently than boxes
-        let showArrow = hasWind;
-        if (!isImportant) {
-          if (zoom < 4) showArrow = false;
-          else if (zoom < 6 && idx % 4 !== 0) showArrow = false;
-          else if (zoom < 8 && idx % 2 !== 0) showArrow = false;
-        }
-
-        // Weather boxes: shown less frequently
-        let showBox = true;
-        if (!isImportant) {
-          if (zoom < 7) showBox = false;
-          else if (zoom < 9 && idx % 4 !== 0) showBox = false;
-          else if (zoom < 11 && idx % 2 !== 0) showBox = false;
-        }
+        const showBox   = showAtStride(pt, boxStride);
+        const showArrow = hasWind && showAtStride(pt, arrowStride);
 
         if (!showBox && !showArrow) return null;
 
@@ -364,6 +361,24 @@ function GpxMarkers({
 }
 
 // ─── GpxMiniElevChart (below map) ─────────────────────────────────────────────
+
+/**
+ * Stride-based visibility check for regularly-spaced weather points.
+ *
+ * The backend now places 'regular' points at exactly every 10 km, so
+ * Math.round(pt.km / 10) gives a clean integer index.  Showing every
+ * stride-th index produces perfectly uniform thinning at any zoom level –
+ * no clustering, no gaps larger than stride × 10 km.
+ *
+ * 'pass' points (highest elevation in each 50 km block) are shown when
+ * stride ≤ 4 (zoom ≥ 7).  'start' and 'end' are always visible.
+ */
+function showAtStride(pt: GpxWeatherPoint, stride: number): boolean {
+  if (pt.type === "start" || pt.type === "end") return true;
+  if (pt.type === "pass" || pt.type === "valley") return stride <= 4;
+  if (stride === 0) return false;
+  return Math.round(pt.km / 10) % stride === 0;
+}
 
 const LEGEND_GRADIENT =
   "linear-gradient(to right, rgb(60,0,80) 0%, rgb(30,30,160) 16.67%, rgb(100,160,255) 33.33%, rgb(255,255,255) 50%, rgb(255,150,100) 66.67%, rgb(200,40,40) 83.33%, rgb(160,0,120) 100%)";

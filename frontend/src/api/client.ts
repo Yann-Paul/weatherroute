@@ -5,6 +5,7 @@ import type {
   JobResults,
   PlannerFormData,
   GpxJobResults,
+  GpxDayConfig,
 } from "./types";
 
 const BASE = "/api";
@@ -49,14 +50,12 @@ export async function getJobResults(jobId: string): Promise<JobResults> {
 export async function submitGpxJob(
   file: File,
   startDate: string,
-  startTime: string,
-  avgSpeedKmh: number
+  dailyConfigs: GpxDayConfig[]
 ): Promise<{ jobId: string }> {
   const form = new FormData();
   form.append("file", file);
   form.append("startDate", startDate);
-  form.append("startTime", startTime);
-  form.append("avgSpeedKmh", String(avgSpeedKmh));
+  form.append("dailyConfigs", JSON.stringify(dailyConfigs));
   const res = await fetch("/api/gpx/jobs", { method: "POST", body: form });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

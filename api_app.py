@@ -311,13 +311,18 @@ def job_results(job_id: str):
 async def submit_gpx_job(
     file: UploadFile = File(...),
     startDate: str = Form(...),
-    startTime: str = Form("09:00"),
-    avgSpeedKmh: float = Form(15.0),
+    dailyConfigs: str = Form("[]"),
 ):
     content = await file.read()
     latlons = parse_gpx(content)
     if len(latlons) < 2:
         raise HTTPException(400, "GPX-Datei enthält keine gültige Route")
+    try:
+        configs = json.loads(dailyConfigs)
+        if not isinstance(configs, list) or len(configs) == 0:
+            raise ValueError("empty")
+    except Exception:
+        configs = [{"startTime": "09:00", "speed": 15.0, "dailyKm": 90.0}]
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "status": "pending",
@@ -336,7 +341,7 @@ async def submit_gpx_job(
     }
     t = threading.Thread(
         target=run_gpx_analysis,
-        args=(job_id, latlons, startDate, startTime, avgSpeedKmh),
+        args=(job_id, latlons, startDate, configs),
         daemon=True,
     )
     t.start()
@@ -435,16 +440,19 @@ def gpx_subsample(latlons: List[tuple], n_target: int) -> tuple:
 
 
 def select_gpx_weather_points(
-    profile: List[tuple], spacing_km: float = 10.0, min_spacing_km: float = 5.0
+    profile: List[tuple], spacing_km: float = 10.0, peak_interval_km: float = 50.0
 ) -> List[tuple]:
     """Select weather points along the GPX profile.
-    profile: list of (km, ele) pairs.
-    Returns list of (index, type) tuples sorted by index.
-    type: 'start' | 'end' | 'pass' | 'valley' | 'regular'
-    """
-    import numpy as np
-    from scipy.signal import find_peaks
 
+    Strategy:
+    - 'regular' every spacing_km (default 10 km) – evenly spaced, index-based
+      zoom filtering on the frontend guarantees uniform thinning.
+    - 'pass'    the highest-elevation point in each peak_interval_km (50 km)
+      block – shown at medium zoom levels to highlight major climbs.
+    - 'start' / 'end' always.
+
+    Returns list of (profile_index, type) tuples sorted by index.
+    """
     n = len(profile)
     if n == 0:
         return []
@@ -454,35 +462,37 @@ def select_gpx_weather_points(
         return [(0, "start"), (1, "end")]
 
     total_km = profile[-1][0]
-    idx_per_km = n / total_km if total_km > 0 else 1.0
-    ele_arr = np.array([e for _, e in profile])
-    min_dist = max(1, int(5 * idx_per_km))
-
-    peaks, _ = find_peaks(ele_arr, prominence=30, distance=min_dist)
-    valleys, _ = find_peaks(-ele_arr, prominence=30, distance=min_dist)
-
-    peaks_set: set = set(peaks.tolist())
-    valleys_set: set = set(valleys.tolist())
-    extrema = peaks_set | valleys_set
-
     result: dict = {0: "start", n - 1: "end"}
-    for idx in peaks_set:
-        result[idx] = "pass"
-    for idx in valleys_set:
-        if idx not in result:
-            result[idx] = "valley"
 
-    if total_km > 0:
-        n_intervals = max(1, int(total_km / spacing_km))
-        for i in range(1, n_intervals):
-            km_target = i * spacing_km
-            closest = min(range(n), key=lambda j: abs(profile[j][0] - km_target))
-            km_closest = profile[closest][0]
-            is_close = any(
-                abs(km_closest - profile[e][0]) < min_spacing_km for e in extrema
-            )
-            if not is_close and closest not in result:
-                result[closest] = "regular"
+    # --- Regular points every spacing_km ---
+    km_target = spacing_km
+    while km_target < total_km - spacing_km * 0.1:
+        # Linear interpolation to find approximate index, then local scan
+        frac = km_target / total_km
+        approx = max(0, min(n - 1, int(frac * (n - 1))))
+        best_idx, best_dist = approx, abs(profile[approx][0] - km_target)
+        for di in range(-10, 11):
+            j = approx + di
+            if 0 <= j < n:
+                d = abs(profile[j][0] - km_target)
+                if d < best_dist:
+                    best_dist, best_idx = d, j
+        if best_idx not in result:
+            result[best_idx] = "regular"
+        km_target += spacing_km
+
+    # --- Highest point within each peak_interval_km block ---
+    interval_start = 0.0
+    while interval_start < total_km:
+        interval_end = interval_start + peak_interval_km
+        peak_idx, peak_ele = None, -1e9
+        for j in range(n):
+            km, ele = profile[j]
+            if interval_start <= km < interval_end and ele > peak_ele:
+                peak_ele, peak_idx = ele, j
+        if peak_idx is not None and peak_idx not in result:
+            result[peak_idx] = "pass"
+        interval_start += peak_interval_km
 
     return [(k, result[k]) for k in sorted(result.keys())]
 
@@ -1043,12 +1053,36 @@ def run_calculation(job_id: str, params: dict):
 # ---------------------------------------------------------------------------
 
 
+def _gpx_arrival_dt(km: float, daily_configs: List[dict], start_date) -> "datetime":
+    """Return the arrival datetime for a point at distance `km` along the route.
+
+    Each config dict has keys: startTime (str HH:MM), speed (float km/h), dailyKm (float).
+    """
+    cumulative_km = 0.0
+    for day_idx, cfg in enumerate(daily_configs):
+        day_km = max(0.01, float(cfg.get("dailyKm", 90.0)))
+        speed = max(0.01, float(cfg.get("speed", 15.0)))
+        start_time_str = cfg.get("startTime", "09:00")
+        try:
+            h_str, m_str = start_time_str.split(":")
+            day_start_time = _time_cls(int(h_str), int(m_str))
+        except Exception:
+            day_start_time = _time_cls(9, 0)
+        day_start_dt = datetime.combine(start_date + timedelta(days=day_idx), day_start_time)
+        is_last = day_idx == len(daily_configs) - 1
+        if is_last or cumulative_km + day_km >= km - 0.001:
+            km_within_day = max(0.0, km - cumulative_km)
+            return day_start_dt + timedelta(hours=km_within_day / speed)
+        cumulative_km += day_km
+    # Fallback (should not happen)
+    return datetime.combine(start_date, _time_cls(9, 0))
+
+
 def run_gpx_analysis(
     job_id: str,
     latlons: List[tuple],
     start_date_str: str,
-    start_time_str: str,
-    avg_speed_kmh: float,
+    daily_configs: List[dict],
 ):
     import time as _time
 
@@ -1063,19 +1097,13 @@ def run_gpx_analysis(
     try:
         job["status"] = "running"
 
-        # Parse start datetime
+        # Parse start date
         try:
             start_date = date.fromisoformat(start_date_str)
         except ValueError:
             job["status"] = "error"
             job["error"] = f"Ungültiges Datum: {start_date_str}"
             return
-        try:
-            h_str, m_str = start_time_str.split(":")
-            start_time_val = _time_cls(int(h_str), int(m_str))
-        except Exception:
-            start_time_val = _time_cls(9, 0)
-        start_dt = datetime.combine(start_date, start_time_val)
 
         # Cumulative km of raw track
         cum_km_raw = [0.0]
@@ -1176,8 +1204,7 @@ def run_gpx_analysis(
             km = profile[idx][0]
             ele = profile[idx][1]
             lat, lon = sampled_latlons[idx]
-            arrival_hours = km / avg_speed_kmh if avg_speed_kmh > 0 else 0.0
-            arrival_dt = start_dt + timedelta(hours=arrival_hours)
+            arrival_dt = _gpx_arrival_dt(km, daily_configs, start_date)
             days_away = (arrival_dt.date() - today).days
             is_forecast = days_away <= 15
             arrival_hour_frac = arrival_dt.hour + arrival_dt.minute / 60.0
@@ -1243,8 +1270,7 @@ def run_gpx_analysis(
                 continue
             lat, lon = sampled_latlons[idx]
             km = profile[idx][0]
-            arrival_hours = km / avg_speed_kmh if avg_speed_kmh > 0 else 0.0
-            arrival_dt = start_dt + timedelta(hours=arrival_hours)
+            arrival_dt = _gpx_arrival_dt(km, daily_configs, start_date)
             day_of_year = arrival_dt.timetuple().tm_yday
             hour_frac = arrival_dt.hour + arrival_dt.minute / 60.0
             nearest_city = find_nearest_city_id(lat, lon, city_graph)
@@ -1299,7 +1325,11 @@ def run_gpx_analysis(
             "weatherPoints": weather_points,
             "totalKm": round(total_km, 1),
             "startDate": start_date_str,
-            "startTime": start_time_str,
+            "startTime": daily_configs[0].get("startTime", "09:00") if daily_configs else "09:00",
+            "dailyConfigs": [
+                {"startTime": c.get("startTime", "09:00"), "speed": float(c.get("speed", 15.0)), "dailyKm": float(c.get("dailyKm", 90.0))}
+                for c in daily_configs
+            ],
             "trackPoints": [[round(lat, 5), round(lon, 5)] for lat, lon in track_pts],
         }
         job["status"] = "done"
