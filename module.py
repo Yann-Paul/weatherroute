@@ -1643,7 +1643,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
 
 
 
-def get_osrm_route(route_locations, skip_segments=None, routing_mode='car', progress_callback=None):
+def get_osrm_route(route_locations, skip_segments=None, routing_mode='car', progress_callback=None, chunk_callback=None):
     """
     Fetch road geometry for each city-to-city segment.
     routing_mode: 'car'            – OSRM driving (default)
@@ -1714,6 +1714,8 @@ def get_osrm_route(route_locations, skip_segments=None, routing_mode='car', prog
             road_chunks.append(decoded)
             seg_done += 1
             print(f"  Segment {seg_done}/{n_segs} — {len(decoded)} Punkte", flush=True)
+            if chunk_callback:
+                chunk_callback(i, decoded)
             if progress_callback:
                 progress_callback(seg_done, n_segs)
 
@@ -1721,11 +1723,47 @@ def get_osrm_route(route_locations, skip_segments=None, routing_mode='car', prog
             print(f"  Segment {i+1} fehlgeschlagen ({routing_mode}): {e}", flush=True)
             road_chunks.append([start, end])
             seg_done += 1
+            if chunk_callback:
+                chunk_callback(i, [start, end])
             if progress_callback:
                 progress_callback(seg_done, n_segs)
 
     print(f"[Routing] Fertig — {len(road_chunks)} Chunks gesamt", flush=True)
     return road_chunks
+
+
+def sample_chunk_fixed_density(chunk, points_per_km):
+    """
+    Sample a single OSRM road chunk at a fixed density (points per km).
+    Returns list of (lat, lon, local_km) where local_km is the cumulative distance
+    from the start of this chunk.
+    """
+    coords_km = []
+    cum_km = 0.0
+    prev = None
+    for point in chunk:
+        if not (isinstance(point, (list, tuple)) and len(point) == 2):
+            continue
+        lat, lon = float(point[0]), float(point[1])
+        if prev is not None:
+            cum_km += haversine(prev, (lat, lon))
+        coords_km.append((lat, lon, cum_km))
+        prev = (lat, lon)
+
+    if not coords_km:
+        return []
+
+    total_km = coords_km[-1][2]
+    n_target = max(2, round(total_km * points_per_km))
+    n = len(coords_km)
+
+    if n <= n_target:
+        return coords_km
+
+    step = n / n_target
+    indices = [int(i * step) for i in range(n_target)]
+    indices[-1] = n - 1
+    return [coords_km[idx] for idx in indices]
 
 
 def get_elevation_profile(route_locations, city_names, skip_segments=None, max_elev_points=5000):

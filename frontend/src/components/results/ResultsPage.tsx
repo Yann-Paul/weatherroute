@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import { Map, Mountain, CloudSun, List, Radar } from "lucide-react";
+import { Map, Mountain, CloudSun, List, Radar, Bookmark, BookmarkCheck } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { ResultsHeader } from "./ResultsHeader";
 import { RouteMap } from "./RouteMap";
 import { ElevationChart } from "./ElevationChart";
@@ -11,17 +12,38 @@ import { WeatherGrid } from "./WeatherGrid";
 import { RouteList } from "./RouteList";
 import { ForecastMap } from "./ForecastMap";
 import { useResultsStore } from "@/stores/resultsStore";
-import { getJobResults, getJobStatus } from "@/api/client";
+import { getJobResults, getJobStatus, saveRoute } from "@/api/client";
 import { useT } from "@/i18n/useT";
+import { useLangStore } from "@/i18n/store";
+import { dayOfYearToDate } from "@/utils/constants";
+import type { JobResults } from "@/api/types";
+
+function buildRouteName(results: JobResults, lang: "de" | "en"): string {
+  const cities = results.route.map((s) => s.cityName);
+  const label =
+    cities.length <= 4
+      ? cities.join(" → ")
+      : `${cities[0]} → ... → ${cities[cities.length - 1]} (${cities.length} Stops)`;
+  const locale = lang === "de" ? "de-DE" : "en-US";
+  const dateStr = dayOfYearToDate(results.startDay, undefined, locale);
+  return `${label}, ${dateStr}`;
+}
 
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const { setResults, updateElevation, activeTab, setActiveTab } = useResultsStore();
   const elevationComplete = useResultsStore((s) => s.elevationComplete);
+  const route = useResultsStore((s) => s.route);
+  const startDay = useResultsStore((s) => s.startDay);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [forecastUpdating, setForecastUpdating] = useState(false);
   const t = useT();
+  const lang = useLangStore((s) => s.lang);
   const elevPollingRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const forecastPollingRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!jobId) return;
@@ -30,6 +52,11 @@ export function ResultsPage() {
       try {
         const data = await getJobResults(jobId!);
         setResults(data);
+        // Check if forecast is still being refreshed (restored route)
+        const status = await getJobStatus(jobId!);
+        if (status.status !== "done") {
+          setForecastUpdating(true);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : t.results.loadFailed);
       } finally {
@@ -39,6 +66,29 @@ export function ResultsPage() {
 
     fetchResults();
   }, [jobId, setResults]);
+
+  // Poll for forecast refresh (when restoring saved routes)
+  useEffect(() => {
+    if (!forecastUpdating || !jobId) return;
+
+    async function pollForecast() {
+      try {
+        const status = await getJobStatus(jobId!);
+        if (status.status === "done") {
+          const data = await getJobResults(jobId!);
+          setResults(data);
+          setForecastUpdating(false);
+        } else {
+          forecastPollingRef.current = setTimeout(pollForecast, 2000);
+        }
+      } catch {
+        forecastPollingRef.current = setTimeout(pollForecast, 5000);
+      }
+    }
+
+    forecastPollingRef.current = setTimeout(pollForecast, 2000);
+    return () => { if (forecastPollingRef.current) clearTimeout(forecastPollingRef.current); };
+  }, [forecastUpdating, jobId, setResults]);
 
   useEffect(() => {
     if (!jobId || elevationComplete !== false) return;
@@ -65,6 +115,18 @@ export function ResultsPage() {
     return () => { if (elevPollingRef.current) clearTimeout(elevPollingRef.current); };
   }, [jobId, elevationComplete, updateElevation]);
 
+  async function handleSave() {
+    if (!jobId || isSaved || isSaving) return;
+    setIsSaving(true);
+    try {
+      const name = buildRouteName({ route, startDay } as unknown as JobResults, lang);
+      await saveRoute(jobId, name);
+      setIsSaved(true);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-4 p-4">
@@ -87,7 +149,30 @@ export function ResultsPage() {
 
   return (
     <div className="space-y-4 p-4 pb-16">
-      <ResultsHeader />
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1">
+          <ResultsHeader />
+        </div>
+        <Button
+          variant={isSaved ? "outline" : "secondary"}
+          size="sm"
+          onClick={handleSave}
+          disabled={isSaving || isSaved}
+          className="mt-1 shrink-0 gap-1.5"
+        >
+          {isSaved ? (
+            <><BookmarkCheck className="h-4 w-4" />{t.results.saved}</>
+          ) : (
+            <><Bookmark className="h-4 w-4" />{isSaving ? "..." : t.results.save}</>
+          )}
+        </Button>
+      </div>
+
+      {forecastUpdating && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          {t.results.forecastUpdating}
+        </div>
+      )}
 
       {elevationComplete === false && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">

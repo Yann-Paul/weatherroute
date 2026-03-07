@@ -16,6 +16,7 @@ import { ShimmerButton } from "@/components/magicui/shimmer-button";
 import { CityList } from "./CityList";
 import { CityCombobox } from "./CityCombobox";
 import { AdvancedPanel } from "./AdvancedPanel";
+import { SavedRoutesList } from "./SavedRoutesList";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { useJobStore } from "@/stores/jobStore";
 import { submitJob } from "@/api/client";
@@ -179,6 +180,8 @@ export function PlannerPage() {
           {submitting ? t.planner.submitting : t.planner.submit}
         </ShimmerButton>
       </div>
+
+      <SavedRoutesList />
     </div>
   );
 }

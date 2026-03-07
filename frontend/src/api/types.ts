@@ -241,6 +241,15 @@ export interface GpxJobResults {
   trackPoints: [number, number][];
 }
 
+export interface SavedRouteSummary {
+  id: string;
+  name: string;
+  savedAt: string;
+  totalDistance: number;
+  totalDays: number;
+  startDay: number;
+}
+
 export interface JobResults {
   segments: RouteSegment[];
   markers: MarkerData[];

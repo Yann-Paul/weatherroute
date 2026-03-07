@@ -6,6 +6,7 @@ import type {
   PlannerFormData,
   GpxJobResults,
   GpxDayConfig,
+  SavedRouteSummary,
 } from "./types";
 
 const BASE = "/api";
@@ -66,4 +67,23 @@ export async function submitGpxJob(
 
 export async function getGpxResults(jobId: string): Promise<GpxJobResults> {
   return request(`/jobs/${jobId}/results`);
+}
+
+export async function getSavedRoutes(): Promise<SavedRouteSummary[]> {
+  return request("/saved-routes");
+}
+
+export async function saveRoute(jobId: string, name: string): Promise<{ id: string; name: string }> {
+  return request("/saved-routes", {
+    method: "POST",
+    body: JSON.stringify({ jobId, name }),
+  });
+}
+
+export async function deleteSavedRoute(id: string): Promise<void> {
+  await request(`/saved-routes/${id}`, { method: "DELETE" });
+}
+
+export async function restoreSavedRoute(id: string): Promise<{ jobId: string }> {
+  return request(`/saved-routes/${id}/restore`, { method: "POST" });
 }
