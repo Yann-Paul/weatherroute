@@ -7,7 +7,7 @@ import { useResultsStore } from "@/stores/resultsStore";
 import { tempToRgb, dayToShortDE } from "@/utils/tempColor";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
-import type { WeatherStop, ElevationCityData } from "@/api/types";
+import type { WeatherStop, ElevationCityData, ForecastData } from "@/api/types";
 
 // ─── Lapse-rate-corrected temperature interpolation ──────────────────────────
 
@@ -34,6 +34,32 @@ function interpTempAtKm(
   return (w0[key]! + t * (w1[key]! - w0[key]!)) - (ele - eleRef) * lapse;
 }
 
+function interpForecastByKey(
+  km: number, ele: number, key: "tmax" | "tmin", forecast: ForecastData
+): number | null {
+  const { points, data } = forecast;
+  if (!points.length || km < points[0].km || km > points[points.length - 1].km) return null;
+  let ci = points.findIndex((p) => p.km >= km);
+  if (ci < 0) ci = points.length - 1;
+  if (ci === 0) ci = 1;
+  const p0 = points[ci - 1], p1 = points[ci];
+  const fd0 = data[String(ci - 1)], fd1 = data[String(ci)];
+  if (!fd0?.ok || !fd1?.ok) return null;
+  const d0 = fd0.daily, d1 = fd1.daily;
+  if (d0?.[key] == null || d1?.[key] == null) return null;
+  const tv = p1.km > p0.km ? (km - p0.km) / (p1.km - p0.km) : 0;
+  const eleRef = p0.ele + tv * (p1.ele - p0.ele);
+  return d0[key]! + tv * (d1[key]! - d0[key]!) - (ele - eleRef) / 100;
+}
+
+function getForecastEndKm(forecast: ForecastData): number | null {
+  let lastOkKm: number | null = null;
+  for (let i = 0; i < forecast.points.length; i++) {
+    if (forecast.data[String(i)]?.ok) lastOkKm = forecast.points[i].km;
+  }
+  return lastOkKm;
+}
+
 const SEGMENT_KM = 1000;
 
 // ─── Single-segment chart ─────────────────────────────────────────────────────
@@ -50,17 +76,18 @@ interface SegmentProps {
   desiredLow: number;
   startDay: number;
   lang: "de" | "en";
+  forecast: ForecastData | null;
 }
 
 function ElevationSegment({
   segIndex, segPoints, segCitiesVisible, allCityData,
-  weatherByCityRef, tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang,
+  weatherByCityRef, tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang, forecast,
 }: SegmentProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartStateRef = useRef<any>(null);
-  const stateRef = useRef({ tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang });
-  stateRef.current = { tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang };
+  const stateRef = useRef({ tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang, forecast });
+  stateRef.current = { tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang, forecast };
 
   const drawChart = useCallback(() => {
     const svg = svgRef.current;
@@ -103,10 +130,12 @@ function ElevationSegment({
       out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="#94a3b8" font-family="sans-serif">${e}m</text>`;
     }
 
+    const { forecast: fc } = stateRef.current;
     for (let i = 0; i < drawProfile.length - 1; i++) {
       const [km0, e0] = drawProfile[i], [km1, e1] = drawProfile[i + 1];
       const midKm = (km0 + km1) / 2, midEle = (e0 + e1) / 2;
-      const temp = interpTempAtKm(midKm, midEle, allCityData, weatherByCityRef.current, off, tk);
+      const fcTemp = off === 0 && fc ? interpForecastByKey(midKm, midEle, tk, fc) : null;
+      const temp = fcTemp ?? interpTempAtKm(midKm, midEle, allCityData, weatherByCityRef.current, off, tk);
       const col = temp !== null ? tempToRgb(temp, desired) : "#94a3b8";
       const x0 = xp(km0).toFixed(1), x1 = xp(km1).toFixed(1);
       const y0 = yp(e0).toFixed(1), y1 = yp(e1).toFixed(1), ay = axY.toFixed(1);
@@ -119,6 +148,18 @@ function ElevationSegment({
     if (eMin <= 0) {
       const y0m = yp(0);
       out += `<line x1="${PL}" y1="${y0m.toFixed(1)}" x2="${PL + cW}" y2="${y0m.toFixed(1)}" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="4,3"/>`;
+    }
+
+    // Forecast end boundary line (only when dayOffset=0 and forecast exists)
+    if (off === 0 && fc) {
+      const endKm = getForecastEndKm(fc);
+      if (endKm != null && endKm > kmMin && endKm < kmMax) {
+        const xEnd = xp(endKm).toFixed(1);
+        const forecastLabel = stateRef.current.lang === "de" ? "Vorhersage" : "Forecast";
+        out += `<line x1="${xEnd}" y1="${PT}" x2="${xEnd}" y2="${axY}" stroke="#f97316" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.9"/>`;
+        out += `<rect x="${(parseFloat(xEnd) + 1).toFixed(1)}" y="${(PT + 1).toFixed(1)}" width="70" height="13" rx="2" fill="white" opacity="0.85"/>`;
+        out += `<text x="${(parseFloat(xEnd) + 4).toFixed(1)}" y="${(PT + 11).toFixed(1)}" font-size="8.5" fill="#f97316" font-weight="600" font-family="sans-serif">☁ ${forecastLabel}</text>`;
+      }
     }
 
     for (const cd of segCitiesVisible) {
@@ -157,7 +198,7 @@ function ElevationSegment({
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("height", String(H));
     svg.innerHTML = out;
-  }, [segPoints, segCitiesVisible, allCityData, tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang, segIndex]);
+  }, [segPoints, segCitiesVisible, allCityData, tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang, segIndex, forecast]);
 
   useEffect(() => {
     drawChart();
@@ -202,12 +243,15 @@ function ElevationSegment({
     if (cdot) { cdot.setAttribute("cx", String(cxFixed)); cdot.setAttribute("cy", String(cy)); cdot.setAttribute("visibility", "visible"); }
 
     const desired = tk === "tmax" ? dh : dl;
-    const temp = interpTempAtKm(bestKm, bestEle, allCityData, weatherByCityRef.current, off, tk);
+    const { forecast: fc } = stateRef.current;
+    const fcTemp = off === 0 && fc ? interpForecastByKey(bestKm, bestEle, tk, fc) : null;
+    const temp = fcTemp ?? interpTempAtKm(bestKm, bestEle, allCityData, weatherByCityRef.current, off, tk);
 
     let ttHtml = `<div style="color:#64748b;font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
     ttHtml += `<div style="color:#1e293b">⛰ ${Math.round(bestEle)} m</div>`;
     if (temp != null) {
-      ttHtml += `<div style="color:${tempToRgb(temp, desired)}">${tk === "tmax" ? "☀" : "☽"} ${temp.toFixed(1)}°C</div>`;
+      const icon = fcTemp != null ? (tk === "tmax" ? "☁☀" : "☁☽") : (tk === "tmax" ? "☀" : "☽");
+      ttHtml += `<div style="color:${tempToRgb(temp, desired)}">${icon} ${temp.toFixed(1)}°C</div>`;
     }
 
     tooltip.innerHTML = ttHtml;
@@ -262,6 +306,7 @@ export function ElevationChart() {
   const desiredHigh = useResultsStore((s) => s.desiredHigh);
   const desiredLow = useResultsStore((s) => s.desiredLow);
 
+  const forecast = useResultsStore((s) => s.forecast);
   const [tempKey, setTempKey] = useState<"tmax" | "tmin">("tmax");
   const [dayOffset, setDayOffset] = useState(0);
 
@@ -366,6 +411,7 @@ export function ElevationChart() {
             desiredLow={desiredLow}
             startDay={startDay}
             lang={lang}
+            forecast={forecast}
           />
         ))}
       </div>

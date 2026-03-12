@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { CityEntry, Connection } from "@/api/types";
+import type { CityEntry, Connection, RouteStop } from "@/api/types";
 
 interface PlannerState {
   cities: CityEntry[];
@@ -40,6 +40,7 @@ interface PlannerState {
   toggleBlockedCountry: (code: string) => void;
   setBlockedCountries: (codes: string[]) => void;
   setSortedInput: (value: boolean) => void;
+  loadFromResults: (data: { route: RouteStop[]; startDay: number; desiredHigh: number; desiredLow: number }) => void;
   reset: () => void;
 }
 
@@ -116,6 +117,15 @@ export const usePlannerStore = create<PlannerState>()(
 
       setBlockedCountries: (blockedCountries) => set({ blockedCountries }),
       setSortedInput: (sortedInput) => set({ sortedInput }),
+
+      loadFromResults: ({ route, startDay, desiredHigh, desiredLow }) =>
+        set({
+          cities: route.map((r) => ({ id: r.cityId, name: r.cityName, restDays: r.restDays })),
+          startDay,
+          autoDetectStart: false,
+          desiredDayTemp: desiredHigh,
+          desiredNightTemp: desiredLow,
+        }),
 
       reset: () => set(initialState),
     }),

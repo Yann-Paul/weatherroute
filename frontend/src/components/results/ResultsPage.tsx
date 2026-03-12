@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router";
-import { Map, Mountain, CloudSun, List, Radar, Bookmark, BookmarkCheck } from "lucide-react";
+import { useParams, useNavigate } from "react-router";
+import { Map, Mountain, CloudSun, List, Radar, Bookmark, BookmarkCheck, SlidersHorizontal } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,6 +12,7 @@ import { WeatherGrid } from "./WeatherGrid";
 import { RouteList } from "./RouteList";
 import { ForecastMap } from "./ForecastMap";
 import { useResultsStore } from "@/stores/resultsStore";
+import { usePlannerStore } from "@/stores/plannerStore";
 import { getJobResults, getJobStatus, saveRoute } from "@/api/client";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
@@ -31,10 +32,14 @@ function buildRouteName(results: JobResults, lang: "de" | "en"): string {
 
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  const navigate = useNavigate();
   const { setResults, updateElevation, activeTab, setActiveTab } = useResultsStore();
   const elevationComplete = useResultsStore((s) => s.elevationComplete);
   const route = useResultsStore((s) => s.route);
   const startDay = useResultsStore((s) => s.startDay);
+  const desiredHigh = useResultsStore((s) => s.desiredHigh);
+  const desiredLow = useResultsStore((s) => s.desiredLow);
+  const loadFromResults = usePlannerStore((s) => s.loadFromResults);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
@@ -115,6 +120,11 @@ export function ResultsPage() {
     return () => { if (elevPollingRef.current) clearTimeout(elevPollingRef.current); };
   }, [jobId, elevationComplete, updateElevation]);
 
+  function handleEditSettings() {
+    loadFromResults({ route, startDay, desiredHigh, desiredLow });
+    navigate("/");
+  }
+
   async function handleSave() {
     if (!jobId || isSaved || isSaving) return;
     setIsSaving(true);
@@ -153,19 +163,30 @@ export function ResultsPage() {
         <div className="flex-1">
           <ResultsHeader />
         </div>
-        <Button
-          variant={isSaved ? "outline" : "secondary"}
-          size="sm"
-          onClick={handleSave}
-          disabled={isSaving || isSaved}
-          className="mt-1 shrink-0 gap-1.5"
-        >
-          {isSaved ? (
-            <><BookmarkCheck className="h-4 w-4" />{t.results.saved}</>
-          ) : (
-            <><Bookmark className="h-4 w-4" />{isSaving ? "..." : t.results.save}</>
-          )}
-        </Button>
+        <div className="mt-1 flex shrink-0 gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleEditSettings}
+            className="gap-1.5"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            {t.results.editSettings}
+          </Button>
+          <Button
+            variant={isSaved ? "outline" : "secondary"}
+            size="sm"
+            onClick={handleSave}
+            disabled={isSaving || isSaved}
+            className="gap-1.5"
+          >
+            {isSaved ? (
+              <><BookmarkCheck className="h-4 w-4" />{t.results.saved}</>
+            ) : (
+              <><Bookmark className="h-4 w-4" />{isSaving ? "..." : t.results.save}</>
+            )}
+          </Button>
+        </div>
       </div>
 
       {forecastUpdating && (

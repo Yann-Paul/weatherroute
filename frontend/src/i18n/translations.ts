@@ -119,6 +119,7 @@ const de = {
     save: "Speichern",
     saved: "Gespeichert",
     forecastUpdating: "Vorhersage wird aktualisiert...",
+    editSettings: "Einstellungen ändern",
   },
   savedRoutes: {
     heading: "Gespeicherte Routen",
@@ -139,6 +140,7 @@ const de = {
     elevTitle: "Höhenprofil mit Temperatur (☀ Tmax, Starttag)",
     elevCold: "kalt",
     elevWarm: "warm",
+    forecastEnd: "Vorhersage-Ende",
   },
   elevationChart: {
     dayTemp: (target: number) => `☀ Tagestemperatur (Ziel ${target}°C)`,
@@ -347,6 +349,7 @@ const en = {
     save: "Save",
     saved: "Saved",
     forecastUpdating: "Updating forecast...",
+    editSettings: "Edit settings",
   },
   savedRoutes: {
     heading: "Saved Routes",
@@ -367,6 +370,7 @@ const en = {
     elevTitle: "Elevation profile with temperature (☀ Tmax, start day)",
     elevCold: "cold",
     elevWarm: "warm",
+    forecastEnd: "Forecast end",
   },
   elevationChart: {
     dayTemp: (target: number) => `☀ Day temperature (target ${target}°C)`,

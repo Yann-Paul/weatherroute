@@ -14,7 +14,7 @@ import { useResultsStore } from "@/stores/resultsStore";
 import { tempToRgb, dayToShortDE } from "@/utils/tempColor";
 import { useLangStore } from "@/i18n/store";
 import { useT } from "@/i18n/useT";
-import type { MarkerData, WeatherStop, ElevationCityData } from "@/api/types";
+import type { MarkerData, WeatherStop, ElevationCityData, ForecastData } from "@/api/types";
 
 // First day of each month (1-indexed, non-leap year)
 const MONTH_START_DAYS = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
@@ -73,6 +73,48 @@ function interpTempAtKm(
   const lapse = (1 - 0.4 * Math.min(1, prcp / 5)) / 100;
   const eleRef = c0.ele + t * (c1.ele - c0.ele);
   return (w0[key]! + t * (w1[key]! - w0[key]!)) - (ele - eleRef) * lapse;
+}
+
+function interpForecastByKey(
+  km: number, ele: number, key: "tmax" | "tmin", forecast: ForecastData
+): number | null {
+  const { points, data } = forecast;
+  if (!points.length || km < points[0].km || km > points[points.length - 1].km) return null;
+  let ci = points.findIndex((p) => p.km >= km);
+  if (ci < 0) ci = points.length - 1;
+  if (ci === 0) ci = 1;
+  const p0 = points[ci - 1], p1 = points[ci];
+  const fd0 = data[String(ci - 1)], fd1 = data[String(ci)];
+  if (!fd0?.ok || !fd1?.ok) return null;
+  const d0 = fd0.daily, d1 = fd1.daily;
+  if (d0?.[key] == null || d1?.[key] == null) return null;
+  const tv = p1.km > p0.km ? (km - p0.km) / (p1.km - p0.km) : 0;
+  const eleRef = p0.ele + tv * (p1.ele - p0.ele);
+  return d0[key]! + tv * (d1[key]! - d0[key]!) - (ele - eleRef) / 100;
+}
+
+function getForecastEndKm(forecast: ForecastData): number | null {
+  let lastOkKm: number | null = null;
+  for (let i = 0; i < forecast.points.length; i++) {
+    if (forecast.data[String(i)]?.ok) lastOkKm = forecast.points[i].km;
+  }
+  return lastOkKm;
+}
+
+function miniElevKmToLatLon(km: number, miniElev: [number, number, number, number][]): [number, number] | null {
+  if (!miniElev.length) return null;
+  if (km <= miniElev[0][0]) return [miniElev[0][1], miniElev[0][2]];
+  for (let i = 1; i < miniElev.length; i++) {
+    if (miniElev[i][0] >= km) {
+      const span = miniElev[i][0] - miniElev[i - 1][0];
+      const t = span > 0 ? (km - miniElev[i - 1][0]) / span : 0;
+      return [
+        miniElev[i - 1][1] + t * (miniElev[i][1] - miniElev[i - 1][1]),
+        miniElev[i - 1][2] + t * (miniElev[i][2] - miniElev[i - 1][2]),
+      ];
+    }
+  }
+  return [miniElev[miniElev.length - 1][1], miniElev[miniElev.length - 1][2]];
 }
 
 // ─── Wind arrow SVG ───────────────────────────────────────────────────────────
@@ -137,12 +179,34 @@ function RouteMapMarkers({
   const desiredAvg = (desiredHigh + desiredLow) / 2;
   const textShadow = "0 1px 3px rgba(0,0,0,0.65)";
 
+  const forecast = useResultsStore((s) => s.forecast);
+  const elevation = useResultsStore((s) => s.elevation);
+
+  const cityEleById = useMemo(() => {
+    const m = new globalThis.Map<string, number>();
+    for (const cd of elevation?.cityData ?? []) m.set(cd.cityId, cd.ele);
+    return m;
+  }, [elevation]);
+
+  const kmByRelDay = useMemo(() => {
+    const m = new globalThis.Map<number, number>();
+    for (const s of forecast?.routeStops ?? []) m.set(s.relDay, s.km);
+    return m;
+  }, [forecast]);
+
   return (
     <>
       {markers.map((m, idx) => {
         if (idx !== 0 && idx !== markers.length - 1 && idx % step !== 0) return null;
 
-        const bg = tempToRgb((m.tmax + m.tmin) / 2, desiredAvg);
+        const markerKm = kmByRelDay.get(m.relDay);
+        const markerEle = cityEleById.get(m.id) ?? 0;
+        const fcTmax = markerKm != null && forecast ? interpForecastByKey(markerKm, markerEle, "tmax", forecast) : null;
+        const fcTmin = markerKm != null && forecast ? interpForecastByKey(markerKm, markerEle, "tmin", forecast) : null;
+        const isForecast = fcTmax != null && fcTmin != null;
+        const tmax = isForecast ? fcTmax! : m.tmax;
+        const tmin = isForecast ? fcTmin! : m.tmin;
+        const bg = tempToRgb((tmax + tmin) / 2, desiredAvg);
         const calDay = ((startDay + m.relDay - 1 + 3650) % 365) + 1;
         const dateStr = dayToShortDE(calDay, lang);
         const bearing = routeBearingForMarker(markers, idx);
@@ -155,7 +219,7 @@ function RouteMapMarkers({
                   className="cursor-pointer rounded border px-1.5 py-0.5 text-center font-bold shadow-md whitespace-nowrap leading-tight"
                   style={{
                     background: bg,
-                    borderColor: "rgba(255,255,255,0.25)",
+                    borderColor: isForecast ? "rgba(56,189,248,0.7)" : "rgba(255,255,255,0.25)",
                     fontSize: "10px",
                     minWidth: "52px",
                   }}
@@ -169,11 +233,11 @@ function RouteMapMarkers({
                   <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
                     <span>
                       <span style={{ color: "#fde68a", textShadow }}>☀</span>
-                      <span style={{ color: "#fff", textShadow }}>{Math.round(m.tmax)}°</span>
+                      <span style={{ color: "#fff", textShadow }}>{Math.round(tmax)}°</span>
                     </span>
                     <span>
                       <span style={{ color: "#bfdbfe", textShadow }}>☽</span>
-                      <span style={{ color: "#fff", textShadow }}>{Math.round(m.tmin)}°</span>
+                      <span style={{ color: "#fff", textShadow }}>{Math.round(tmin)}°</span>
                     </span>
                   </div>
                   {m.prcp > 0.1 && (
@@ -193,10 +257,11 @@ function RouteMapMarkers({
               <p className="text-xs text-muted-foreground">{dateStr} · {lang === "de" ? "Tag" : "Day"} {m.relDay}</p>
               <div className="mt-1 space-y-0.5 text-sm">
                 <p>
-                  <span className="text-orange-500">☀ {m.tmax}°</span>
+                  <span className="text-orange-500">☀ {Math.round(tmax)}°</span>
                   {" / "}
-                  <span className="text-blue-400">☽ {m.tmin}°</span>
+                  <span className="text-blue-400">☽ {Math.round(tmin)}°</span>
                 </p>
+                {isForecast && <p className="text-[10px] text-cyan-500">☁ {lang === "de" ? "Echtzeitvorhersage" : "Live forecast"}</p>}
                 {m.prcp > 0 && <p className="text-muted-foreground">☂ {m.prcp.toFixed(1)} mm</p>}
                 {m.wspd > 0 && (
                   <p className="text-muted-foreground">☴ {Math.round(m.wspd)} km/h</p>
@@ -343,6 +408,8 @@ function MiniElevChart() {
   const weather = useResultsStore((s) => s.weather);
   const startDay = useResultsStore((s) => s.startDay);
   const desiredHigh = useResultsStore((s) => s.desiredHigh);
+  const desiredLow = useResultsStore((s) => s.desiredLow);
+  const forecast = useResultsStore((s) => s.forecast);
   const setHoveredKm = useResultsStore((s) => s.setHoveredKm);
   const visibleKmRange = useResultsStore((s) => s.visibleKmRange);
   const lang = useLangStore((s) => s.lang);
@@ -361,8 +428,11 @@ function MiniElevChart() {
   const weatherByCityRef = useRef(weatherByCity);
   weatherByCityRef.current = weatherByCity;
 
-  const stateRef = useRef({ elevation, desiredHigh });
-  stateRef.current = { elevation, desiredHigh };
+  const forecastRef = useRef(forecast);
+  forecastRef.current = forecast;
+
+  const stateRef = useRef({ elevation, desiredHigh, desiredLow });
+  stateRef.current = { elevation, desiredHigh, desiredLow };
 
   useEffect(() => {
     return () => { setHoveredKm(null); };
@@ -412,12 +482,20 @@ function MiniElevChart() {
       out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="#94a3b8" font-family="sans-serif">${e}m</text>`;
     }
 
+    const desiredAvg = (desiredHigh + desiredLow) / 2;
     out += `<g clip-path="url(#mc-clip)">`;
     for (let i = 0; i < drawProfile.length - 1; i++) {
       const [km0, e0] = drawProfile[i], [km1, e1] = drawProfile[i + 1];
       const midKm = (km0 + km1) / 2, midEle = (e0 + e1) / 2;
-      const temp = interpTempAtKm(midKm, midEle, cityData, weatherByCity, "tmax");
-      const col = temp !== null ? tempToRgb(temp, desiredHigh) : "#94a3b8";
+      const fcTmax = forecast ? interpForecastByKey(midKm, midEle, "tmax", forecast) : null;
+      const fcTmin = forecast ? interpForecastByKey(midKm, midEle, "tmin", forecast) : null;
+      const segTmax = fcTmax ?? interpTempAtKm(midKm, midEle, cityData, weatherByCity, "tmax");
+      const segTmin = fcTmin ?? interpTempAtKm(midKm, midEle, cityData, weatherByCity, "tmin");
+      const col = segTmax != null && segTmin != null
+        ? tempToRgb((segTmax + segTmin) / 2, desiredAvg)
+        : segTmax != null
+        ? tempToRgb(segTmax, desiredHigh)
+        : "#94a3b8";
       const x0 = xp(km0).toFixed(1), x1 = xp(km1).toFixed(1);
       const y0 = yp(e0).toFixed(1), y1 = yp(e1).toFixed(1), ay = axY.toFixed(1);
       out += `<polygon points="${x0},${y0} ${x1},${y1} ${x1},${ay} ${x0},${ay}" fill="${col}" stroke="${col}" stroke-width="0.3"/>`;
@@ -456,6 +534,15 @@ function MiniElevChart() {
       out += `<text font-size="9.5" fill="#1e2d45" font-weight="600" text-anchor="end" font-family="sans-serif" transform="rotate(-38,${xv.toFixed(1)},${(axY + 14).toFixed(1)}) translate(${xv.toFixed(1)},${(axY + 14).toFixed(1)})">${safe}</text>`;
     }
 
+    // Forecast end boundary line
+    const forecastEndKm = forecast ? getForecastEndKm(forecast) : null;
+    if (forecastEndKm != null && forecastEndKm > kmMin && forecastEndKm < kmMax) {
+      const xEnd = xp(forecastEndKm).toFixed(1);
+      const forecastLabel = lang === "de" ? "Vorhersage" : "Forecast";
+      out += `<line x1="${xEnd}" y1="${PT}" x2="${xEnd}" y2="${axY}" stroke="#f97316" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.9"/>`;
+      out += `<text x="${(parseFloat(xEnd) + 3).toFixed(1)}" y="${(PT + 9).toFixed(1)}" font-size="8" fill="#f97316" font-weight="600" font-family="sans-serif">☁ ${forecastLabel}</text>`;
+    }
+
     out += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${axY}" stroke="#94a3b8" stroke-width="1"/>`;
     out += `<line x1="${PL}" y1="${axY}" x2="${PL + cW}" y2="${axY}" stroke="#94a3b8" stroke-width="1"/>`;
     out += `<line id="mc-cursor" x1="0" y1="${PT}" x2="0" y2="${axY}" stroke="#334155" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>`;
@@ -464,7 +551,7 @@ function MiniElevChart() {
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("height", String(H));
     svg.innerHTML = out;
-  }, [elevation, desiredHigh, weatherByCity, startDay, lang, visibleKmRange]);
+  }, [elevation, desiredHigh, desiredLow, weatherByCity, startDay, lang, visibleKmRange, forecast]);
 
   useEffect(() => {
     drawChart();
@@ -503,12 +590,20 @@ function MiniElevChart() {
     const cdot = svg.querySelector("#mc-cursor-dot");
     if (cdot) { cdot.setAttribute("cx", String(cxFixed)); cdot.setAttribute("cy", String(cy)); cdot.setAttribute("visibility", "visible"); }
 
-    const { desiredHigh } = stateRef.current;
-    const temp = interpTempAtKm(bestKm, bestEle, cs.cityData, weatherByCityRef.current, "tmax");
+    const { desiredHigh, desiredLow } = stateRef.current;
+    const fc = forecastRef.current;
+    const fcTmax = fc ? interpForecastByKey(bestKm, bestEle, "tmax", fc) : null;
+    const fcTmin = fc ? interpForecastByKey(bestKm, bestEle, "tmin", fc) : null;
+    const tmax = fcTmax ?? interpTempAtKm(bestKm, bestEle, cs.cityData, weatherByCityRef.current, "tmax");
+    const tmin = fcTmin ?? interpTempAtKm(bestKm, bestEle, cs.cityData, weatherByCityRef.current, "tmin");
+    const isFc = fcTmax != null || fcTmin != null;
     let ttHtml = `<div style="color:#64748b;font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
     ttHtml += `<div style="color:#1e293b">⛰ ${Math.round(bestEle)} m</div>`;
-    if (temp != null) {
-      ttHtml += `<div style="color:${tempToRgb(temp, desiredHigh)}">☀ ${temp.toFixed(1)}°C</div>`;
+    if (tmax != null) {
+      ttHtml += `<div style="color:${tempToRgb(tmax, desiredHigh)}">${isFc ? "☁" : ""}☀ ${tmax.toFixed(1)}°C</div>`;
+    }
+    if (tmin != null) {
+      ttHtml += `<div style="color:${tempToRgb(tmin, desiredLow)}">${isFc ? "☁" : ""}☽ ${tmin.toFixed(1)}°C</div>`;
     }
     tooltip.innerHTML = ttHtml;
     tooltip.style.display = "block";
@@ -581,8 +676,17 @@ export function RouteMap() {
   const startDay = useResultsStore((s) => s.startDay);
   const desiredHigh = useResultsStore((s) => s.desiredHigh);
   const desiredLow = useResultsStore((s) => s.desiredLow);
+  const forecast = useResultsStore((s) => s.forecast);
   const lang = useLangStore((s) => s.lang);
   const t = useT();
+
+  const forecastEndPos = useMemo(() => {
+    if (!forecast) return null;
+    const endKm = getForecastEndKm(forecast);
+    if (endKm == null) return null;
+    const pos = miniElevKmToLatLon(endKm, forecast.miniElev);
+    return pos ? { lat: pos[0], lon: pos[1], km: Math.round(endKm) } : null;
+  }, [forecast]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [elevExpanded, setElevExpanded] = useState(true);
 
@@ -652,6 +756,19 @@ export function RouteMap() {
             </MarkerContent>
           </MapMarker>
         ))}
+
+        {forecastEndPos && (
+          <MapMarker longitude={forecastEndPos.lon} latitude={forecastEndPos.lat}>
+            <MarkerContent>
+              <div
+                className="rounded border-2 px-1.5 py-0.5 text-[9px] font-bold shadow-md whitespace-nowrap"
+                style={{ background: "rgba(255,237,213,0.95)", borderColor: "#f97316", color: "#c2410c" }}
+              >
+                ☁ {t.routeMap.forecastEnd} · {forecastEndPos.km} km
+              </div>
+            </MarkerContent>
+          </MapMarker>
+        )}
 
         <RouteMapMarkers
           markers={markers}

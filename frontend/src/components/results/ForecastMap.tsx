@@ -402,6 +402,7 @@ export function ForecastMap() {
 
     function interpTemp(km: number, ele: number): number | null {
       if (!points.length) return null;
+      if (km < points[0].km || km > points[points.length - 1].km) return null;
       let ci = points.findIndex((p) => p.km >= km);
       if (ci < 0) ci = points.length - 1;
       if (ci === 0) ci = 1;
@@ -420,6 +421,7 @@ export function ForecastMap() {
 
     function interpTempByKey(km: number, ele: number, key: "tmax" | "tmin"): number | null {
       if (!points.length) return null;
+      if (km < points[0].km || km > points[points.length - 1].km) return null;
       let ci = points.findIndex((p) => p.km >= km);
       if (ci < 0) ci = points.length - 1;
       if (ci === 0) ci = 1;
@@ -440,19 +442,17 @@ export function ForecastMap() {
     if (dailyMode) {
       for (let i = 0; i < miniElev.length - 1; i++) {
         const [km0,,, e0] = miniElev[i], [km1,,, e1] = miniElev[i + 1];
-        out += `<polygon points="${xp(km0)},${yp(e0)} ${xp(km1)},${yp(e1)} ${xp(km1)},${yp(eMin)} ${xp(km0)},${yp(eMin)}" fill="#cbd5e1" opacity="0.8"/>`;
-      }
-      const outline = miniElev.map((p) => `${xp(p[0])},${yp(p[3])}`).join(" ");
-      out += `<polyline points="${outline}" fill="none" stroke="#94a3b8" stroke-width="1"/>`;
-      for (let i = 0; i < miniElev.length - 1; i++) {
-        const [km0,,, e0] = miniElev[i], [km1,,, e1] = miniElev[i + 1];
         const mk = (km0 + km1) / 2, me = (e0 + e1) / 2;
         const tmaxV = interpTempByKey(mk, me, "tmax");
         const tminV = interpTempByKey(mk, me, "tmin");
+        const hasForecast = tmaxV != null || tminV != null;
         const w = xp(km1) - xp(km0);
+        out += `<polygon points="${xp(km0)},${yp(e0)} ${xp(km1)},${yp(e1)} ${xp(km1)},${yp(eMin)} ${xp(km0)},${yp(eMin)}" fill="${hasForecast ? '#cbd5e1' : '#f8fafc'}" opacity="0.8"/>`;
         if (tmaxV != null) out += `<rect x="${xp(km0)}" y="${PT}" width="${w}" height="${BAND}" fill="${tempToRgb(tmaxV, desiredHigh)}" opacity="0.9"/>`;
         if (tminV != null) out += `<rect x="${xp(km0)}" y="${PT+BAND+1}" width="${w}" height="${BAND}" fill="${tempToRgb(tminV, desiredLow)}" opacity="0.9"/>`;
       }
+      const outline = miniElev.map((p) => `${xp(p[0])},${yp(p[3])}`).join(" ");
+      out += `<polyline points="${outline}" fill="none" stroke="#94a3b8" stroke-width="1"/>`;
       out += `<text x="${W-PR-2}" y="${PT+8}" text-anchor="end" font-size="8" fill="#ea580c" font-family="sans-serif">☀Tmax</text>`;
       out += `<text x="${W-PR-2}" y="${PT+20}" text-anchor="end" font-size="8" fill="#0284c7" font-family="sans-serif">☽Tmin</text>`;
     } else {
@@ -460,7 +460,7 @@ export function ForecastMap() {
       for (let i = 0; i < miniElev.length - 1; i++) {
         const [km0,,, e0] = miniElev[i], [km1,,, e1] = miniElev[i + 1];
         const tmid = interpTemp((km0 + km1) / 2, (e0 + e1) / 2);
-        const col = tmid != null ? tempToRgb(tmid, chartRef) : "#94a3b8";
+        const col = tmid != null ? tempToRgb(tmid, chartRef) : "#f8fafc";
         out += `<polygon points="${xp(km0)},${yp(e0)} ${xp(km1)},${yp(e1)} ${xp(km1)},${yp(eMin)} ${xp(km0)},${yp(eMin)}" fill="${col}" opacity="0.85"/>`;
       }
       const outline = miniElev.map((p) => `${xp(p[0])},${yp(p[3])}`).join(" ");
@@ -506,6 +506,7 @@ export function ForecastMap() {
     const hour  = HOUR_STEPS[hourIdx];
 
     function interpTemp(km: number, ele: number): number | null {
+      if (!pts.length || km < pts[0].km || km > pts[pts.length - 1].km) return null;
       let ci = pts.findIndex((p) => p.km >= km);
       if (ci < 0) ci = pts.length - 1;
       if (ci === 0) ci = 1;
@@ -521,6 +522,7 @@ export function ForecastMap() {
     }
 
     function interpByKey(km: number, ele: number, key: "tmax" | "tmin"): number | null {
+      if (!pts.length || km < pts[0].km || km > pts[pts.length - 1].km) return null;
       let ci = pts.findIndex((p) => p.km >= km);
       if (ci < 0) ci = pts.length - 1;
       if (ci === 0) ci = 1;
