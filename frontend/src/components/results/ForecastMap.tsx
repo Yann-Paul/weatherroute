@@ -327,8 +327,7 @@ export function ForecastMap() {
   const forecastError = useResultsStore((s) => s.forecastError);
   const setHoveredKm = useResultsStore((s) => s.setHoveredKm);
   const visibleKmRange = useResultsStore((s) => s.visibleKmRange);
-  const startDay = useResultsStore((s) => s.startDay);
-  const lang = useLangStore((s) => s.lang);
+const lang = useLangStore((s) => s.lang);
   const [hourIdx, setHourIdx] = useState(2);
   const [dailyMode, setDailyMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);

@@ -440,7 +440,7 @@ function DayMarkersRM() {
 
   return (
     <>
-      {dayMarkers.filter((_, i) => i % step === 0).map(([km, relDay], i) => {
+      {dayMarkers.filter((_, i) => i % step === 0).map(([km, relDay], _i) => {
         const scaledKm = km * scale;
         let ci = routePolyline.findIndex((p) => p[0] >= scaledKm);
         if (ci < 0) ci = routePolyline.length - 1;
