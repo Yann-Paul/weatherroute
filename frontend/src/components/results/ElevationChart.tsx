@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { NumberTicker } from "@/components/magicui/number-ticker";
-import { TrendingUp, TrendingDown, Ruler } from "lucide-react";
+import { TrendingUp, TrendingDown, Ruler, Sun, Moon } from "lucide-react";
 import { useResultsStore } from "@/stores/resultsStore";
 import { tempToRgb, dayToShortDE } from "@/utils/tempColor";
 import { useT } from "@/i18n/useT";
@@ -94,6 +94,28 @@ function ElevationSegment({
     const svg = svgRef.current;
     if (!svg || segPoints.length < 2) return;
 
+    // Read design tokens from CSS custom properties so the chart respects both modes.
+    const root = document.documentElement;
+    const cssVar = (name: string) => getComputedStyle(root).getPropertyValue(name).trim();
+    const hsl = (name: string) => `hsl(${cssVar(name)})`;
+
+    const colBg     = hsl("--muted");
+    const colGrid   = hsl("--border");
+    const colAxis   = hsl("--muted-foreground");
+    const colLine   = hsl("--chart-line");
+    const colDot    = hsl("--chart-1");
+    const colText   = hsl("--foreground");
+    const colCard   = hsl("--card");
+    const colWarn   = hsl("--warn");
+    const colCursor = hsl("--chart-cursor");
+
+    // Store resolved tooltip colors for mouse-move handler
+    chartStateRef.current = {
+      ...chartStateRef.current,
+      colAxisFallback: cssVar("--muted-foreground"),
+      colTextResolved: cssVar("--foreground"),
+    };
+
     const W = svg.parentElement?.offsetWidth || 700;
     const H = 280;
     const PL = 48, PR = 10, PT = 30, PB = 80;
@@ -111,6 +133,7 @@ function ElevationSegment({
     const eRange = eMax - eMin || 1;
 
     chartStateRef.current = {
+      ...chartStateRef.current,
       drawProfile, kmMin, kmMax, eMin, eMax, eRange,
       PL, PR, PT, PB, cW, cH, H, W,
     };
@@ -122,13 +145,13 @@ function ElevationSegment({
     const yp = (ele: number) => PT + cH - ((ele - eMin) / eRange) * cH;
     const axY = PT + cH;
 
-    let out = `<rect x="${PL}" y="${PT}" width="${cW}" height="${cH}" fill="#f9fafb" rx="2"/>`;
+    let out = `<rect x="${PL}" y="${PT}" width="${cW}" height="${cH}" fill="${colBg}" rx="2"/>`;
 
     const yTick = eMax <= 200 ? 50 : eMax <= 500 ? 100 : eMax <= 1000 ? 200 : eMax <= 2500 ? 500 : 1000;
     for (let e = Math.ceil(eMin / yTick) * yTick; e <= eMax; e += yTick) {
       const y = yp(e);
-      out += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${PL + cW}" y2="${y.toFixed(1)}" stroke="#e2e8f0" stroke-width="0.8"/>`;
-      out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="#94a3b8" font-family="sans-serif">${e}m</text>`;
+      out += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${PL + cW}" y2="${y.toFixed(1)}" stroke="${colGrid}" stroke-width="0.8"/>`;
+      out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${colAxis}" font-family="sans-serif">${e}m</text>`;
     }
 
     const { forecast: fc } = stateRef.current;
@@ -137,18 +160,18 @@ function ElevationSegment({
       const midKm = (km0 + km1) / 2, midEle = (e0 + e1) / 2;
       const fcTemp = off === 0 && fc ? interpForecastByKey(midKm, midEle, tk, fc) : null;
       const temp = fcTemp ?? interpTempAtKm(midKm, midEle, allCityData, weatherByCityRef.current, off, tk);
-      const col = temp !== null ? tempToRgb(temp, desired) : "#94a3b8";
+      const col = temp !== null ? tempToRgb(temp, desired) : colAxis;
       const x0 = xp(km0).toFixed(1), x1 = xp(km1).toFixed(1);
       const y0 = yp(e0).toFixed(1), y1 = yp(e1).toFixed(1), ay = axY.toFixed(1);
       out += `<polygon points="${x0},${y0} ${x1},${y1} ${x1},${ay} ${x0},${ay}" fill="${col}" stroke="${col}" stroke-width="0.3"/>`;
     }
 
     const pts = drawProfile.map(([km, e]) => `${xp(km).toFixed(1)},${yp(e).toFixed(1)}`).join(" ");
-    out += `<polyline points="${pts}" fill="none" stroke="#475569" stroke-width="1.2"/>`;
+    out += `<polyline points="${pts}" fill="none" stroke="${colLine}" stroke-width="1.2"/>`;
 
     if (eMin <= 0) {
       const y0m = yp(0);
-      out += `<line x1="${PL}" y1="${y0m.toFixed(1)}" x2="${PL + cW}" y2="${y0m.toFixed(1)}" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="4,3"/>`;
+      out += `<line x1="${PL}" y1="${y0m.toFixed(1)}" x2="${PL + cW}" y2="${y0m.toFixed(1)}" stroke="${colAxis}" stroke-width="0.8" stroke-dasharray="4,3"/>`;
     }
 
     // Forecast end boundary line (only when dayOffset=0 and forecast exists)
@@ -157,9 +180,9 @@ function ElevationSegment({
       if (endKm != null && endKm > kmMin && endKm < kmMax) {
         const xEnd = xp(endKm).toFixed(1);
         const forecastLabel = stateRef.current.lang === "de" ? "Vorhersage" : "Forecast";
-        out += `<line x1="${xEnd}" y1="${PT}" x2="${xEnd}" y2="${axY}" stroke="#f97316" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.9"/>`;
-        out += `<rect x="${(parseFloat(xEnd) + 1).toFixed(1)}" y="${(PT + 1).toFixed(1)}" width="70" height="13" rx="2" fill="white" opacity="0.85"/>`;
-        out += `<text x="${(parseFloat(xEnd) + 4).toFixed(1)}" y="${(PT + 11).toFixed(1)}" font-size="8.5" fill="#f97316" font-weight="600" font-family="sans-serif">☁ ${forecastLabel}</text>`;
+        out += `<line x1="${xEnd}" y1="${PT}" x2="${xEnd}" y2="${axY}" stroke="${colWarn}" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.9"/>`;
+        out += `<rect x="${(parseFloat(xEnd) + 1).toFixed(1)}" y="${(PT + 1).toFixed(1)}" width="70" height="13" rx="2" fill="${colCard}" opacity="0.85"/>`;
+        out += `<text x="${(parseFloat(xEnd) + 4).toFixed(1)}" y="${(PT + 11).toFixed(1)}" font-size="8.5" fill="${colWarn}" font-weight="600" font-family="sans-serif">☁ ${forecastLabel}</text>`;
       }
     }
 
@@ -172,8 +195,8 @@ function ElevationSegment({
       if (xd - lastDmX < MIN_DM_PX) continue;
       lastDmX = xd;
       const lbl = stateRef.current.lang === "de" ? `Tag ${dmRelDay}` : `Day ${dmRelDay}`;
-      out += `<line x1="${xd.toFixed(1)}" y1="${PT}" x2="${xd.toFixed(1)}" y2="${axY}" stroke="#94a3b8" stroke-width="0.7" stroke-dasharray="2,3" opacity="0.5"/>`;
-      out += `<text x="${(xd + 1.5).toFixed(1)}" y="${(PT + 8).toFixed(1)}" font-size="7" fill="#94a3b8" font-family="sans-serif" opacity="0.7">${lbl}</text>`;
+      out += `<line x1="${xd.toFixed(1)}" y1="${PT}" x2="${xd.toFixed(1)}" y2="${axY}" stroke="${colAxis}" stroke-width="0.7" stroke-dasharray="2,3" opacity="0.5"/>`;
+      out += `<text x="${(xd + 1.5).toFixed(1)}" y="${(PT + 8).toFixed(1)}" font-size="7" fill="${colAxis}" font-family="sans-serif" opacity="0.7">${lbl}</text>`;
     }
 
     for (const cd of segCitiesVisible) {
@@ -192,22 +215,22 @@ function ElevationSegment({
       const absDay = ((stateRef.current.startDay + relDay + off - 1 + 3650) % 365) + 1;
       const dateStr = dayToShortDE(absDay, lang);
       const px = xv - 18, py = PT + 2;
-      out += `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="36" height="13" rx="3" fill="white" opacity="0.9" stroke="#b0c4de" stroke-width="0.7"/>`;
-      out += `<text x="${xv.toFixed(1)}" y="${(py + 9.5).toFixed(1)}" text-anchor="middle" font-size="8" fill="#1a2d45" font-weight="700" font-family="sans-serif">${dateStr}</text>`;
-      out += `<line x1="${xv.toFixed(1)}" y1="${PT}" x2="${xv.toFixed(1)}" y2="${axY}" stroke="#4a6fa5" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>`;
-      out += `<circle cx="${xv.toFixed(1)}" cy="${dotY.toFixed(1)}" r="3.5" fill="#fff" stroke="#4a6fa5" stroke-width="1.8"/>`;
+      out += `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="36" height="13" rx="3" fill="${colCard}" opacity="0.9" stroke="${colDot}" stroke-width="0.7"/>`;
+      out += `<text x="${xv.toFixed(1)}" y="${(py + 9.5).toFixed(1)}" text-anchor="middle" font-size="8" fill="${colText}" font-weight="700" font-family="sans-serif">${dateStr}</text>`;
+      out += `<line x1="${xv.toFixed(1)}" y1="${PT}" x2="${xv.toFixed(1)}" y2="${axY}" stroke="${colDot}" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>`;
+      out += `<circle cx="${xv.toFixed(1)}" cy="${dotY.toFixed(1)}" r="3.5" fill="${colCard}" stroke="${colDot}" stroke-width="1.8"/>`;
       const safe = cd.name.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-      out += `<text font-size="9.5" fill="#1e2d45" font-weight="600" text-anchor="end" font-family="sans-serif" transform="rotate(-38,${xv.toFixed(1)},${(axY + 14).toFixed(1)}) translate(${xv.toFixed(1)},${(axY + 14).toFixed(1)})">${safe}</text>`;
+      out += `<text font-size="9.5" fill="${colText}" font-weight="600" text-anchor="end" font-family="sans-serif" transform="rotate(-38,${xv.toFixed(1)},${(axY + 14).toFixed(1)}) translate(${xv.toFixed(1)},${(axY + 14).toFixed(1)})">${safe}</text>`;
     }
 
-    out += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${axY}" stroke="#94a3b8" stroke-width="1"/>`;
-    out += `<line x1="${PL}" y1="${axY}" x2="${PL + cW}" y2="${axY}" stroke="#94a3b8" stroke-width="1"/>`;
-    out += `<text x="${(PL + cW / 2).toFixed(1)}" y="${H - 3}" text-anchor="middle" font-size="8" fill="#94a3b8" font-family="sans-serif">${Math.round(kmMin)}–${Math.round(kmMax)} km</text>`;
+    out += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${axY}" stroke="${colAxis}" stroke-width="1"/>`;
+    out += `<line x1="${PL}" y1="${axY}" x2="${PL + cW}" y2="${axY}" stroke="${colAxis}" stroke-width="1"/>`;
+    out += `<text x="${(PL + cW / 2).toFixed(1)}" y="${H - 3}" text-anchor="middle" font-size="8" fill="${colAxis}" font-family="sans-serif">${Math.round(kmMin)}–${Math.round(kmMax)} km</text>`;
 
     const cursorId = `ec-cursor-${segIndex}`;
     const dotId = `ec-dot-${segIndex}`;
-    out += `<line id="${cursorId}" x1="0" y1="${PT}" x2="0" y2="${axY}" stroke="#334155" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>`;
-    out += `<circle id="${dotId}" cx="0" cy="0" r="3" fill="#334155" opacity="0.85" visibility="hidden"/>`;
+    out += `<line id="${cursorId}" x1="0" y1="${PT}" x2="0" y2="${axY}" stroke="${colCursor}" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>`;
+    out += `<circle id="${dotId}" cx="0" cy="0" r="3" fill="${colCursor}" opacity="0.85" visibility="hidden"/>`;
 
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("height", String(H));
@@ -261,8 +284,10 @@ function ElevationSegment({
     const fcTemp = off === 0 && fc ? interpForecastByKey(bestKm, bestEle, tk, fc) : null;
     const temp = fcTemp ?? interpTempAtKm(bestKm, bestEle, allCityData, weatherByCityRef.current, off, tk);
 
-    let ttHtml = `<div style="color:#64748b;font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
-    ttHtml += `<div style="color:#1e293b">⛰ ${Math.round(bestEle)} m</div>`;
+    const colMuted = cs?.colAxisFallback ? `hsl(${cs.colAxisFallback})` : "hsl(var(--muted-foreground))";
+    const colFg = cs?.colTextResolved ? `hsl(${cs.colTextResolved})` : "hsl(var(--foreground))";
+    let ttHtml = `<div style="color:${colMuted};font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
+    ttHtml += `<div style="color:${colFg}">⛰ ${Math.round(bestEle)} m</div>`;
     // Date at hovered km
     {
       const { startDay: sd, lang: lg, dayOffset: off } = stateRef.current;
@@ -282,7 +307,7 @@ function ElevationSegment({
         }
         if (relDayAtKm != null) {
           const absDay = ((sd + Math.round(relDayAtKm) + off - 1 + 3650) % 365) + 1;
-          ttHtml += `<div style="color:#475569;font-size:9px">${dayToShortDE(absDay, lg)}</div>`;
+          ttHtml += `<div style="color:${colMuted};font-size:9px">${dayToShortDE(absDay, lg)}</div>`;
         }
       }
     }
@@ -313,7 +338,7 @@ function ElevationSegment({
 
   return (
     <div
-      className="relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white"
+      className="relative w-full overflow-hidden rounded-xl border border-border bg-card"
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
     >
@@ -322,9 +347,9 @@ function ElevationSegment({
         ref={tooltipRef}
         className="pointer-events-none absolute hidden whitespace-nowrap rounded border px-2 py-1.5 text-[11px] leading-relaxed"
         style={{
-          background: "rgba(255,255,255,0.96)",
-          borderColor: "#93c5fd",
-          color: "#1e293b",
+          background: "hsl(var(--card) / 0.96)",
+          borderColor: "hsl(var(--chart-1))",
+          color: "hsl(var(--foreground))",
           zIndex: 20,
           boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
         }}
@@ -387,7 +412,7 @@ export function ElevationChart() {
   if (!elevation) {
     if (!elevationError) return null;
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      <div className="rounded-2xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-foreground">
         ⚠ {elevationError}
       </div>
     );
@@ -399,28 +424,30 @@ export function ElevationChart() {
   return (
     <div className="space-y-3">
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
-        <div className="flex overflow-hidden rounded-lg border border-slate-200">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
+        <div className="flex overflow-hidden rounded-lg border border-border">
           {(["tmax", "tmin"] as const).map((key) => (
             <button
               key={key}
               onClick={() => setTempKey(key)}
               className={[
-                "border-r border-slate-200 px-3 py-1.5 text-xs font-medium last:border-r-0 transition-colors",
+                "border-r border-border px-3 py-1.5 text-xs font-medium last:border-r-0 transition-colors",
                 tempKey === key
                   ? "bg-primary text-primary-foreground"
-                  : "bg-white text-slate-600 hover:bg-slate-50",
+                  : "bg-card text-muted-foreground hover:bg-muted",
               ].join(" ")}
             >
-              {key === "tmax"
-                ? t.elevationChart.dayTemp(desiredHigh)
-                : t.elevationChart.nightTemp(desiredLow)}
+              {key === "tmax" ? (
+                <><Sun className="mr-1 inline h-3 w-3" />{t.elevationChart.dayTemp(desiredHigh)}</>
+              ) : (
+                <><Moon className="mr-1 inline h-3 w-3" />{t.elevationChart.nightTemp(desiredLow)}</>
+              )}
             </button>
           ))}
         </div>
 
         <div className="flex flex-1 items-center gap-3 min-w-[200px]">
-          <span className="whitespace-nowrap text-xs font-medium text-slate-600">
+          <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">
             {t.elevationChart.startDay(dayOffset)}
           </span>
           <Slider
@@ -457,8 +484,8 @@ export function ElevationChart() {
       </div>
 
       {/* Temperature legend */}
-      <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2">
-        <span className="whitespace-nowrap text-[10px] text-slate-500">{desired - 15}°C</span>
+      <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2">
+        <span className="whitespace-nowrap text-[10px] text-muted-foreground">{desired - 15}°C</span>
         <svg className="flex-1" height="14">
           <defs>
             <linearGradient id="ec-tg" x1="0" y1="0" x2="1" y2="0">
@@ -473,10 +500,10 @@ export function ElevationChart() {
           </defs>
           <rect x="0" y="2" width="100%" height="10" fill="url(#ec-tg)" rx="3" />
         </svg>
-        <span className="whitespace-nowrap text-[10px] font-bold text-slate-700">
+        <span className="whitespace-nowrap text-[10px] font-bold text-foreground">
           {desired}°C ✓
         </span>
-        <span className="whitespace-nowrap text-[10px] text-slate-500">{desired + 15}°C</span>
+        <span className="whitespace-nowrap text-[10px] text-muted-foreground">{desired + 15}°C</span>
       </div>
 
       {/* Stats card */}

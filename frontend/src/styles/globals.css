@@ -43,6 +43,11 @@
 }
 
 :root {
+  /* Chart-specific tokens (used by imperative SVG rendering in RouteMap) */
+  --chart-line: 215 19% 35%;
+  --chart-cursor: 215 25% 25%;
+  --precipitation: 210 100% 64%;
+
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
   --card: 0 0% 100%;
@@ -72,6 +77,9 @@
 }
 
 .dark {
+  --chart-line: 215 14% 62%;
+  --chart-cursor: 215 14% 75%;
+
   --background: 240 10% 3.9%;
   --foreground: 0 0% 98%;
   --card: 240 10% 7%;
@@ -119,6 +127,21 @@
   .maplibregl-popup-tip {
     @apply hidden!;
   }
+}
+
+/* ── Map marker helpers ──────────────────────────────────────────────────── */
+/* Used in RouteMap.tsx for month-boundary and forecast-end markers so they  */
+/* follow the design token system instead of hardcoded rgba values.          */
+.map-marker-month {
+  background: hsl(var(--good));
+  border-color: hsl(var(--good) / 0.75);
+  color: hsl(var(--primary-foreground));
+}
+
+.map-marker-forecast-end {
+  background: hsl(var(--warn) / 0.12);
+  border-color: hsl(var(--warn));
+  color: hsl(var(--warn));
 }
 
 @keyframes shimmer {

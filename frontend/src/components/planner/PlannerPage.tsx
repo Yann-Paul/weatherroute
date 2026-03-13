@@ -34,7 +34,7 @@ export function PlannerPage() {
 
   // Restore date from store if returning from results (loadFromResults sets startDay + autoDetectStart=false)
   const storedDate = !store.autoDetectStart && store.startDay != null
-    ? new Date(2025, 0, store.startDay)
+    ? new Date(new Date().getFullYear(), 0, store.startDay)
     : null;
   const [startMonth, setStartMonth] = useState(
     String(storedDate ? storedDate.getMonth() + 1 : new Date().getMonth() + 1)

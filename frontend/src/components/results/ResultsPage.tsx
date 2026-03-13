@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router";
-import { Map, Mountain, CloudSun, List, Radar, Bookmark, BookmarkCheck, SlidersHorizontal } from "lucide-react";
+import { Map, Mountain, CloudSun, List, Bookmark, BookmarkCheck, SlidersHorizontal } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ResultsHeader } from "./ResultsHeader";
-import { RouteMap } from "./RouteMap";
+import { ForecastMap } from "./ForecastMap";
 import { ElevationChart } from "./ElevationChart";
 import { WeatherGrid } from "./WeatherGrid";
 import { RouteList } from "./RouteList";
-import { ForecastMap } from "./ForecastMap";
 import { useResultsStore } from "@/stores/resultsStore";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { getJobResults, getJobStatus, saveRoute } from "@/api/client";
@@ -21,10 +20,11 @@ import type { JobResults } from "@/api/types";
 
 function buildRouteName(results: JobResults, lang: "de" | "en"): string {
   const cities = results.route.map((s) => s.cityName);
+  const stopsLabel = lang === "de" ? "Haltepunkte" : "stops";
   const label =
     cities.length <= 4
       ? cities.join(" → ")
-      : `${cities[0]} → ... → ${cities[cities.length - 1]} (${cities.length} Stops)`;
+      : `${cities[0]} → ... → ${cities[cities.length - 1]} (${cities.length} ${stopsLabel})`;
   const locale = lang === "de" ? "de-DE" : "en-US";
   const dateStr = dayOfYearToDate(results.startDay, undefined, locale);
   return `${label}, ${dateStr}`;
@@ -37,7 +37,6 @@ export function ResultsPage() {
   const elevationComplete = useResultsStore((s) => s.elevationComplete);
   const route = useResultsStore((s) => s.route);
   const startDay = useResultsStore((s) => s.startDay);
-  const hasForecast = useResultsStore((s) => s.forecast !== null);
   const loadFromResults = usePlannerStore((s) => s.loadFromResults);
   const plannerStore = usePlannerStore();
   const [loading, setLoading] = useState(true);
@@ -211,35 +210,23 @@ export function ResultsPage() {
       </div>
 
       {forecastUpdating && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+        <div className="rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-foreground">
           {t.results.forecastUpdating}
         </div>
       )}
 
       {elevationComplete === false && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+        <div className="rounded-lg border border-chart-1/30 bg-chart-1/10 px-3 py-2 text-xs text-foreground">
           {t.results.elevationLoading}
         </div>
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start">
-          {hasForecast && (
-            <TabsTrigger value="forecast" className="gap-1.5">
-              <Radar className="h-4 w-4" />
-              {t.results.tabForecast}
-            </TabsTrigger>
-          )}
           <TabsTrigger value="map" className="gap-1.5">
             <Map className="h-4 w-4" />
             {t.results.tabMap}
           </TabsTrigger>
-          {!hasForecast && (
-            <TabsTrigger value="forecast" className="gap-1.5">
-              <Radar className="h-4 w-4" />
-              {t.results.tabForecast}
-            </TabsTrigger>
-          )}
           <TabsTrigger value="elevation" className="gap-1.5">
             <Mountain className="h-4 w-4" />
             {t.results.tabElevation}
@@ -255,7 +242,7 @@ export function ResultsPage() {
         </TabsList>
 
         <TabsContent value="map">
-          <RouteMap />
+          <ForecastMap />
         </TabsContent>
 
         <TabsContent value="elevation">
@@ -268,10 +255,6 @@ export function ResultsPage() {
 
         <TabsContent value="route">
           <RouteList />
-        </TabsContent>
-
-        <TabsContent value="forecast">
-          <ForecastMap />
         </TabsContent>
       </Tabs>
     </div>

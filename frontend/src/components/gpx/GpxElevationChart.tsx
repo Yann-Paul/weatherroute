@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { ElevationProfile, GpxDayConfig, GpxNightHour, GpxWeatherPoint } from "@/api/types";
 import { useT } from "@/i18n/useT";
+import { Moon } from "lucide-react";
+import { useIsDark } from "@/stores/themeStore";
+
+function getCssColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const hsl = (v: string) => `hsl(${cs.getPropertyValue(v).trim()})`;
+  return {
+    grid: hsl("--border"),
+    muted: hsl("--muted-foreground"),
+    axis: hsl("--chart-line"),
+    cursor: hsl("--chart-cursor"),
+    fg: hsl("--foreground"),
+  };
+}
 
 function gpxArrivalTime(km: number, dailyConfigs: GpxDayConfig[], startDate: string): Date {
   const base = new Date(startDate + "T00:00:00");
@@ -41,6 +55,7 @@ function DayChart({
   height = 180,
   dailyConfigs,
   startDate,
+  isDark,
 }: {
   points: [number, number][];
   startKm: number;
@@ -49,11 +64,13 @@ function DayChart({
   height?: number;
   dailyConfigs?: GpxDayConfig[];
   startDate?: string;
+  isDark?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hovRef = useRef<{ x: number; label: string } | null>(null);
 
   const drawChart = useCallback(() => {
+    const clr = getCssColors();
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -134,7 +151,7 @@ function DayChart({
     }
 
     // Axes
-    ctx.strokeStyle = "#94a3b8";
+    ctx.strokeStyle = clr.axis;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(PAD.left, PAD.top);
@@ -144,7 +161,7 @@ function DayChart({
 
     // Y-axis ticks and grid
     const nTicks = 3;
-    ctx.fillStyle = "#64748b";
+    ctx.fillStyle = clr.muted;
     ctx.font = "11px sans-serif";
     ctx.textAlign = "right";
     for (let i = 0; i <= nTicks; i++) {
@@ -152,7 +169,7 @@ function DayChart({
       const y = toY(ele);
       ctx.fillText(`${Math.round(ele)}`, PAD.left - 5, y + 4);
       ctx.beginPath();
-      ctx.strokeStyle = "#e2e8f0";
+      ctx.strokeStyle = clr.grid;
       ctx.lineWidth = 0.8;
       ctx.moveTo(PAD.left, y);
       ctx.lineTo(PAD.left + cw, y);
@@ -161,9 +178,9 @@ function DayChart({
 
     // X-axis ticks
     ctx.textAlign = "center";
-    ctx.fillStyle = "#64748b";
+    ctx.fillStyle = clr.muted;
     ctx.font = "11px sans-serif";
-    ctx.strokeStyle = "#94a3b8";
+    ctx.strokeStyle = clr.axis;
     ctx.lineWidth = 1;
     const xStep = Math.max(1, Math.ceil(kmRange / 5 / 5) * 5);
     for (let km = Math.ceil(startKm / xStep) * xStep; km <= endKm; km += xStep) {
@@ -179,7 +196,7 @@ function DayChart({
     if (hovRef.current) {
       const { x, label } = hovRef.current;
       ctx.save();
-      ctx.strokeStyle = "#334155";
+      ctx.strokeStyle = clr.cursor;
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -187,12 +204,12 @@ function DayChart({
       ctx.lineTo(x, PAD.top + ch);
       ctx.stroke();
       ctx.restore();
-      ctx.fillStyle = "#1e293b";
+      ctx.fillStyle = clr.fg;
       ctx.font = "bold 11px sans-serif";
       ctx.textAlign = x > W / 2 ? "right" : "left";
       ctx.fillText(label, x + (x > W / 2 ? -8 : 8), PAD.top + 14);
     }
-  }, [points, startKm, endKm, weatherPoints]);
+  }, [points, startKm, endKm, weatherPoints, isDark]);
 
   useEffect(() => {
     drawChart();
@@ -251,11 +268,13 @@ function NightTempChart({
   stopTime,
   nextStartTime,
   height = 160,
+  isDark,
 }: {
   nightData: GpxNightHour[];
   stopTime: string;
   nextStartTime: string;
   height?: number;
+  isDark?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hovRef = useRef<{ x: number; label: string } | null>(null);
@@ -273,6 +292,7 @@ function NightTempChart({
   const msRange = t1 - t0 || 1;
 
   const drawChart = useCallback(() => {
+    const clr = getCssColors();
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -353,7 +373,7 @@ function NightTempChart({
     if (minT < 0 && maxT > 0) {
       const y0 = toY(0);
       ctx.save();
-      ctx.strokeStyle = "#94a3b8";
+      ctx.strokeStyle = clr.axis;
       ctx.lineWidth = 0.8;
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
@@ -361,14 +381,14 @@ function NightTempChart({
       ctx.lineTo(PAD.left + cw, y0);
       ctx.stroke();
       ctx.restore();
-      ctx.fillStyle = "#94a3b8";
+      ctx.fillStyle = clr.muted;
       ctx.font = "10px sans-serif";
       ctx.textAlign = "right";
       ctx.fillText("0°", PAD.left - 3, y0 + 3);
     }
 
     // Axes
-    ctx.strokeStyle = "#94a3b8";
+    ctx.strokeStyle = clr.axis;
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     ctx.beginPath();
@@ -379,7 +399,7 @@ function NightTempChart({
 
     // Y-axis ticks
     const nTicks = 3;
-    ctx.fillStyle = "#64748b";
+    ctx.fillStyle = clr.muted;
     ctx.font = "10px sans-serif";
     ctx.textAlign = "right";
     for (let i = 0; i <= nTicks; i++) {
@@ -387,7 +407,7 @@ function NightTempChart({
       const y = toY(temp);
       ctx.fillText(`${Math.round(temp)}°`, PAD.left - 3, y + 3);
       ctx.beginPath();
-      ctx.strokeStyle = "#e2e8f0";
+      ctx.strokeStyle = clr.grid;
       ctx.lineWidth = 0.7;
       ctx.moveTo(PAD.left, y);
       ctx.lineTo(PAD.left + cw, y);
@@ -398,9 +418,9 @@ function NightTempChart({
     const totalHours = msRange / 3600e3;
     const tickHours = totalHours <= 12 ? 3 : 6;
     ctx.textAlign = "center";
-    ctx.fillStyle = "#64748b";
+    ctx.fillStyle = clr.muted;
     ctx.font = "10px sans-serif";
-    ctx.strokeStyle = "#94a3b8";
+    ctx.strokeStyle = clr.axis;
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     // Start from the next rounded tick after t0
@@ -423,7 +443,7 @@ function NightTempChart({
     if (hovRef.current) {
       const { x, label } = hovRef.current;
       ctx.save();
-      ctx.strokeStyle = "#334155";
+      ctx.strokeStyle = clr.cursor;
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -431,13 +451,13 @@ function NightTempChart({
       ctx.lineTo(x, PAD.top + ch);
       ctx.stroke();
       ctx.restore();
-      ctx.fillStyle = "#1e293b";
+      ctx.fillStyle = clr.fg;
       ctx.font = "bold 11px sans-serif";
       ctx.textAlign = x > W / 2 ? "right" : "left";
       ctx.fillText(label, x + (x > W / 2 ? -8 : 8), PAD.top + 14);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pts, t0, t1, msRange, stopTime]);
+  }, [pts, t0, t1, msRange, stopTime, isDark]);
 
   useEffect(() => {
     drawChart();
@@ -499,6 +519,7 @@ export function GpxElevationChart({
   startDate?: string;
 }) {
   const t = useT();
+  const isDark = useIsDark();
 
   // Derive day boundaries from stop points
   const stopPoints = [...weatherPoints.filter((wp) => wp.type === "stop")].sort(
@@ -535,6 +556,7 @@ export function GpxElevationChart({
           height={260}
           dailyConfigs={dailyConfigs}
           startDate={startDate}
+          isDark={isDark}
         />
         {stats}
       </div>
@@ -561,10 +583,7 @@ export function GpxElevationChart({
         return (
           <div key={dayNum} className="mb-4">
             <div className="flex items-center gap-3 mb-1">
-              <span
-                className="text-xs font-bold px-2 py-0.5 rounded-full text-white"
-                style={{ background: "#7c3aed" }}
-              >
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
                 {t.gpx.day} {dayNum}
               </span>
               <span className="text-xs text-muted-foreground">
@@ -572,8 +591,8 @@ export function GpxElevationChart({
                 {" · "}↑{Math.round(asc)} m ↓{Math.round(desc)} m
               </span>
               {hasNight && (
-                <span className="text-xs text-muted-foreground ml-2 border-l pl-3">
-                  ☽ {stopPt!.stopTime!.slice(11, 16)}–{stopPt!.nextStartTime!.slice(11, 16)}
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground ml-2 border-l pl-3">
+                  <Moon className="h-3 w-3 shrink-0" />{stopPt!.stopTime!.slice(11, 16)}–{stopPt!.nextStartTime!.slice(11, 16)}
                   {stopPt!.nightLow !== null && stopPt!.nightLow !== undefined && (
                     <> · {stopPt!.nightLow}°C</>
                   )}
@@ -590,16 +609,18 @@ export function GpxElevationChart({
                   height={160}
                   dailyConfigs={dailyConfigs}
                   startDate={startDate}
+                  isDark={isDark}
                 />
               </div>
               {hasNight && (
                 <div style={{ flex: "0 0 38%" }}>
-                  <div className="text-xs text-center text-muted-foreground mb-0.5">☽ Nacht</div>
+                  <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mb-0.5"><Moon className="h-3 w-3" /> Nacht</div>
                   <NightTempChart
                     nightData={stopPt!.nightData!}
                     stopTime={stopPt!.stopTime!}
                     nextStartTime={stopPt!.nextStartTime!}
                     height={160}
+                    isDark={isDark}
                   />
                 </div>
               )}

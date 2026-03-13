@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Pause } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -161,7 +162,7 @@ export function WeatherGrid() {
                   key={`${row.stop.cityId}-${row.relDay}`}
                   className={[
                     "border-b border-border/50",
-                    row.restDayOffset > 0 ? "bg-amber-50/30" : "",
+                    row.restDayOffset > 0 ? "bg-warn/5" : "",
                   ].join(" ")}
                 >
                   <td className="sticky left-0 z-10 bg-background px-3 py-1 whitespace-nowrap">
@@ -169,7 +170,7 @@ export function WeatherGrid() {
                     <div className="text-[10px] text-muted-foreground">
                       {t.weatherGrid.dayHeader} {row.relDay}
                       {row.restDayOffset > 0 && (
-                        <span className="ml-1 text-amber-600">⏸</span>
+                        <Pause className="ml-1 inline h-2.5 w-2.5 text-warn" />
                       )}
                     </div>
                   </td>

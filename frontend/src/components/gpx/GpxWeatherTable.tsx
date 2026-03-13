@@ -1,33 +1,35 @@
+import type { ReactNode } from "react";
 import type { GpxWeatherPoint } from "@/api/types";
 import { tempToRgb } from "@/utils/tempColor";
 import { windDegreesToDirection } from "@/utils/constants";
 import { useT } from "@/i18n/useT";
+import { CloudRain, Cloud, Sun, Mountain, ArrowDown, ArrowRight, Play, Square } from "lucide-react";
 
-function wxSymbol(prcp: number | null, cloud: number | null): string {
-  if (prcp != null && prcp >= 0.3) return "☂";
-  if (cloud != null) return cloud >= 60 ? "☁" : "☀";
-  if (prcp != null && prcp >= 0.05) return "☁";
-  return "☀";
+function WxSymbol({ prcp, cloud }: { prcp: number | null; cloud: number | null }): ReactNode {
+  if (prcp != null && prcp >= 0.3) return <CloudRain className="inline h-3.5 w-3.5 text-chart-1" />;
+  if (cloud != null) return cloud >= 60 ? <Cloud className="inline h-3.5 w-3.5 text-muted-foreground" /> : <Sun className="inline h-3.5 w-3.5 text-warn" />;
+  if (prcp != null && prcp >= 0.05) return <Cloud className="inline h-3.5 w-3.5 text-muted-foreground" />;
+  return <Sun className="inline h-3.5 w-3.5 text-warn" />;
 }
 
 function TypeBadge({ type }: { type: GpxWeatherPoint["type"] }) {
   const t = useT();
-  const labels: Record<string, string> = {
-    pass: `⛰ ${t.gpx.results.typePass}`,
-    valley: `↓ ${t.gpx.results.typeValley}`,
-    regular: `→ ${t.gpx.results.typeRegular}`,
-    start: "▶ Start",
-    end: "■ Ende",
+  const labels: Record<string, ReactNode> = {
+    pass: <><Mountain className="inline h-3 w-3 mr-0.5" />{t.gpx.results.typePass}</>,
+    valley: <><ArrowDown className="inline h-3 w-3 mr-0.5" />{t.gpx.results.typeValley}</>,
+    regular: <><ArrowRight className="inline h-3 w-3 mr-0.5" />{t.gpx.results.typeRegular}</>,
+    start: <><Play className="inline h-3 w-3 mr-0.5" />Start</>,
+    end: <><Square className="inline h-3 w-3 mr-0.5" />Ende</>,
   };
   const colors: Record<string, string> = {
-    pass: "bg-orange-100 text-orange-700",
-    valley: "bg-blue-100 text-blue-700",
-    regular: "bg-gray-100 text-gray-600",
-    start: "bg-green-100 text-green-700",
-    end: "bg-gray-100 text-gray-600",
+    pass: "bg-warn/15 text-warn",
+    valley: "bg-chart-1/15 text-chart-1",
+    regular: "bg-muted text-muted-foreground",
+    start: "bg-good/15 text-good",
+    end: "bg-muted text-muted-foreground",
   };
   return (
-    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${colors[type] ?? ""}`}>
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${colors[type] ?? ""}`}>
       {labels[type] ?? type}
     </span>
   );
@@ -38,7 +40,9 @@ function SourceBadge({ isForecast }: { isForecast: boolean }) {
   return (
     <span
       className={`rounded px-1.5 py-0.5 text-xs ${
-        isForecast ? "bg-sky-100 text-sky-700" : "bg-purple-100 text-purple-700"
+        isForecast
+          ? "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300"
+          : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
       }`}
     >
       {isForecast ? t.gpx.results.sourceForecast : t.gpx.results.sourceClimatic}
@@ -58,7 +62,7 @@ export function GpxWeatherTable({ weatherPoints }: { weatherPoints: GpxWeatherPo
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Ankunft</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Temp</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Wetter</th>
-            <th className="px-3 py-2 text-left font-medium text-muted-foreground">☂ mm/h</th>
+            <th className="px-3 py-2 text-left font-medium text-muted-foreground"><CloudRain className="inline h-3.5 w-3.5" /> mm/h</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Wind</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Quelle</th>
           </tr>
@@ -88,7 +92,7 @@ export function GpxWeatherTable({ weatherPoints }: { weatherPoints: GpxWeatherPo
                   {wp.temp != null ? `${wp.temp.toFixed(1)}°` : "—"}
                 </td>
                 <td className="px-3 py-1.5">
-                  <span>{wxSymbol(wp.prcp, wp.cloud)}</span>
+                  <span><WxSymbol prcp={wp.prcp} cloud={wp.cloud} /></span>
                   {wp.cloud != null && (
                     <span className="ml-1 text-muted-foreground">{wp.cloud}%</span>
                   )}

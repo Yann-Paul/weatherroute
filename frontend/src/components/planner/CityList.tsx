@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, X, Plus } from "lucide-react";
+import { GripVertical, X, Plus, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CityCombobox } from "./CityCombobox";
@@ -83,7 +83,9 @@ function SortableCityRow({ index }: { index: number }) {
           className="w-16 text-center"
           aria-label={t.cityList.pauseLabel}
         />
-        <span className="text-[10px] text-muted-foreground leading-none">{t.cityList.pauseLabel}</span>
+        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground leading-none">
+          <Pause className="h-2.5 w-2.5" />{t.cityList.pauseLabel}
+        </span>
       </div>
 
       <Button
@@ -146,8 +148,8 @@ export function CityList() {
         <Plus className="mr-2 h-4 w-4" />
         {t.cityList.addCity}
       </Button>
-      <p className="text-xs text-muted-foreground">
-        {t.cityList.helpText}
+      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Pause className="h-3 w-3 shrink-0" />{t.cityList.helpText}
       </p>
     </div>
   );

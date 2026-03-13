@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useIsDark } from "@/stores/themeStore";
+import { Sun, Moon, CloudRain, Cloud, Wind } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import {
   Map as MapView,
@@ -240,14 +242,23 @@ function WindArrow({
 
 // ─── Weather icon ─────────────────────────────────────────────────────────────
 
-function wxIcon(prcp: number | null, cloud: number | null): { sym: string; color: string } {
-  if (prcp != null && prcp >= 0.3) return { sym: "☂", color: "#93c5fd" };
+type WxType = "rain" | "cloud" | "sun";
+
+function wxIcon(prcp: number | null, cloud: number | null): { type: WxType; color: string } {
+  if (prcp != null && prcp >= 0.3) return { type: "rain", color: "#93c5fd" };
   if (cloud != null) {
-    if (cloud >= 60) return { sym: "☁", color: "#94a3b8" };
-    return { sym: "☀", color: "#fde68a" };
+    if (cloud >= 60) return { type: "cloud", color: "#94a3b8" };
+    return { type: "sun", color: "#fde68a" };
   }
-  if (prcp != null && prcp >= 0.05) return { sym: "☁", color: "#94a3b8" };
-  return { sym: "☀", color: "#fde68a" };
+  if (prcp != null && prcp >= 0.05) return { type: "cloud", color: "#94a3b8" };
+  return { type: "sun", color: "#fde68a" };
+}
+
+function WxSymIcon({ type, color, size = 12 }: { type: WxType; color: string; size?: number }) {
+  const style = { width: size, height: size, color, flexShrink: 0 } as React.CSSProperties;
+  if (type === "rain") return <CloudRain style={style} />;
+  if (type === "cloud") return <Cloud style={style} />;
+  return <Sun style={style} />;
 }
 
 // ─── GpxMarkers (inside MapView) ──────────────────────────────────────────────
@@ -345,15 +356,15 @@ function GpxMarkers({
                         {t.gpx.night} {pt.dayNumber}
                       </div>
                       {hasTemp ? (
-                        <div style={{ color: "#fff", textShadow, fontWeight: "bold", fontSize: "12px" }}>
-                          {wx.sym} {Math.round(pt.temp!)}°C
+                        <div style={{ color: "#fff", textShadow, fontWeight: "bold", fontSize: "12px", display: "flex", alignItems: "center", gap: "2px" }}>
+                          <WxSymIcon type={wx.type} color={wx.color} size={11} />{Math.round(pt.temp!)}°C
                         </div>
                       ) : (
                         <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "8px" }}>—</div>
                       )}
                       {pt.nightLow != null && (
-                        <div style={{ color: "#c4b5fd", fontSize: "10px", textShadow }}>
-                          ☽ {Math.round(pt.nightLow)}°C
+                        <div style={{ color: "#c4b5fd", fontSize: "10px", textShadow, display: "flex", alignItems: "center", gap: "2px" }}>
+                          <Moon style={{ width: 9, height: 9, flexShrink: 0 }} />{Math.round(pt.nightLow)}°C
                         </div>
                       )}
                     </div>
@@ -367,7 +378,9 @@ function GpxMarkers({
                         minWidth: "36px",
                       }}
                     >
-                      <div style={{ fontSize: "13px", color: wx.color, textShadow }}>{wx.sym}</div>
+                      <div style={{ display: "flex", justifyContent: "center", padding: "1px 0" }}>
+                        <WxSymIcon type={wx.type} color={wx.color} size={14} />
+                      </div>
                       {hasTemp ? (
                         <div style={{ color: "#fff", textShadow, fontWeight: "bold" }}>
                           {Math.round(pt.temp!)}°C
@@ -389,7 +402,7 @@ function GpxMarkers({
                   <div className="font-semibold">{t.gpx.night} {pt.dayNumber} · {Math.round(pt.km)} km · {Math.round(pt.ele)} m</div>
                   <div className="text-muted-foreground">{arrival}</div>
                   {pt.temp != null && (
-                    <div>{wx.sym} {pt.temp.toFixed(1)}°C</div>
+                    <div className="flex items-center gap-1"><WxSymIcon type={wx.type} color={wx.color} size={12} />{pt.temp.toFixed(1)}°C</div>
                   )}
                   {pt.nightData && pt.nightData.length > 0 && (
                     <>
@@ -427,8 +440,8 @@ function GpxMarkers({
                   <div className="font-semibold">{Math.round(pt.km)} km · {Math.round(pt.ele)} m</div>
                   <div className="text-muted-foreground">{arrival}</div>
                   {pt.temp != null && (
-                    <div className="font-semibold">
-                      {wx.sym} {pt.temp.toFixed(1)}°C
+                    <div className="flex items-center gap-1 font-semibold">
+                      <WxSymIcon type={wx.type} color={wx.color} size={12} />{pt.temp.toFixed(1)}°C
                       {pt.cloud != null && (
                         <span className="ml-1 font-normal text-muted-foreground">
                           {pt.cloud}% Wolken
@@ -437,12 +450,11 @@ function GpxMarkers({
                     </div>
                   )}
                   {pt.prcp != null && (
-                    <div className="text-muted-foreground">☂ {pt.prcp.toFixed(1)} mm</div>
+                    <div className="flex items-center gap-1 text-muted-foreground"><CloudRain className="h-3.5 w-3.5" />{pt.prcp.toFixed(1)} mm</div>
                   )}
                   {pt.wspd != null && (
-                    <div className="text-muted-foreground">
-                      ☴ {Math.round(pt.wspd)} km/h
-                      {pt.wdir != null ? ` · ${windDegreesToDirection(pt.wdir)}` : ""}
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Wind className="h-3.5 w-3.5" />{Math.round(pt.wspd)} km/h{pt.wdir != null ? ` · ${windDegreesToDirection(pt.wdir)}` : ""}
                     </div>
                   )}
                 </div>
@@ -502,6 +514,7 @@ function GpxMiniElevChart({
   startDate?: string;
 }) {
   const t = useT();
+  const isDark = useIsDark();
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartStateRef = useRef<any>(null);
@@ -509,6 +522,15 @@ function GpxMiniElevChart({
   wpRef.current = weatherPoints;
 
   const drawChart = useCallback(() => {
+    const cs = getComputedStyle(document.documentElement);
+    const hsl = (v: string) => `hsl(${cs.getPropertyValue(v).trim()})`;
+    const clrBg = hsl("--card");
+    const clrGrid = hsl("--border");
+    const clrMuted = hsl("--muted-foreground");
+    const clrAxis = hsl("--chart-line");
+    const clrLine = hsl("--chart-line");
+    const clrCursor = hsl("--chart-cursor");
+
     const svg = svgRef.current;
     if (!svg || !elevation) return;
 
@@ -541,14 +563,14 @@ function GpxMiniElevChart({
     const axY = PT + cH;
 
     let out = `<defs><clipPath id="gpx-mc-clip"><rect x="${PL}" y="${PT}" width="${cW}" height="${cH}"/></clipPath></defs>`;
-    out += `<rect x="${PL}" y="${PT}" width="${cW}" height="${cH}" fill="#f9fafb" rx="2"/>`;
+    out += `<rect x="${PL}" y="${PT}" width="${cW}" height="${cH}" fill="${clrBg}" rx="2"/>`;
 
     // Y-axis grid + labels
     const yTick = eMax <= 200 ? 50 : eMax <= 500 ? 100 : eMax <= 1000 ? 200 : eMax <= 2500 ? 500 : 1000;
     for (let e = Math.ceil(eMin / yTick) * yTick; e <= eMax; e += yTick) {
       const y = yp(e);
-      out += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${PL + cW}" y2="${y.toFixed(1)}" stroke="#e2e8f0" stroke-width="0.8"/>`;
-      out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="#94a3b8" font-family="sans-serif">${e}m</text>`;
+      out += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${PL + cW}" y2="${y.toFixed(1)}" stroke="${clrGrid}" stroke-width="0.8"/>`;
+      out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${clrMuted}" font-family="sans-serif">${e}m</text>`;
     }
 
     // Temperature-colored fill (with lapse-rate interpolation)
@@ -564,7 +586,7 @@ function GpxMiniElevChart({
       out += `<polygon points="${x0},${y0} ${x1},${y1} ${x1},${ay} ${x0},${ay}" fill="${col}" stroke="${col}" stroke-width="0.3"/>`;
     }
     const pts = drawProfile.map(([km, e]) => `${xp(km).toFixed(1)},${yp(e).toFixed(1)}`).join(" ");
-    out += `<polyline points="${pts}" fill="none" stroke="#475569" stroke-width="1.2"/>`;
+    out += `<polyline points="${pts}" fill="none" stroke="${clrLine}" stroke-width="1.2"/>`;
     out += `</g>`;
 
     // Weather point markers for passes/valleys/start/end/stop
@@ -596,25 +618,25 @@ function GpxMiniElevChart({
     }
 
     // Axes
-    out += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${axY}" stroke="#94a3b8" stroke-width="1"/>`;
-    out += `<line x1="${PL}" y1="${axY}" x2="${PL + cW}" y2="${axY}" stroke="#94a3b8" stroke-width="1"/>`;
+    out += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${axY}" stroke="${clrAxis}" stroke-width="1"/>`;
+    out += `<line x1="${PL}" y1="${axY}" x2="${PL + cW}" y2="${axY}" stroke="${clrAxis}" stroke-width="1"/>`;
 
     // X-axis labels
     const xStep = Math.max(1, Math.ceil(((kmMax - kmMin) / 6) / 5) * 5);
     for (let km = Math.ceil(kmMin / xStep) * xStep; km <= kmMax; km += xStep) {
       const x = xp(km);
-      out += `<text x="${x.toFixed(1)}" y="${(axY + 12).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="#94a3b8" font-family="sans-serif">${Math.round(km)}km</text>`;
-      out += `<line x1="${x.toFixed(1)}" y1="${axY}" x2="${x.toFixed(1)}" y2="${(axY + 4).toFixed(1)}" stroke="#94a3b8" stroke-width="0.8"/>`;
+      out += `<text x="${x.toFixed(1)}" y="${(axY + 12).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="${clrMuted}" font-family="sans-serif">${Math.round(km)}km</text>`;
+      out += `<line x1="${x.toFixed(1)}" y1="${axY}" x2="${x.toFixed(1)}" y2="${(axY + 4).toFixed(1)}" stroke="${clrAxis}" stroke-width="0.8"/>`;
     }
 
     // Cursor elements (updated on hover via querySelector)
-    out += `<line id="gpx-cursor" x1="0" y1="${PT}" x2="0" y2="${axY}" stroke="#334155" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>`;
+    out += `<line id="gpx-cursor" x1="0" y1="${PT}" x2="0" y2="${axY}" stroke="${clrCursor}" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>`;
     out += `<circle id="gpx-cursor-dot" cx="0" cy="0" r="3.5" fill="#f97316" stroke="white" stroke-width="1.5" opacity="0.9" visibility="hidden"/>`;
 
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("height", String(H));
     svg.innerHTML = out;
-  }, [elevation, weatherPoints, visibleKmRange]);
+  }, [elevation, weatherPoints, visibleKmRange, isDark]);
 
   useEffect(() => {
     drawChart();
@@ -662,8 +684,10 @@ function GpxMiniElevChart({
     }
 
     const temp = interpTempForGpx(bestKm, bestEle, wpRef.current);
-    let ttHtml = `<div style="color:#64748b;font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
-    ttHtml += `<div style="color:#1e293b">⛰ ${Math.round(bestEle)} m</div>`;
+    const ttMuted = "hsl(var(--muted-foreground))";
+    const ttFg = "hsl(var(--foreground))";
+    let ttHtml = `<div style="color:${ttMuted};font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
+    ttHtml += `<div style="color:${ttFg}">⛰ ${Math.round(bestEle)} m</div>`;
     if (temp != null) {
       ttHtml += `<div style="color:${tempToRgb(temp, DESIRED_TEMP)}">☀ ${temp.toFixed(1)}°C</div>`;
     }
@@ -672,7 +696,7 @@ function GpxMiniElevChart({
       const timeStr = arrival.toLocaleString(undefined, {
         month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
       });
-      ttHtml += `<div style="color:#64748b;font-size:9px;margin-top:2px">🕐 ${timeStr}</div>`;
+      ttHtml += `<div style="color:${ttMuted};font-size:9px;margin-top:2px">🕐 ${timeStr}</div>`;
     }
     tooltip.innerHTML = ttHtml;
     tooltip.style.display = "block";
@@ -708,14 +732,8 @@ function GpxMiniElevChart({
         <svg ref={svgRef} width="100%" style={{ display: "block" }} />
         <div
           ref={tooltipRef}
-          className="pointer-events-none absolute hidden whitespace-nowrap rounded border px-2 py-1.5 text-[11px] leading-relaxed"
-          style={{
-            background: "rgba(255,255,255,0.96)",
-            borderColor: "#93c5fd",
-            color: "#1e293b",
-            zIndex: 20,
-            boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-          }}
+          className="pointer-events-none absolute hidden whitespace-nowrap rounded border border-border bg-card/95 px-2 py-1.5 text-[11px] leading-relaxed text-foreground shadow-md"
+          style={{ zIndex: 20 }}
         />
       </div>
       <div className="mt-1 flex items-center gap-2 px-10 text-[9px] text-muted-foreground">
@@ -732,6 +750,7 @@ function GpxMiniElevChart({
 export function GpxRouteMap({ results }: { results: GpxJobResults }) {
   const [visibleKmRange, setVisibleKmRange] = useState<[number, number] | null>(null);
   const [hoveredKm, setHoveredKm] = useState<number | null>(null);
+  const isDark = useIsDark();
 
   // trackPolyline: [cumKm, lat, lon][] scaled to match elevation profile km values
   const trackPolyline = useMemo<[number, number, number][]>(() => {
@@ -763,7 +782,7 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
   return (
     <div className="space-y-3">
       <MapView
-        theme="light"
+        theme={isDark ? "dark" : "light"}
         center={initCenter}
         zoom={8}
         className="h-[500px] w-full rounded-lg lg:h-[600px]"

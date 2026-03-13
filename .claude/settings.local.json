@@ -3,7 +3,14 @@
     "allow": [
       "Bash(npx tsc:*)",
       "Bash(npx vite:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(find /c/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute -type f \\\\\\( -name \"*.png\" -o -name \"*.jpg\" -o -name \"*.jpeg\" -o -name \"*.gif\" -o -name \"*.svg\" \\\\\\) 2>/dev/null | head -20)",
+      "Bash(find \"/c/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute/frontend/src\" -type f -name \"*.tsx\" | xargs wc -l | sort -rn | head -20)",
+      "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\" && npm run build 2>&1 | tail -40)",
+      "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\" && npm run build 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\" && npm run build 2>&1 | tail -8)",
+      "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\" && npm run build 2>&1 | tail -6)",
+      "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\\\\src\" && for func in \"haversineDist\" \"geoBearing\" \"windArrowColor\" \"routeBearingForMarker\" \"interpTempAtKm\" \"interpForecastByKey\" \"getForecastEndKm\" \"miniElevKmToLatLon\"; do echo \"=== Searching for: $func ===\"; grep -r \"$func\" . --include=\"*.tsx\" --include=\"*.ts\" | grep -v \"components/results/RouteMap.tsx\" || echo \"Not found elsewhere\"; done)"
     ]
   }
 }

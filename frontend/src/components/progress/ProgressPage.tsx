@@ -151,7 +151,7 @@ export function ProgressPage() {
             status={getStepStatus(job.step || defaultStep, "forecast", isError, stepOrder)}
             detail={
               job.step === "forecast" && job.forecastTotal > 0
-                ? `${job.forecastDone}/${job.forecastTotal} Punkte`
+                ? t.progress.stepForecastDetail(job.forecastDone, job.forecastTotal)
                 : undefined
             }
             progress={

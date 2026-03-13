@@ -19,6 +19,7 @@ export function AdvancedPanel() {
   const store = usePlannerStore();
   const t = useT();
   const tc = t.advanced;
+  const locale = t.dateLocale;
 
   return (
     <Collapsible>
@@ -201,7 +202,7 @@ export function AdvancedPanel() {
           <CardContent>
             <div className="space-y-2">
               <Label>
-                {tc.elevation.resolution(store.elevResolution.toLocaleString("de-DE"))}
+                {tc.elevation.resolution(store.elevResolution.toLocaleString(locale))}
               </Label>
               <p className="text-xs text-muted-foreground">
                 {tc.elevation.resolutionDesc}
