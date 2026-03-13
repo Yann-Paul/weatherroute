@@ -397,6 +397,73 @@ function HoverDotRM() {
   );
 }
 
+// ─── Day markers on the route map (direct route only) ────────────────────────
+
+function DayMarkersRM() {
+  const elevation = useResultsStore((s) => s.elevation);
+  const segments = useResultsStore((s) => s.segments);
+  const t = useT();
+  const { map, isLoaded } = useMap();
+  const [zoom, setZoom] = useState(5);
+
+  useEffect(() => {
+    if (!map || !isLoaded) return;
+    const onZoom = () => setZoom(map.getZoom());
+    map.on("zoom", onZoom);
+    setZoom(map.getZoom());
+    return () => { map.off("zoom", onZoom); };
+  }, [map, isLoaded]);
+
+  const routePolyline = useMemo(() => {
+    const pts: [number, number, number][] = []; // [cumKm, lon, lat]
+    let cumKm = 0;
+    let prev: [number, number] | null = null;
+    for (const seg of segments) {
+      for (const [lon, lat] of seg.coordinates) {
+        if (prev) cumKm += haversineDist(prev[0], prev[1], lon, lat);
+        pts.push([cumKm, lon, lat]);
+        prev = [lon, lat];
+      }
+    }
+    return pts;
+  }, [segments]);
+
+  const dayMarkers = elevation?.dayMarkers;
+  if (!dayMarkers?.length || routePolyline.length < 2) return null;
+
+  const totalSegKm = routePolyline[routePolyline.length - 1][0];
+  const totalElevKm = elevation?.totalKm ?? totalSegKm;
+  const scale = totalSegKm > 0 && totalElevKm > 0 ? totalSegKm / totalElevKm : 1;
+
+  // Thin day markers based on zoom level to prevent overlap
+  const step = zoom < 3.5 ? 6 : zoom < 4.5 ? 4 : zoom < 5.5 ? 2 : 1;
+
+  return (
+    <>
+      {dayMarkers.filter((_, i) => i % step === 0).map(([km, relDay], i) => {
+        const scaledKm = km * scale;
+        let ci = routePolyline.findIndex((p) => p[0] >= scaledKm);
+        if (ci < 0) ci = routePolyline.length - 1;
+        if (ci === 0) ci = 1;
+        const p0 = routePolyline[ci - 1], p1 = routePolyline[ci];
+        const span = p1[0] - p0[0];
+        const tv = span > 0 ? Math.max(0, Math.min(1, (scaledKm - p0[0]) / span)) : 0;
+        const lon = p0[1] + tv * (p1[1] - p0[1]);
+        const lat = p0[2] + tv * (p1[2] - p0[2]);
+        return (
+          <MapMarker key={`dm-${relDay}`} longitude={lon} latitude={lat}>
+            <MarkerContent>
+              <div className="rounded border border-slate-300 bg-white/90 px-1.5 py-0.5 text-[9px] font-medium text-slate-600 shadow-sm whitespace-nowrap backdrop-blur-sm">
+                {t.forecastMap.dayMarker(relDay)}
+              </div>
+            </MarkerContent>
+          </MapMarker>
+        );
+      })}
+    </>
+  );
+}
+
 // ─── Mini elevation chart below the map ───────────────────────────────────────
 
 const LEGEND_GRADIENT =
@@ -431,8 +498,8 @@ function MiniElevChart() {
   const forecastRef = useRef(forecast);
   forecastRef.current = forecast;
 
-  const stateRef = useRef({ elevation, desiredHigh, desiredLow });
-  stateRef.current = { elevation, desiredHigh, desiredLow };
+  const stateRef = useRef({ elevation, desiredHigh, desiredLow, startDay, lang });
+  stateRef.current = { elevation, desiredHigh, desiredLow, startDay, lang };
 
   useEffect(() => {
     return () => { setHoveredKm(null); };
@@ -534,6 +601,19 @@ function MiniElevChart() {
       out += `<text font-size="9.5" fill="#1e2d45" font-weight="600" text-anchor="end" font-family="sans-serif" transform="rotate(-38,${xv.toFixed(1)},${(axY + 14).toFixed(1)}) translate(${xv.toFixed(1)},${(axY + 14).toFixed(1)})">${safe}</text>`;
     }
 
+    // Day markers with minimum pixel spacing to avoid overlap on long routes
+    const MIN_DM_PX = 28;
+    let lastDmX = -Infinity;
+    for (const [dmKm, dmRelDay] of elevation.dayMarkers ?? []) {
+      if (dmKm < kmMin - 1 || dmKm > kmMax + 1) continue;
+      const xd = xp(dmKm);
+      if (xd - lastDmX < MIN_DM_PX) continue;
+      lastDmX = xd;
+      const lbl = lang === "de" ? `Tag ${dmRelDay}` : `Day ${dmRelDay}`;
+      out += `<line x1="${xd.toFixed(1)}" y1="${PT}" x2="${xd.toFixed(1)}" y2="${axY}" stroke="#94a3b8" stroke-width="0.6" stroke-dasharray="2,3" opacity="0.45"/>`;
+      out += `<text x="${(xd + 1).toFixed(1)}" y="${(PT + 7).toFixed(1)}" font-size="6.5" fill="#94a3b8" font-family="sans-serif" opacity="0.6">${lbl}</text>`;
+    }
+
     // Forecast end boundary line
     const forecastEndKm = forecast ? getForecastEndKm(forecast) : null;
     if (forecastEndKm != null && forecastEndKm > kmMin && forecastEndKm < kmMax) {
@@ -590,7 +670,7 @@ function MiniElevChart() {
     const cdot = svg.querySelector("#mc-cursor-dot");
     if (cdot) { cdot.setAttribute("cx", String(cxFixed)); cdot.setAttribute("cy", String(cy)); cdot.setAttribute("visibility", "visible"); }
 
-    const { desiredHigh, desiredLow } = stateRef.current;
+    const { desiredHigh, desiredLow, startDay: sd, lang: lg } = stateRef.current;
     const fc = forecastRef.current;
     const fcTmax = fc ? interpForecastByKey(bestKm, bestEle, "tmax", fc) : null;
     const fcTmin = fc ? interpForecastByKey(bestKm, bestEle, "tmin", fc) : null;
@@ -599,6 +679,26 @@ function MiniElevChart() {
     const isFc = fcTmax != null || fcTmin != null;
     let ttHtml = `<div style="color:#64748b;font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
     ttHtml += `<div style="color:#1e293b">⛰ ${Math.round(bestEle)} m</div>`;
+    // Date at hovered km
+    if (cs.cityData?.length > 0) {
+      let ci = cs.cityData.findIndex((c: any) => c.km >= km);
+      if (ci < 0) ci = cs.cityData.length - 1;
+      let relDayAtKm: number | null = null;
+      if (ci === 0) {
+        relDayAtKm = weatherByCityRef.current.get(cs.cityData[0].cityId)?.relDay ?? null;
+      } else {
+        const c0 = cs.cityData[ci - 1], c1 = cs.cityData[ci];
+        const tv = c1.km > c0.km ? Math.max(0, Math.min(1, (km - c0.km) / (c1.km - c0.km))) : 0;
+        const w0 = weatherByCityRef.current.get(c0.cityId);
+        const dep0 = (w0?.relDay ?? 0) + (w0?.restDays ?? 0); // departure day from c0 (after rest)
+        const r1 = weatherByCityRef.current.get(c1.cityId)?.relDay ?? 0;
+        relDayAtKm = dep0 + tv * (r1 - dep0);
+      }
+      if (relDayAtKm != null) {
+        const absDay = ((sd + Math.round(relDayAtKm) - 1 + 3650) % 365) + 1;
+        ttHtml += `<div style="color:#475569;font-size:9px">${dayToShortDE(absDay, lg)}</div>`;
+      }
+    }
     if (tmax != null) {
       ttHtml += `<div style="color:${tempToRgb(tmax, desiredHigh)}">${isFc ? "☁" : ""}☀ ${tmax.toFixed(1)}°C</div>`;
     }
@@ -778,6 +878,7 @@ export function RouteMap() {
           lang={lang}
         />
 
+        <DayMarkersRM />
         <HoverDotRM />
         <MapBoundsTracker />
 

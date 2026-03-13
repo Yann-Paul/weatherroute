@@ -157,6 +157,7 @@ class JobSubmission(BaseModel):
     elevResolution: int = 1000
     blockedCountries: List[str] = []
     sortedInput: bool = False
+    directOsrm: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -260,8 +261,9 @@ def submit_job(data: JobSubmission):
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "status": "pending",
-        "step": "route",
+        "step": "osrm" if data.directOsrm else "route",
         "message": "Starting calculation...",
+        "jobType": "weather_route" if data.directOsrm else "route",
         "osrm_done": 0,
         "osrm_total": 0,
         "rough_map": None,
@@ -273,7 +275,10 @@ def submit_job(data: JobSubmission):
         "forecast_total": 0,
     }
 
-    t = threading.Thread(target=run_calculation, args=(job_id, params), daemon=True)
+    if data.directOsrm:
+        t = threading.Thread(target=run_direct_osrm_job, args=(job_id, params), daemon=True)
+    else:
+        t = threading.Thread(target=run_calculation, args=(job_id, params), daemon=True)
     t.start()
 
     return {"jobId": job_id}
@@ -669,6 +674,30 @@ def _build_forecast(elev_data, start_day, osrm_distances, route,
     return None, f"Startdatum (Tag {start_day}) liegt nicht in der Zukunft (Serverdatum: {date.today().isoformat()})"
 
 
+def _fmt_elev(elev_data, city_ids_for_elev):
+    """Format elevation data dict into the JSON result shape."""
+    if not elev_data:
+        return None
+    cd_list = elev_data.get("city_data", [])
+    profile = elev_data["profile"]
+    return {
+        "points": [[round(km, 2), round(ele, 1)] for km, ele in profile],
+        "cityMarks": [[round(cd["km"], 2), cd["name"]] for cd in cd_list],
+        "cityData": [
+            {
+                "km": round(cd["km"], 2),
+                "name": cd["name"],
+                "cityId": city_ids_for_elev[i] if i < len(city_ids_for_elev) else "",
+                "ele": round(float(cd.get("ele") or 0), 1),
+            }
+            for i, cd in enumerate(cd_list)
+        ],
+        "totalAscent": round(sum(max(0, profile[i+1][1] - profile[i][1]) for i in range(len(profile)-1)), 0),
+        "totalDescent": round(sum(max(0, profile[i][1] - profile[i+1][1]) for i in range(len(profile)-1)), 0),
+        "totalKm": round(profile[-1][0], 1) if profile else 0,
+    }
+
+
 def run_calculation(job_id: str, params: dict):
     job = jobs[job_id]
 
@@ -900,6 +929,22 @@ def run_calculation(job_id: str, params: dict):
         markers = []
         rest_days_map = params.get("city_rest_days", {})
         start_day_val = route[0][1]
+
+        # Compute km positions where each new cycling day starts (intra-segment)
+        _cum_km_seg = 0.0
+        day_markers = []
+        n_all = len(all_temps_data)
+        for _i in range(n_all - 1):
+            _cid = all_temps_data[_i][0]
+            _sd = osrm_distances[_i] if _i < len(osrm_distances) else 0.0
+            _rest = rest_days_map.get(_cid, 0)
+            _nd = max(1, all_temps_data[_i + 1][1] - all_temps_data[_i][1] - _rest)
+            _kpd = _sd / _nd if _nd > 0 else 0.0
+            _dep_rel = all_temps_data[_i][1] - start_day_val + _rest
+            for _j in range(1, _nd):
+                day_markers.append((round(_cum_km_seg + _j * _kpd, 2), _dep_rel + _j))
+            _cum_km_seg += _sd
+
         cum_dist = 0.0
         for i, (city_id, day, city_name, dist, lat, lon, temps, temp_score) in enumerate(
             all_temps_data
@@ -975,29 +1020,6 @@ def run_calculation(job_id: str, params: dict):
         overall_distance = sum(d for d in osrm_distances if d > 0)
         total_days = all_temps_data[-1][1] - start_day_val if all_temps_data else 0
 
-        # --- Helper: format elev_data dict into the JSON result shape ---
-        def _fmt_elev(elev_data, city_ids_for_elev):
-            if not elev_data:
-                return None
-            cd_list = elev_data.get("city_data", [])
-            profile = elev_data["profile"]
-            return {
-                "points": [[round(km, 2), round(ele, 1)] for km, ele in profile],
-                "cityMarks": [[round(cd["km"], 2), cd["name"]] for cd in cd_list],
-                "cityData": [
-                    {
-                        "km": round(cd["km"], 2),
-                        "name": cd["name"],
-                        "cityId": city_ids_for_elev[i] if i < len(city_ids_for_elev) else "",
-                        "ele": round(float(cd.get("ele") or 0), 1),
-                    }
-                    for i, cd in enumerate(cd_list)
-                ],
-                "totalAscent": round(sum(max(0, profile[i+1][1] - profile[i][1]) for i in range(len(profile)-1)), 0),
-                "totalDescent": round(sum(max(0, profile[i][1] - profile[i+1][1]) for i in range(len(profile)-1)), 0),
-                "totalKm": round(profile[-1][0], 1) if profile else 0,
-            }
-
         # Transition to elevation step — the worker thread is already making
         # API calls in the background (pipeline). The CPU work above ran in
         # parallel with the early elevation batches.
@@ -1055,12 +1077,414 @@ def run_calculation(job_id: str, params: dict):
                 "city_data": _city_data,
             }
             elevation_result = _fmt_elev(elev_data, city_ids_for_elev)
+            if elevation_result and day_markers:
+                elevation_result["dayMarkers"] = [[km, rd] for km, rd in day_markers]
             if not elevation_result and not elevation_error:
                 elevation_error = "Höhenprofil enthält keine Daten"
         elif not elevation_error:
             elevation_error = "Keine Höhenprofil-Daten verfügbar"
 
         # Build forecast (uses elevation profile if available)
+        forecast_data, forecast_error = _build_forecast(
+            elev_data, start_day, osrm_distances, route,
+            route_locations, city_graph, params, job
+        )
+
+        job["result"] = {
+            "segments": segments,
+            "markers": markers,
+            "elevation": elevation_result,
+            "elevationError": elevation_error if elevation_result is None else None,
+            "elevationComplete": True,
+            "weather": weather_stops,
+            "route": route_list,
+            "startDay": start_day,
+            "totalDistance": round(overall_distance, 1),
+            "totalDays": total_days,
+            "forecast": forecast_data,
+            "forecastError": forecast_error,
+            "desiredHigh": params["high_temp"],
+            "desiredLow": params["low_temp"],
+        }
+        job["forecast_meta"] = {
+            "elev_data": elev_data,
+            "start_day": start_day,
+            "osrm_distances": osrm_distances,
+            "route": [list(t) for t in route],
+            "route_locations": list(route_locations),
+            "params": {"high_temp": params["high_temp"], "low_temp": params["low_temp"]},
+        }
+        update("elevation", "Fertig!", status="done")
+        job["status"] = "done"
+        job["result"]["elevationComplete"] = True
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        job["status"] = "error"
+        job["error"] = str(e)
+
+
+# ---------------------------------------------------------------------------
+# Direct OSRM background task (no graph / TSP)
+# ---------------------------------------------------------------------------
+
+
+def _auto_start_day_direct(city_ids, travel_days, rest_days_map, params):
+    """Find optimal start day for a direct-order OSRM route.
+
+    Evaluates 52 weekly candidates across the year and fine-tunes ±3 days
+    around the best weekly candidate. Returns the day-of-year (1–365) with
+    the minimum average weather score across all cities.
+    """
+    best_day = 1
+    best_score = float("inf")
+    candidates = set(range(1, 366, 7))
+
+    def _score_start(start):
+        total = 0.0
+        current_day = start
+        for i, city_id in enumerate(city_ids):
+            try:
+                day = ((current_day - 1) % 365) + 1
+                temps = get_interpolated_weather(city_id, day, temperatures, params["warming_factor"])
+                score, _ = calculate_temperature_score(
+                    temps, 2,
+                    params["low_temp"], params["high_temp"],
+                    params["low_temp_min"], params["low_temp_max"],
+                    params["high_temp_min"], params["high_temp_max"],
+                )
+                total += score
+            except Exception:
+                total += 1000.0
+            if i < len(travel_days):
+                current_day += travel_days[i]
+                current_day += rest_days_map.get(city_id, 0)
+        return total / len(city_ids) if city_ids else 0.0
+
+    for start in candidates:
+        avg = _score_start(start)
+        if avg < best_score:
+            best_score = avg
+            best_day = start
+
+    # Fine-tune ±3 days around best weekly candidate
+    for offset in range(-3, 4):
+        candidate = ((best_day + offset - 1) % 365) + 1
+        if candidate in candidates:
+            continue
+        avg = _score_start(candidate)
+        if avg < best_score:
+            best_score = avg
+            best_day = candidate
+
+    return best_day
+
+
+def run_direct_osrm_job(job_id: str, params: dict):
+    """Direct OSRM route: connect cities A→B→C in input order, no graph algorithm."""
+    job = jobs[job_id]
+
+    def update(step: str, message: str, **kwargs):
+        job["step"] = step
+        job["message"] = message
+        for k, v in kwargs.items():
+            job[k] = v
+
+    try:
+        job["status"] = "running"
+        update("osrm", "Straßendaten werden geladen...")
+
+        # Resolve city coordinates in input order
+        city_ids = params["city_ids"]
+        route_locations = []
+        valid_city_ids = []
+        city_name_map = {}
+        for cid in city_ids:
+            try:
+                nd = city_graph.nodes[cid]
+                lat, lon = float(nd["lat"]), float(nd["lon"])
+                route_locations.append((lat, lon))
+                valid_city_ids.append(cid)
+                city_name_map[cid] = nd.get("name", cid)
+            except KeyError:
+                continue
+
+        if len(valid_city_ids) < 2:
+            job["status"] = "error"
+            job["error"] = "Mindestens 2 gültige Städte erforderlich."
+            return
+
+        n_cities = len(valid_city_ids)
+        n_segments = n_cities - 1
+        rest_days_map = params.get("city_rest_days", {})
+
+        # Show cities on preview map immediately (before OSRM runs)
+        _preview_start = date.today().timetuple().tm_yday
+        _preview_route = [
+            (cid, _preview_start + i, city_name_map[cid], 0.0)
+            for i, cid in enumerate(valid_city_ids)
+        ]
+        try:
+            job["rough_map"] = create_loading_route_map(
+                city_graph, temperatures, _preview_route,
+                2,
+                params["low_temp"], params["high_temp"],
+                params["low_temp_min"], params["low_temp_max"],
+                params["high_temp_min"], params["high_temp_max"],
+                warming_factor=params["warming_factor"],
+            )
+        except Exception:
+            pass  # preview map is optional
+
+        job["osrm_total"] = n_segments
+        job["osrm_done"] = 0
+
+        # Estimate elevation batch total for progress bar
+        _points_per_km = params["elev_points_per_1000km"] / 1000
+        _estimated_n_points = max(200, round(500 * n_segments * _points_per_km))
+        job["elevation_batch_total"] = max(1, (_estimated_n_points + 511) // 512)
+        job["elevation_batch_done"] = 0
+
+        # Start elevation worker before OSRM so they run in parallel
+        _seg_queue = _queue.Queue()
+        _elev_result = {}
+        _elev_thread = threading.Thread(
+            target=_run_elevation_worker,
+            args=(_seg_queue, _points_per_km, job, _elev_result),
+            daemon=True,
+        )
+        _elev_thread.start()
+
+        # OSRM routing for the full route at once
+        osrm_counter = [0]
+
+        def _chunk_cb(local_i, chunk):
+            _seg_queue.put((local_i, chunk))
+            osrm_counter[0] += 1
+            job["osrm_done"] = osrm_counter[0]
+
+        chunks = get_osrm_route(
+            route_locations,
+            routing_mode=params["routing_mode"],
+            chunk_callback=_chunk_cb,
+        )
+        _seg_queue.put(None)  # signal elevation worker: done
+
+        # Compute actual road distances per segment
+        osrm_distances = compute_distances_from_chunks(chunks, route_locations)
+
+        # Travel days per segment: ceil(distance / daily_km), minimum 1
+        travel_days = [
+            max(1, math.ceil(d / params["daily_km"])) if d > 0 else 1
+            for d in osrm_distances
+        ]
+
+        # Determine start day — direct routes default to TODAY (not climatological optimum),
+        # because the user is planning an imminent trip and forecast data is the only
+        # meaningful temperature source.
+        today_date = date.today()
+        start_day = params.get("start_day")
+        if start_day is None:
+            start_day = today_date.timetuple().tm_yday
+
+        # Build route: [(city_id, arrival_day, city_name, dist_from_prev), ...]
+        route = []
+        current_day = start_day
+        for i, cid in enumerate(valid_city_ids):
+            dist = osrm_distances[i - 1] if i > 0 else 0.0
+            route.append((cid, current_day, city_name_map[cid], dist))
+            if i < n_segments:
+                current_day += travel_days[i]
+                current_day += rest_days_map.get(cid, 0)
+
+        # Compute actual calendar start date for forecast-window filtering
+        actual_start_date = today_date
+        for yr in [today_date.year, today_date.year + 1]:
+            candidate = date(yr, 1, 1) + timedelta(days=start_day - 1)
+            if (candidate - today_date).days >= 0:
+                actual_start_date = candidate
+                break
+
+        start_day_val = route[0][1]
+
+        # Compute km positions where each new cycling day starts (intra-segment)
+        _cum_km_seg = 0.0
+        day_markers = []
+        for _i in range(n_segments):
+            _cid = valid_city_ids[_i]
+            _sd = osrm_distances[_i] if _i < len(osrm_distances) else 0.0
+            _nd = travel_days[_i] if _i < len(travel_days) else 1
+            _kpd = _sd / _nd if _nd > 0 else 0.0
+            _rest = rest_days_map.get(_cid, 0)
+            _dep_rel = route[_i][1] - start_day_val + _rest
+            for _j in range(1, _nd):
+                day_markers.append((round(_cum_km_seg + _j * _kpd, 2), _dep_rel + _j))
+            _cum_km_seg += _sd
+
+        def _in_forecast(day):
+            """True if this arrival day falls within the 16-day forecast window."""
+            arrival = actual_start_date + timedelta(days=day - start_day_val)
+            return (arrival - today_date).days <= 15
+
+        # Build all_temps_data with weather scores
+        all_temps_data = []
+        for city_id, day, city_name, distance in route:
+            nd = city_graph.nodes[city_id]
+            lat, lon = float(nd["lat"]), float(nd["lon"])
+            temps = get_interpolated_weather(city_id, day, temperatures, params["warming_factor"])
+            temp_score, _ = calculate_temperature_score(
+                temps, 2,
+                params["low_temp"], params["high_temp"],
+                params["low_temp_min"], params["low_temp_max"],
+                params["high_temp_min"], params["high_temp_max"],
+            )
+            all_temps_data.append((city_id, day, city_name, distance, lat, lon, temps, temp_score))
+
+        # Normalize scores for segment colors
+        scores = [d[7] for d in all_temps_data]
+        mn, mx = min(scores), max(scores)
+        rng = mx - mn if mx > mn else 1
+
+        # Build map segments from OSRM chunks
+        segments = []
+        for ci, chunk in enumerate(chunks):
+            ns = (all_temps_data[min(ci, len(all_temps_data) - 1)][7] - mn) / rng
+            segments.append({
+                "coordinates": [[pt[1], pt[0]] for pt in chunk],
+                "color": _score_color(ns),
+                "isDirect": False,
+            })
+
+        # Build markers — only for cities within the 16-day forecast window
+        markers = []
+        cum_dist = 0.0
+        for i, (city_id, day, city_name, dist, lat, lon, temps, temp_score) in enumerate(all_temps_data):
+            if i > 0:
+                cum_dist += osrm_distances[i - 1] if i - 1 < len(osrm_distances) else 0
+            if not _in_forecast(day):
+                continue
+            markers.append({
+                "id": city_id,
+                "cityName": city_name,
+                "lat": lat,
+                "lon": lon,
+                "dayNumber": day - start_day_val,
+                "relDay": day - start_day_val,
+                "tmin": round(temps[0], 1) if temps[0] is not None else 0,
+                "tmax": round(temps[1], 1) if temps[1] is not None else 0,
+                "prcp": round(temps[2], 1) if len(temps) > 2 and temps[2] is not None else 0,
+                "wspd": round(temps[3], 1) if len(temps) > 3 and temps[3] is not None else 0,
+                "wdir": round(temps[4], 0) if len(temps) > 4 and temps[4] is not None else 0,
+                "score": round((temp_score - mn) / rng * 10, 1),
+                "isRestDay": city_id in rest_days_map,
+            })
+
+        # Build weather stops — only for cities within the 16-day forecast window
+        weather_stops = []
+        for city_id, day, city_name, dist, lat, lon, temps, temp_score in all_temps_data:
+            if not _in_forecast(day):
+                continue
+            rel_day = day - start_day_val
+            by_offset: dict = {}
+            for offset in range(-70, 71, 1):
+                cal_day = ((day + offset - 1) % 365) + 1
+                try:
+                    w = get_interpolated_weather(city_id, cal_day, temperatures, params["warming_factor"])
+                    by_offset[str(offset)] = {
+                        "tmin": round(w[0], 1) if w[0] is not None else None,
+                        "tmax": round(w[1], 1) if w[1] is not None else None,
+                        "prcp": round(w[2], 1) if len(w) > 2 and w[2] is not None else None,
+                        "wspd": round(w[3], 1) if len(w) > 3 and w[3] is not None else None,
+                        "wdir": round(w[4], 0) if len(w) > 4 and w[4] is not None else None,
+                    }
+                except Exception:
+                    pass
+            weather_stops.append({
+                "relDay": rel_day,
+                "cityId": city_id,
+                "cityName": city_name,
+                "isRestDay": city_id in rest_days_map,
+                "restDays": rest_days_map.get(city_id, 0),
+                "byOffset": by_offset,
+            })
+
+        # Build route list
+        route_list = []
+        cum_dist = 0.0
+        for i, (city_id, day, city_name, _dist, lat, lon, temps, temp_score) in enumerate(all_temps_data):
+            dist_from_prev = osrm_distances[i - 1] if i > 0 and i - 1 < len(osrm_distances) else 0
+            cum_dist += dist_from_prev
+            route_list.append({
+                "cityId": city_id,
+                "cityName": city_name,
+                "dayNumber": day - start_day_val,
+                "restDays": rest_days_map.get(city_id, 0),
+                "distanceFromPrev": round(dist_from_prev, 1),
+                "cumulativeDistance": round(cum_dist, 1),
+            })
+
+        overall_distance = sum(d for d in osrm_distances if d > 0)
+        total_days = all_temps_data[-1][1] - start_day_val if all_temps_data else 0
+
+        # Wait for elevation worker to finish
+        update("elevation", "Höhenprofil wird geladen...")
+        _elev_thread.join()
+
+        # Assemble elevation result
+        elevation_error = _elev_result.get("elevation_error")
+        _api_results = _elev_result.get("api_results", [])
+        _all_kms = _elev_result.get("all_kms", [])
+        _all_latlons = _elev_result.get("all_latlons", [])
+        _seg_start_kms = _elev_result.get("segment_start_kms", {})
+        _worker_total_km = _elev_result.get("total_km", 0.0)
+
+        elev_data = None
+        elevation_result = None
+
+        if _api_results and _all_kms:
+            _profile = [(km, r["elevation"]) for km, r in zip(_all_kms, _api_results)]
+
+            _city_kms = [_seg_start_kms.get(i, 0.0) for i in range(n_cities - 1)]
+            _city_kms.append(_worker_total_km)
+
+            def _interp_ele(km_target):
+                for j in range(len(_profile) - 1):
+                    km0, e0 = _profile[j]
+                    km1, e1 = _profile[j + 1]
+                    if km0 <= km_target <= km1:
+                        t = (km_target - km0) / (km1 - km0) if km1 > km0 else 0.0
+                        return e0 + t * (e1 - e0)
+                return _profile[-1][1] if _profile else 0.0
+
+            _city_data = []
+            for i, (city_id, day, city_name, _, lat, lon, temps, _score) in enumerate(all_temps_data):
+                km = _city_kms[i]
+                _city_data.append({
+                    "km": km,
+                    "name": city_name,
+                    "tmin": round(temps[0], 1) if temps[0] is not None else None,
+                    "tmax": round(temps[1], 1) if temps[1] is not None else None,
+                    "prcp": round(temps[2], 1) if len(temps) > 2 and temps[2] is not None else None,
+                    "ele": _interp_ele(km),
+                })
+
+            elev_data = {
+                "profile": _profile,
+                "profile_latlons": _all_latlons,
+                "city_marks": [(_cd["km"], _cd["name"]) for _cd in _city_data],
+                "city_data": _city_data,
+            }
+            city_ids_for_elev = [d[0] for d in all_temps_data]
+            elevation_result = _fmt_elev(elev_data, city_ids_for_elev)
+            if elevation_result and day_markers:
+                elevation_result["dayMarkers"] = [[km, rd] for km, rd in day_markers]
+            if not elevation_result and not elevation_error:
+                elevation_error = "Höhenprofil enthält keine Daten"
+        elif not elevation_error:
+            elevation_error = "Keine Höhenprofil-Daten verfügbar"
+
+        # Build forecast
         forecast_data, forecast_error = _build_forecast(
             elev_data, start_day, osrm_distances, route,
             route_locations, city_graph, params, job
@@ -1514,6 +1938,7 @@ def run_gpx_analysis(
 class SaveRouteRequest(BaseModel):
     jobId: str
     name: str
+    plannerSettings: Optional[dict] = None
 
 
 def run_restore_job(job_id: str, saved_data: dict):
@@ -1574,6 +1999,7 @@ def save_route(req: SaveRouteRequest):
         "startDay": result.get("startDay", 0),
         "result": result,
         "forecastMeta": job.get("forecast_meta"),
+        "plannerSettings": req.plannerSettings,
     }
     path = SAVED_ROUTES_DIR / f"{saved_id}.json"
     with open(path, "w", encoding="utf-8") as f:
@@ -1614,7 +2040,7 @@ def restore_saved_route(saved_id: str):
     }
     t = threading.Thread(target=run_restore_job, args=(job_id, saved_data), daemon=True)
     t.start()
-    return {"jobId": job_id}
+    return {"jobId": job_id, "plannerSettings": saved_data.get("plannerSettings")}
 
 
 # ---------------------------------------------------------------------------

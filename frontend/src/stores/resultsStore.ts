@@ -88,7 +88,7 @@ const initialState = {
 export const useResultsStore = create<ResultsState>()((set) => ({
   ...initialState,
 
-  setResults: (data) => set({ ...data, activeTab: "map" }),
+  setResults: (data) => set({ ...data, activeTab: data.forecast ? "forecast" : "map" }),
 
   updateElevation: (data) => set(data),
 

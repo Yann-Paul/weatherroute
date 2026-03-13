@@ -43,6 +43,7 @@ export interface PlannerFormData {
   elevResolution: number;
   blockedCountries: string[];
   sortedInput: boolean;
+  directOsrm?: boolean;
 }
 
 export type JobStatus = "pending" | "running" | "done" | "preview" | "error";
@@ -112,6 +113,7 @@ export interface ElevationProfile {
   totalAscent: number;
   totalDescent: number;
   totalKm: number;
+  dayMarkers?: [number, number][];
 }
 
 export interface WeatherDay {
@@ -249,6 +251,9 @@ export interface SavedRouteSummary {
   totalDays: number;
   startDay: number;
 }
+
+/** Planner settings snapshot stored alongside a saved route. */
+export type PlannerSettings = PlannerFormData;
 
 export interface JobResults {
   segments: RouteSegment[];

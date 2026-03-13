@@ -21,6 +21,8 @@ const de = {
     },
     submit: "Route berechnen",
     submitting: "Wird berechnet...",
+    directOsrm: "Direktroute (OSRM)",
+    directOsrmDesc: "Städte werden direkt über OSRM verbunden – kein Graphalgorithmus, keine Routenoptimierung.",
   },
   cityList: {
     pauseLabel: "⏸ Pause",
@@ -251,6 +253,8 @@ const en = {
     },
     submit: "Calculate Route",
     submitting: "Submitting...",
+    directOsrm: "Direct route (OSRM)",
+    directOsrmDesc: "Cities are connected directly via OSRM – no graph algorithm, no route optimization.",
   },
   cityList: {
     pauseLabel: "⏸ Rest",

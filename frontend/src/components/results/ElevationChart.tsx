@@ -68,6 +68,7 @@ interface SegmentProps {
   segIndex: number;
   segPoints: [number, number][];
   segCitiesVisible: ElevationCityData[];
+  segDayMarkersVisible: [number, number][];
   allCityData: ElevationCityData[];
   weatherByCityRef: React.MutableRefObject<globalThis.Map<string, WeatherStop>>;
   tempKey: "tmax" | "tmin";
@@ -80,7 +81,7 @@ interface SegmentProps {
 }
 
 function ElevationSegment({
-  segIndex, segPoints, segCitiesVisible, allCityData,
+  segIndex, segPoints, segCitiesVisible, segDayMarkersVisible, allCityData,
   weatherByCityRef, tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang, forecast,
 }: SegmentProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -162,6 +163,19 @@ function ElevationSegment({
       }
     }
 
+    // Show day markers with minimum pixel spacing to avoid overlap on long routes
+    const MIN_DM_PX = 32;
+    let lastDmX = -Infinity;
+    for (const [dmKm, dmRelDay] of segDayMarkersVisible) {
+      if (dmKm < kmMin || dmKm > kmMax) continue;
+      const xd = xp(dmKm);
+      if (xd - lastDmX < MIN_DM_PX) continue;
+      lastDmX = xd;
+      const lbl = stateRef.current.lang === "de" ? `Tag ${dmRelDay}` : `Day ${dmRelDay}`;
+      out += `<line x1="${xd.toFixed(1)}" y1="${PT}" x2="${xd.toFixed(1)}" y2="${axY}" stroke="#94a3b8" stroke-width="0.7" stroke-dasharray="2,3" opacity="0.5"/>`;
+      out += `<text x="${(xd + 1.5).toFixed(1)}" y="${(PT + 8).toFixed(1)}" font-size="7" fill="#94a3b8" font-family="sans-serif" opacity="0.7">${lbl}</text>`;
+    }
+
     for (const cd of segCitiesVisible) {
       const xv = xp(cd.km);
       let dotEle = cd.ele;
@@ -198,7 +212,7 @@ function ElevationSegment({
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("height", String(H));
     svg.innerHTML = out;
-  }, [segPoints, segCitiesVisible, allCityData, tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang, segIndex, forecast]);
+  }, [segPoints, segCitiesVisible, segDayMarkersVisible, allCityData, tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang, segIndex, forecast]);
 
   useEffect(() => {
     drawChart();
@@ -249,6 +263,29 @@ function ElevationSegment({
 
     let ttHtml = `<div style="color:#64748b;font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
     ttHtml += `<div style="color:#1e293b">⛰ ${Math.round(bestEle)} m</div>`;
+    // Date at hovered km
+    {
+      const { startDay: sd, lang: lg, dayOffset: off } = stateRef.current;
+      if (allCityData.length > 0) {
+        let ci = allCityData.findIndex((c) => c.km >= km);
+        if (ci < 0) ci = allCityData.length - 1;
+        let relDayAtKm: number | null = null;
+        if (ci === 0) {
+          relDayAtKm = weatherByCityRef.current.get(allCityData[0].cityId)?.relDay ?? null;
+        } else {
+          const c0 = allCityData[ci - 1], c1 = allCityData[ci];
+          const tv = c1.km > c0.km ? Math.max(0, Math.min(1, (km - c0.km) / (c1.km - c0.km))) : 0;
+          const w0 = weatherByCityRef.current.get(c0.cityId);
+          const dep0 = (w0?.relDay ?? 0) + (w0?.restDays ?? 0); // departure day from c0 (after rest)
+          const r1 = weatherByCityRef.current.get(c1.cityId)?.relDay ?? 0;
+          relDayAtKm = dep0 + tv * (r1 - dep0);
+        }
+        if (relDayAtKm != null) {
+          const absDay = ((sd + Math.round(relDayAtKm) + off - 1 + 3650) % 365) + 1;
+          ttHtml += `<div style="color:#475569;font-size:9px">${dayToShortDE(absDay, lg)}</div>`;
+        }
+      }
+    }
     if (temp != null) {
       const icon = fcTemp != null ? (tk === "tmax" ? "☁☀" : "☁☽") : (tk === "tmax" ? "☀" : "☽");
       ttHtml += `<div style="color:${tempToRgb(temp, desired)}">${icon} ${temp.toFixed(1)}°C</div>`;
@@ -326,6 +363,7 @@ export function ElevationChart() {
     if (!elevation || elevation.points.length < 2) return [];
     const points = elevation.points;
     const allCityData = elevation.cityData ?? [];
+    const dayMarkers = elevation.dayMarkers ?? [];
     const totalKm = points[points.length - 1][0];
     const numSegments = Math.max(1, Math.ceil(totalKm / SEGMENT_KM));
 
@@ -340,8 +378,9 @@ export function ElevationChart() {
       const segPoints: [number, number][] = lastBefore ? [lastBefore, ...filtered] : filtered;
 
       const segCitiesVisible = allCityData.filter((c) => c.km >= kmStart && c.km <= kmEnd);
+      const segDayMarkersVisible = dayMarkers.filter(([km]) => km >= kmStart && km <= kmEnd);
 
-      return { segPoints, segCitiesVisible };
+      return { segPoints, segCitiesVisible, segDayMarkersVisible };
     });
   }, [elevation]);
 
@@ -403,6 +442,7 @@ export function ElevationChart() {
             segIndex={i}
             segPoints={seg.segPoints}
             segCitiesVisible={seg.segCitiesVisible}
+            segDayMarkersVisible={seg.segDayMarkersVisible}
             allCityData={allCityData}
             weatherByCityRef={weatherByCityRef}
             tempKey={tempKey}

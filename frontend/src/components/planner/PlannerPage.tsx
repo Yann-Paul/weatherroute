@@ -31,8 +31,17 @@ export function PlannerPage() {
   const t = useT();
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [startMonth, setStartMonth] = useState(String(new Date().getMonth() + 1));
-  const [startDay, setStartDay] = useState(String(new Date().getDate()));
+
+  // Restore date from store if returning from results (loadFromResults sets startDay + autoDetectStart=false)
+  const storedDate = !store.autoDetectStart && store.startDay != null
+    ? new Date(2025, 0, store.startDay)
+    : null;
+  const [startMonth, setStartMonth] = useState(
+    String(storedDate ? storedDate.getMonth() + 1 : new Date().getMonth() + 1)
+  );
+  const [startDay, setStartDay] = useState(
+    String(storedDate ? storedDate.getDate() : new Date().getDate())
+  );
 
   function validate(): string[] {
     const errs: string[] = [];
@@ -114,6 +123,14 @@ export function PlannerPage() {
               onCheckedChange={store.setSortedInput}
             />
             <Label>{t.advanced.travel.sortedInput}</Label>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">{t.planner.directOsrm}</p>
+              <p className="text-xs text-muted-foreground">{t.planner.directOsrmDesc}</p>
+            </div>
+            <Switch checked={store.directOsrm} onCheckedChange={store.setDirectOsrm} />
           </div>
 
           <div className="space-y-2">

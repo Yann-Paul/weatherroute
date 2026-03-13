@@ -99,10 +99,13 @@ export function ProgressPage() {
   }, [poll]);
 
   const isGpxJob = job.jobType === "gpx";
+  const isWeatherRoute = job.jobType === "weather_route";
   const stepOrder = isGpxJob
     ? ["elevation", "forecast"]
+    : isWeatherRoute
+    ? ["osrm", "elevation", "forecast"]
     : ["route", "osrm", "elevation", "forecast"];
-  const defaultStep = isGpxJob ? "elevation" : "route";
+  const defaultStep = isGpxJob ? "elevation" : isWeatherRoute ? "osrm" : "route";
   const isError = job.status === "error";
   const osrmProgress =
     job.osrmTotal > 0 ? (job.osrmDone / job.osrmTotal) * 100 : 0;
@@ -114,24 +117,24 @@ export function ProgressPage() {
           <CardTitle>{t.progress.heading}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1">
+          {!isGpxJob && !isWeatherRoute && (
+            <StepIndicator
+              label={t.progress.stepRoute}
+              status={getStepStatus(job.step || defaultStep, "route", isError, stepOrder)}
+              detail={job.step === "route" ? job.message : undefined}
+            />
+          )}
           {!isGpxJob && (
-            <>
-              <StepIndicator
-                label={t.progress.stepRoute}
-                status={getStepStatus(job.step || defaultStep, "route", isError, stepOrder)}
-                detail={job.step === "route" ? job.message : undefined}
-              />
-              <StepIndicator
-                label={t.progress.stepOsrm}
-                status={getStepStatus(job.step || defaultStep, "osrm", isError, stepOrder)}
-                detail={
-                  job.step === "osrm" && job.osrmTotal > 0
-                    ? t.progress.stepOsrmDetail(job.osrmDone, job.osrmTotal)
-                    : undefined
-                }
-                progress={job.step === "osrm" ? osrmProgress : undefined}
-              />
-            </>
+            <StepIndicator
+              label={t.progress.stepOsrm}
+              status={getStepStatus(job.step || defaultStep, "osrm", isError, stepOrder)}
+              detail={
+                job.step === "osrm" && job.osrmTotal > 0
+                  ? t.progress.stepOsrmDetail(job.osrmDone, job.osrmTotal)
+                  : undefined
+              }
+              progress={job.step === "osrm" ? osrmProgress : undefined}
+            />
           )}
           <StepIndicator
             label={t.progress.stepElevation}

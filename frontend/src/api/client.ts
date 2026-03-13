@@ -4,6 +4,7 @@ import type {
   JobStatusResponse,
   JobResults,
   PlannerFormData,
+  PlannerSettings,
   GpxJobResults,
   GpxDayConfig,
   SavedRouteSummary,
@@ -73,10 +74,14 @@ export async function getSavedRoutes(): Promise<SavedRouteSummary[]> {
   return request("/saved-routes");
 }
 
-export async function saveRoute(jobId: string, name: string): Promise<{ id: string; name: string }> {
+export async function saveRoute(
+  jobId: string,
+  name: string,
+  plannerSettings: PlannerSettings
+): Promise<{ id: string; name: string }> {
   return request("/saved-routes", {
     method: "POST",
-    body: JSON.stringify({ jobId, name }),
+    body: JSON.stringify({ jobId, name, plannerSettings }),
   });
 }
 
@@ -84,6 +89,6 @@ export async function deleteSavedRoute(id: string): Promise<void> {
   await request(`/saved-routes/${id}`, { method: "DELETE" });
 }
 
-export async function restoreSavedRoute(id: string): Promise<{ jobId: string }> {
+export async function restoreSavedRoute(id: string): Promise<{ jobId: string; plannerSettings: PlannerSettings | null }> {
   return request(`/saved-routes/${id}/restore`, { method: "POST" });
 }

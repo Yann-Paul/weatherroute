@@ -4,6 +4,7 @@ import { FolderOpen, Trash2, Route as RouteIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useJobStore } from "@/stores/jobStore";
+import { usePlannerStore } from "@/stores/plannerStore";
 import { getSavedRoutes, deleteSavedRoute, restoreSavedRoute } from "@/api/client";
 import { useT } from "@/i18n/useT";
 import { dayOfYearToDate } from "@/utils/constants";
@@ -16,6 +17,7 @@ export function SavedRoutesList() {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const navigate = useNavigate();
   const setJobId = useJobStore((s) => s.setJobId);
+  const restoreSettings = usePlannerStore((s) => s.restoreSettings);
   const t = useT();
   const lang = useLangStore((s) => s.lang);
 
@@ -29,7 +31,8 @@ export function SavedRoutesList() {
   async function handleOpen(id: string) {
     setOpeningId(id);
     try {
-      const { jobId } = await restoreSavedRoute(id);
+      const { jobId, plannerSettings } = await restoreSavedRoute(id);
+      if (plannerSettings) restoreSettings(plannerSettings);
       setJobId(jobId);
       navigate(`/progress/${jobId}`);
     } catch {

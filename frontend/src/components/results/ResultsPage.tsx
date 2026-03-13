@@ -37,9 +37,9 @@ export function ResultsPage() {
   const elevationComplete = useResultsStore((s) => s.elevationComplete);
   const route = useResultsStore((s) => s.route);
   const startDay = useResultsStore((s) => s.startDay);
-  const desiredHigh = useResultsStore((s) => s.desiredHigh);
-  const desiredLow = useResultsStore((s) => s.desiredLow);
+  const hasForecast = useResultsStore((s) => s.forecast !== null);
   const loadFromResults = usePlannerStore((s) => s.loadFromResults);
+  const plannerStore = usePlannerStore();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
@@ -121,7 +121,7 @@ export function ResultsPage() {
   }, [jobId, elevationComplete, updateElevation]);
 
   function handleEditSettings() {
-    loadFromResults({ route, startDay, desiredHigh, desiredLow });
+    loadFromResults({ startDay });
     navigate("/");
   }
 
@@ -130,7 +130,28 @@ export function ResultsPage() {
     setIsSaving(true);
     try {
       const name = buildRouteName({ route, startDay } as unknown as JobResults, lang);
-      await saveRoute(jobId, name);
+      const plannerSettings = {
+        cities: plannerStore.cities,
+        startCity: plannerStore.startCity,
+        startDay,  // use the actual computed start day from results
+        autoDetectStart: false,
+        connections: plannerStore.connections,
+        desiredDayTemp: plannerStore.desiredDayTemp,
+        desiredNightTemp: plannerStore.desiredNightTemp,
+        dayTempMin: plannerStore.dayTempMin,
+        dayTempMax: plannerStore.dayTempMax,
+        nightTempMin: plannerStore.nightTempMin,
+        nightTempMax: plannerStore.nightTempMax,
+        warmingFactor: plannerStore.warmingFactor,
+        tempWeight: plannerStore.tempWeight,
+        maxDailyKm: plannerStore.maxDailyKm,
+        maxTravelDays: plannerStore.maxTravelDays,
+        elevResolution: plannerStore.elevResolution,
+        blockedCountries: plannerStore.blockedCountries,
+        sortedInput: plannerStore.sortedInput,
+        directOsrm: plannerStore.directOsrm,
+      };
+      await saveRoute(jobId, name, plannerSettings);
       setIsSaved(true);
     } finally {
       setIsSaving(false);
@@ -203,14 +224,22 @@ export function ResultsPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start">
+          {hasForecast && (
+            <TabsTrigger value="forecast" className="gap-1.5">
+              <Radar className="h-4 w-4" />
+              {t.results.tabForecast}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="map" className="gap-1.5">
             <Map className="h-4 w-4" />
             {t.results.tabMap}
           </TabsTrigger>
-          <TabsTrigger value="forecast" className="gap-1.5">
-            <Radar className="h-4 w-4" />
-            {t.results.tabForecast}
-          </TabsTrigger>
+          {!hasForecast && (
+            <TabsTrigger value="forecast" className="gap-1.5">
+              <Radar className="h-4 w-4" />
+              {t.results.tabForecast}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="elevation" className="gap-1.5">
             <Mountain className="h-4 w-4" />
             {t.results.tabElevation}

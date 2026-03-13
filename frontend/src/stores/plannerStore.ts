@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { CityEntry, Connection, RouteStop } from "@/api/types";
+import type { CityEntry, Connection, PlannerSettings } from "@/api/types";
 
 interface PlannerState {
   cities: CityEntry[];
@@ -21,6 +21,7 @@ interface PlannerState {
   elevResolution: number;
   blockedCountries: string[];
   sortedInput: boolean;
+  directOsrm: boolean;
 
   addCity: (city: CityEntry) => void;
   removeCity: (index: number) => void;
@@ -40,7 +41,9 @@ interface PlannerState {
   toggleBlockedCountry: (code: string) => void;
   setBlockedCountries: (codes: string[]) => void;
   setSortedInput: (value: boolean) => void;
-  loadFromResults: (data: { route: RouteStop[]; startDay: number; desiredHigh: number; desiredLow: number }) => void;
+  setDirectOsrm: (value: boolean) => void;
+  loadFromResults: (data: { startDay: number }) => void;
+  restoreSettings: (settings: PlannerSettings) => void;
   reset: () => void;
 }
 
@@ -63,6 +66,7 @@ const initialState = {
   elevResolution: 1000,
   blockedCountries: [] as string[],
   sortedInput: false,
+  directOsrm: false,
 };
 
 export const usePlannerStore = create<PlannerState>()(
@@ -117,14 +121,38 @@ export const usePlannerStore = create<PlannerState>()(
 
       setBlockedCountries: (blockedCountries) => set({ blockedCountries }),
       setSortedInput: (sortedInput) => set({ sortedInput }),
+      setDirectOsrm: (directOsrm) => set({ directOsrm }),
 
-      loadFromResults: ({ route, startDay, desiredHigh, desiredLow }) =>
+      // Restores only the computed start day — all other settings (cities, temps, etc.)
+      // remain as the user originally configured them in the planner.
+      loadFromResults: ({ startDay }) =>
         set({
-          cities: route.map((r) => ({ id: r.cityId, name: r.cityName, restDays: r.restDays })),
           startDay,
           autoDetectStart: false,
-          desiredDayTemp: desiredHigh,
-          desiredNightTemp: desiredLow,
+        }),
+
+      // Restores all planner settings from a saved route snapshot.
+      restoreSettings: (s) =>
+        set({
+          cities: s.cities,
+          startCity: s.startCity,
+          startDay: s.startDay,
+          autoDetectStart: s.autoDetectStart,
+          connections: s.connections,
+          desiredDayTemp: s.desiredDayTemp,
+          desiredNightTemp: s.desiredNightTemp,
+          dayTempMin: s.dayTempMin,
+          dayTempMax: s.dayTempMax,
+          nightTempMin: s.nightTempMin,
+          nightTempMax: s.nightTempMax,
+          warmingFactor: s.warmingFactor,
+          tempWeight: s.tempWeight,
+          maxDailyKm: s.maxDailyKm,
+          maxTravelDays: s.maxTravelDays,
+          elevResolution: s.elevResolution,
+          blockedCountries: s.blockedCountries,
+          sortedInput: s.sortedInput,
+          directOsrm: s.directOsrm ?? false,
         }),
 
       reset: () => set(initialState),

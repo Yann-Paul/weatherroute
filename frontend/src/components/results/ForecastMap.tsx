@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/map";
 import { useResultsStore } from "@/stores/resultsStore";
 import { useT } from "@/i18n/useT";
+import { useLangStore } from "@/i18n/store";
+import { dayToShortDE } from "@/utils/tempColor";
 import type { ForecastPoint, ForecastPointData, ForecastDailyData, ForecastHourData } from "@/api/types";
 
 const HOUR_STEPS = [0, 6, 12, 18, 24];
@@ -325,6 +327,8 @@ export function ForecastMap() {
   const forecastError = useResultsStore((s) => s.forecastError);
   const setHoveredKm = useResultsStore((s) => s.setHoveredKm);
   const visibleKmRange = useResultsStore((s) => s.visibleKmRange);
+  const startDay = useResultsStore((s) => s.startDay);
+  const lang = useLangStore((s) => s.lang);
   const [hourIdx, setHourIdx] = useState(2);
   const [dailyMode, setDailyMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -339,8 +343,8 @@ export function ForecastMap() {
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartStateRef = useRef<any>(null);
-  const stateRef = useRef({ hourIdx, dailyMode, forecast });
-  stateRef.current = { hourIdx, dailyMode, forecast };
+  const stateRef = useRef({ hourIdx, dailyMode, forecast, lang });
+  stateRef.current = { hourIdx, dailyMode, forecast, lang };
 
   useEffect(() => {
     return () => { setHoveredKm(null); };
@@ -559,6 +563,24 @@ export function ForecastMap() {
 
     let ttHtml = `<div style="color:#64748b;font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
     ttHtml += `<div style="color:#1e293b">⛰ ${Math.round(ele)} m</div>`;
+    // Date at hovered km — use forecast points' day_offset (avoids rest-day gaps)
+    {
+      const { forecast: fc, lang: lg } = stateRef.current;
+      const pts = fc?.points ?? [];
+      if (pts.length > 0 && km >= pts[0].km) {
+        let pi = pts.findIndex((p) => p.km >= km);
+        if (pi < 0) pi = pts.length - 1;
+        const p0 = pi > 0 ? pts[pi - 1] : pts[0];
+        const p1 = pts[Math.min(pi, pts.length - 1)];
+        const tv = p1.km > p0.km ? Math.max(0, Math.min(1, (km - p0.km) / (p1.km - p0.km))) : 0;
+        const offset = Math.round(p0.day_offset + tv * (p1.day_offset - p0.day_offset));
+        const target = new Date();
+        target.setDate(target.getDate() + offset);
+        const jan0 = new Date(target.getFullYear(), 0, 0);
+        const absDay = Math.floor((target.getTime() - jan0.getTime()) / 86400000);
+        ttHtml += `<div style="color:#475569;font-size:9px">${dayToShortDE(absDay, lg)}</div>`;
+      }
+    }
     if (dailyMode) {
       const tmax = interpByKey(km, ele, "tmax");
       const tmin = interpByKey(km, ele, "tmin");
