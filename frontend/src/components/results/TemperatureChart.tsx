@@ -104,7 +104,6 @@ function TempSegment({
     const colBg     = hsl("--muted");
     const colGrid   = hsl("--border");
     const colAxis   = hsl("--muted-foreground");
-    const colLine   = hsl("--chart-line");
     const colDot    = hsl("--chart-1");
     const colText   = hsl("--foreground");
     const colCard   = hsl("--card");
@@ -263,7 +262,7 @@ function TempSegment({
   }, [drawChart]);
 
   function onMouseMove(e: React.MouseEvent<HTMLDivElement>) {
-    const { tempKey: tk, dayOffset: off, desiredHigh: dh, desiredLow: dl } = stateRef.current;
+    const { tempKey: tk, dayOffset: off } = stateRef.current;
     const cs = chartStateRef.current;
     const svg = svgRef.current;
     const tooltip = tooltipRef.current;
@@ -289,7 +288,6 @@ function TempSegment({
     }
     const [bestKm, bestEle] = cs.drawProfile[bestIdx];
     const temp = cs.tempValues?.[bestIdx] as number | null | undefined;
-    const desired = tk === "tmax" ? dh : dl;
 
     const cxFixed = cs.PL + ((km - cs.kmMin) / (cs.kmMax - cs.kmMin)) * cs.cW;
     const cy = temp != null
