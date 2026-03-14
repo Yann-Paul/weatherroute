@@ -114,6 +114,7 @@ const de = {
   results: {
     tabMap: "Karte",
     tabElevation: "Höhenprofil",
+    tabTemperature: "Temperaturprofil",
     tabWeather: "Tabelle",
     tabRoute: "Route",
     tabForecast: "Vorhersage",
@@ -218,6 +219,7 @@ const de = {
     results: {
       tabMap: "Karte",
       tabElevation: "Höhenprofil",
+      tabTemperature: "Temperatur",
       tabWeather: "Wetter",
       totalKm: "Gesamt",
       ascent: "Aufstieg",
@@ -355,6 +357,7 @@ const en = {
   results: {
     tabMap: "Map",
     tabElevation: "Elevation",
+    tabTemperature: "Temperature Profile",
     tabWeather: "Weather",
     tabRoute: "Route",
     tabForecast: "Forecast",
@@ -459,6 +462,7 @@ const en = {
     results: {
       tabMap: "Map",
       tabElevation: "Elevation",
+      tabTemperature: "Temperature",
       tabWeather: "Weather",
       totalKm: "Total",
       ascent: "Ascent",

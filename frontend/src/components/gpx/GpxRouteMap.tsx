@@ -340,7 +340,7 @@ function GpxMarkers({
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 {showBox && (
                   isStop ? (
-                    // Larger stop/camp marker
+                    // Stop/camp marker: ForecastMap daily-style with purple border
                     <div
                       className="cursor-pointer rounded border text-center shadow-md whitespace-nowrap leading-tight"
                       style={{
@@ -348,45 +348,50 @@ function GpxMarkers({
                         borderColor: "#7c3aed",
                         borderWidth: "2px",
                         fontSize: "10px",
-                        minWidth: "52px",
                         padding: "3px 6px",
                       }}
                     >
                       <div style={{ color: "#e9d5ff", fontSize: "8px", fontWeight: "bold", textShadow }}>
                         {t.gpx.night} {pt.dayNumber}
                       </div>
-                      {hasTemp ? (
-                        <div style={{ color: "#fff", textShadow, fontWeight: "bold", fontSize: "12px", display: "flex", alignItems: "center", gap: "2px" }}>
-                          <WxSymIcon type={wx.type} color={wx.color} size={11} />{Math.round(pt.temp!)}°C
-                        </div>
-                      ) : (
-                        <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "8px" }}>—</div>
-                      )}
-                      {pt.nightLow != null && (
-                        <div style={{ color: "#c4b5fd", fontSize: "10px", textShadow, display: "flex", alignItems: "center", gap: "2px" }}>
-                          <Moon style={{ width: 9, height: 9, flexShrink: 0 }} />{Math.round(pt.nightLow)}°C
-                        </div>
-                      )}
+                      <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                        {hasTemp && (
+                          <span style={{ display: "flex", alignItems: "center", gap: "1px" }}>
+                            <WxSymIcon type={wx.type} color={wx.color} size={10} />
+                            <span style={{ color: "#fff", textShadow, fontWeight: "bold" }}>{Math.round(pt.temp!)}°</span>
+                          </span>
+                        )}
+                        {pt.nightLow != null && (
+                          <span style={{ display: "flex", alignItems: "center", gap: "1px" }}>
+                            <Moon style={{ width: 10, height: 10, color: "#bfdbfe", flexShrink: 0 }} />
+                            <span style={{ color: "#c4b5fd", textShadow }}>{Math.round(pt.nightLow)}°</span>
+                          </span>
+                        )}
+                        {!hasTemp && <span style={{ color: "rgba(255,255,255,0.45)", fontSize: "8px" }}>—</span>}
+                      </div>
                     </div>
                   ) : (
+                    // Regular marker: ForecastMap hourly-style (icon inline with temp)
                     <div
                       className="cursor-pointer rounded border px-1.5 py-0.5 text-center font-bold shadow-md whitespace-nowrap leading-tight"
                       style={{
                         background: bg,
-                        borderColor: "rgba(255,255,255,0.3)",
+                        borderColor: "rgba(255,255,255,0.25)",
                         fontSize: "10px",
-                        minWidth: "36px",
+                        minWidth: "42px",
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "center", padding: "1px 0" }}>
-                        <WxSymIcon type={wx.type} color={wx.color} size={14} />
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "2px" }}>
+                        <WxSymIcon type={wx.type} color={wx.color} size={10} />
+                        <span style={{ color: "#fff", textShadow }}>
+                          {hasTemp ? `${Math.round(pt.temp!)}°` : "?"}
+                        </span>
                       </div>
-                      {hasTemp ? (
-                        <div style={{ color: "#fff", textShadow, fontWeight: "bold" }}>
-                          {Math.round(pt.temp!)}°C
+                      {pt.prcp != null && pt.prcp > 0.3 && (
+                        <div style={{ fontSize: "9px", display: "flex", alignItems: "center", justifyContent: "center", gap: "1px" }}>
+                          <CloudRain style={{ width: 9, height: 9, color: "#93c5fd", flexShrink: 0 }} />
+                          <span style={{ color: "#fff", textShadow }}>{pt.prcp.toFixed(1)} mm</span>
                         </div>
-                      ) : (
-                        <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "8px" }}>—</div>
                       )}
                     </div>
                   )
@@ -604,6 +609,11 @@ function GpxMiniElevChart({
         if (wp.nightLow != null) {
           out += `<text x="${xv.toFixed(1)}" y="${(axY + 24).toFixed(1)}" text-anchor="middle" font-size="7.5" fill="${color}" font-family="sans-serif">☽${Math.round(wp.nightLow)}°</text>`;
         }
+        // Pause time range below night low
+        if (wp.stopTime && wp.nextStartTime) {
+          const pauseLabel = wp.stopTime.slice(11, 16) + "–" + wp.nextStartTime.slice(11, 16);
+          out += `<text x="${xv.toFixed(1)}" y="${(axY + 34).toFixed(1)}" text-anchor="middle" font-size="7" fill="${color}" font-family="sans-serif">${pauseLabel}</text>`;
+        }
       } else {
         out += `<line x1="${xv.toFixed(1)}" y1="${PT}" x2="${xv.toFixed(1)}" y2="${axY}" stroke="${color}" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>`;
         let dotEle = wp.ele;
@@ -621,11 +631,14 @@ function GpxMiniElevChart({
     out += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${axY}" stroke="${clrAxis}" stroke-width="1"/>`;
     out += `<line x1="${PL}" y1="${axY}" x2="${PL + cW}" y2="${axY}" stroke="${clrAxis}" stroke-width="1"/>`;
 
-    // X-axis labels
+    // X-axis labels (time if dailyConfigs available, else km)
     const xStep = Math.max(1, Math.ceil(((kmMax - kmMin) / 6) / 5) * 5);
     for (let km = Math.ceil(kmMin / xStep) * xStep; km <= kmMax; km += xStep) {
       const x = xp(km);
-      out += `<text x="${x.toFixed(1)}" y="${(axY + 12).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="${clrMuted}" font-family="sans-serif">${Math.round(km)}km</text>`;
+      const label = dailyConfigs && startDate
+        ? gpxArrivalTime(km, dailyConfigs, startDate).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+        : `${Math.round(km)}km`;
+      out += `<text x="${x.toFixed(1)}" y="${(axY + 12).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="${clrMuted}" font-family="sans-serif">${label}</text>`;
       out += `<line x1="${x.toFixed(1)}" y1="${axY}" x2="${x.toFixed(1)}" y2="${(axY + 4).toFixed(1)}" stroke="${clrAxis}" stroke-width="0.8"/>`;
     }
 
@@ -745,12 +758,430 @@ function GpxMiniElevChart({
   );
 }
 
+// ─── GpxMiniTempChart ─────────────────────────────────────────────────────────
+
+function GpxMiniTempChart({
+  elevation,
+  weatherPoints,
+  visibleKmRange,
+  onHover,
+  dailyConfigs,
+  startDate,
+}: {
+  elevation: ElevationProfile;
+  weatherPoints: GpxWeatherPoint[];
+  visibleKmRange: [number, number] | null;
+  onHover: (km: number | null) => void;
+  dailyConfigs?: GpxDayConfig[];
+  startDate?: string;
+}) {
+  const t = useT();
+  const isDark = useIsDark();
+  const svgRef = useRef<SVGSVGElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const chartStateRef = useRef<any>(null);
+  const wpRef = useRef(weatherPoints);
+  wpRef.current = weatherPoints;
+
+  const drawChart = useCallback(() => {
+    const cs = getComputedStyle(document.documentElement);
+    const hsl = (v: string) => `hsl(${cs.getPropertyValue(v).trim()})`;
+    const clrBg = hsl("--card");
+    const clrGrid = hsl("--border");
+    const clrMuted = hsl("--muted-foreground");
+    const clrAxis = hsl("--chart-line");
+    const clrCursor = hsl("--chart-cursor");
+
+    const svg = svgRef.current;
+    if (!svg || !elevation) return;
+
+    const W = svg.parentElement?.offsetWidth || 700;
+    const H = 180;
+    const PL = 44, PR = 10, PT = 20, PB = 50;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const profile = elevation.points;
+    if (profile.length < 2 || cW <= 0 || cH <= 0) return;
+
+    const stride = Math.max(1, Math.floor(profile.length / 600));
+    const drawProfile: [number, number][] = profile.filter(
+      (_, i) => i % stride === 0 || i === profile.length - 1
+    );
+
+    const dataKmMin = drawProfile[0][0], dataKmMax = drawProfile[drawProfile.length - 1][0];
+    const kmMin = visibleKmRange ? Math.max(dataKmMin, visibleKmRange[0]) : dataKmMin;
+    const kmMax = visibleKmRange ? Math.min(dataKmMax, visibleKmRange[1]) : dataKmMax;
+
+    const wps = wpRef.current;
+    const axY = PT + cH;
+    const hasTime = !!(dailyConfigs && startDate);
+
+    if (hasTime) {
+      // ── TIME-BASED MODE: riding segments + overnight nightData ───────────────
+
+      // Riding temp points (km → time → temp)
+      const ridePoints: { ms: number; temp: number }[] = drawProfile
+        .filter(([km]) => km >= kmMin && km <= kmMax)
+        .map(([km, ele]) => {
+          const temp = interpTempForGpx(km, ele, wps);
+          if (temp == null) return null;
+          return { ms: gpxArrivalTime(km, dailyConfigs!, startDate!).getTime(), temp };
+        })
+        .filter((p): p is { ms: number; temp: number } => p != null);
+
+      // Stop wps with nightData within visible km range
+      const stopWps = wps.filter(
+        (wp) => wp.type === "stop"
+          && wp.km >= kmMin - 1 && wp.km <= kmMax + 1
+          && wp.stopTime && wp.nextStartTime
+      );
+
+      interface NightSeg { pts: { ms: number; temp: number }[]; stopMs: number; nextStartMs: number; nightLow: number | null; stopTime: string; nextStartTime: string }
+      const nightSegs: NightSeg[] = [];
+      for (const wp of stopWps) {
+        if (!wp.stopTime || !wp.nextStartTime) continue;
+        const pts = (wp.nightData as GpxNightHour[] | undefined ?? [])
+          .map((d) => ({ ms: new Date(`${d.date}T${d.hour}:00`).getTime(), temp: d.temp ?? NaN }))
+          .filter((p) => Number.isFinite(p.ms) && Number.isFinite(p.temp));
+        nightSegs.push({
+          pts,
+          stopMs: new Date(wp.stopTime).getTime(),
+          nextStartMs: new Date(wp.nextStartTime).getTime(),
+          nightLow: wp.nightLow ?? null,
+          stopTime: wp.stopTime,
+          nextStartTime: wp.nextStartTime,
+        });
+      }
+
+      const allMs = [
+        ...ridePoints.map((p) => p.ms),
+        ...nightSegs.flatMap((s) => [s.stopMs, s.nextStartMs]),
+      ];
+      if (allMs.length < 2 || ridePoints.length < 2) {
+        svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+        svg.setAttribute("height", String(H));
+        svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-size="11" fill="${clrMuted}" font-family="sans-serif">Keine Temperaturdaten</text>`;
+        return;
+      }
+
+      const tStart = Math.min(...allMs);
+      const tEnd = Math.max(...allMs);
+      const msRange = tEnd - tStart || 1;
+
+      const allTemps = [
+        ...ridePoints.map((p) => p.temp),
+        ...nightSegs.flatMap((s) => s.pts.map((p) => p.temp)),
+      ];
+      const tMin = Math.floor(Math.min(...allTemps)) - 2;
+      const tMax = Math.ceil(Math.max(...allTemps)) + 2;
+      const tRange = tMax - tMin || 1;
+
+      chartStateRef.current = {
+        drawProfile: drawProfile.filter(([km]) => km >= kmMin && km <= kmMax),
+        kmMin, kmMax, PL, cW, PT, cH,
+        tMode: "time", tStart, msRange, tMin, tMax, tRange,
+        ridePoints, nightSegs,
+      };
+
+      const xp = (ms: number) => PL + ((ms - tStart) / msRange) * cW;
+      const yp = (temp: number) => PT + cH - ((temp - tMin) / tRange) * cH;
+
+      let out = `<rect x="${PL}" y="${PT}" width="${cW}" height="${cH}" fill="${clrBg}" rx="2"/>`;
+
+      // Night shading
+      for (const ns of nightSegs) {
+        const x1 = xp(ns.stopMs), x2 = xp(ns.nextStartMs);
+        out += `<rect x="${x1.toFixed(1)}" y="${PT}" width="${Math.max(0, x2 - x1).toFixed(1)}" height="${cH}" fill="#7c3aed" opacity="0.07"/>`;
+      }
+
+      // Y-axis grid + labels
+      const tempTick = tRange <= 6 ? 1 : tRange <= 15 ? 2 : tRange <= 30 ? 5 : 10;
+      for (let tv = Math.ceil(tMin / tempTick) * tempTick; tv <= tMax; tv += tempTick) {
+        const y = yp(tv);
+        out += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${PL + cW}" y2="${y.toFixed(1)}" stroke="${clrGrid}" stroke-width="0.8"/>`;
+        out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${clrMuted}" font-family="sans-serif">${tv}°</text>`;
+      }
+
+      // 0° reference
+      if (tMin < 0 && tMax > 0) {
+        const y0 = yp(0);
+        out += `<line x1="${PL}" y1="${y0.toFixed(1)}" x2="${PL + cW}" y2="${y0.toFixed(1)}" stroke="${clrAxis}" stroke-width="0.8" stroke-dasharray="3,3"/>`;
+      }
+
+      // Riding temp line
+      for (let i = 0; i < ridePoints.length - 1; i++) {
+        const p0 = ridePoints[i], p1 = ridePoints[i + 1];
+        const col = tempToRgb((p0.temp + p1.temp) / 2, DESIRED_TEMP);
+        out += `<line x1="${xp(p0.ms).toFixed(1)}" y1="${yp(p0.temp).toFixed(1)}" x2="${xp(p1.ms).toFixed(1)}" y2="${yp(p1.temp).toFixed(1)}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>`;
+      }
+
+      // Night temp lines (dashed)
+      for (const ns of nightSegs) {
+        for (let i = 0; i < ns.pts.length - 1; i++) {
+          const p0 = ns.pts[i], p1 = ns.pts[i + 1];
+          const col = tempToRgb((p0.temp + p1.temp) / 2, DESIRED_TEMP);
+          out += `<line x1="${xp(p0.ms).toFixed(1)}" y1="${yp(p0.temp).toFixed(1)}" x2="${xp(p1.ms).toFixed(1)}" y2="${yp(p1.temp).toFixed(1)}" stroke="${col}" stroke-width="1.5" stroke-dasharray="3,2" stroke-linecap="round"/>`;
+        }
+      }
+
+      // Stop marker lines + labels
+      for (const ns of nightSegs) {
+        const xv = xp(ns.stopMs);
+        out += `<line x1="${xv.toFixed(1)}" y1="${PT}" x2="${xv.toFixed(1)}" y2="${axY}" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.7"/>`;
+        if (ns.nightLow != null) {
+          out += `<text x="${xv.toFixed(1)}" y="${(axY + 22).toFixed(1)}" text-anchor="middle" font-size="7.5" fill="#7c3aed" font-family="sans-serif">☽${Math.round(ns.nightLow)}°</text>`;
+        }
+        const pauseLabel = ns.stopTime.slice(11, 16) + "–" + ns.nextStartTime.slice(11, 16);
+        out += `<text x="${xv.toFixed(1)}" y="${(axY + 34).toFixed(1)}" text-anchor="middle" font-size="7" fill="#7c3aed" font-family="sans-serif">${pauseLabel}</text>`;
+      }
+
+      // Axes
+      out += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${axY}" stroke="${clrAxis}" stroke-width="1"/>`;
+      out += `<line x1="${PL}" y1="${axY}" x2="${PL + cW}" y2="${axY}" stroke="${clrAxis}" stroke-width="1"/>`;
+
+      // X-axis time ticks
+      const hourMs = 3_600_000;
+      const tickMs = msRange < 12 * hourMs ? hourMs
+        : msRange < 24 * hourMs ? 2 * hourMs
+        : msRange < 48 * hourMs ? 4 * hourMs
+        : msRange < 96 * hourMs ? 8 * hourMs : 12 * hourMs;
+      for (let ms = Math.ceil(tStart / tickMs) * tickMs; ms <= tEnd; ms += tickMs) {
+        const x = xp(ms);
+        const label = new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+        out += `<text x="${x.toFixed(1)}" y="${(axY + 12).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="${clrMuted}" font-family="sans-serif">${label}</text>`;
+        out += `<line x1="${x.toFixed(1)}" y1="${axY}" x2="${x.toFixed(1)}" y2="${(axY + 4).toFixed(1)}" stroke="${clrAxis}" stroke-width="0.8"/>`;
+      }
+
+      // Cursor elements
+      out += `<line id="gpx-tc-cursor" x1="0" y1="${PT}" x2="0" y2="${axY}" stroke="${clrCursor}" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>`;
+      out += `<circle id="gpx-tc-cursor-dot" cx="0" cy="0" r="3.5" fill="#f97316" stroke="white" stroke-width="1.5" opacity="0.9" visibility="hidden"/>`;
+
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      svg.setAttribute("height", String(H));
+      svg.innerHTML = out;
+      return;
+    }
+
+    // ── KM-BASED MODE (fallback when no dailyConfigs) ────────────────────────
+    const kmRange = kmMax - kmMin || 1;
+    const tempData: { km: number; ele: number; temp: number }[] = drawProfile
+      .filter(([km]) => km >= kmMin && km <= kmMax)
+      .map(([km, ele]) => {
+        const temp = interpTempForGpx(km, ele, wps);
+        return temp != null ? { km, ele, temp } : null;
+      })
+      .filter((p): p is { km: number; ele: number; temp: number } => p != null);
+
+    chartStateRef.current = {
+      drawProfile: drawProfile.filter(([km]) => km >= kmMin && km <= kmMax),
+      kmMin, kmMax, PL, cW, PT, cH,
+      tempData,
+    };
+
+    if (tempData.length < 2) {
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      svg.setAttribute("height", String(H));
+      svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-size="11" fill="${clrMuted}" font-family="sans-serif">Keine Temperaturdaten</text>`;
+      return;
+    }
+
+    const temps = tempData.map((p) => p.temp);
+    const tMin = Math.floor(Math.min(...temps)) - 2;
+    const tMax = Math.ceil(Math.max(...temps)) + 2;
+    const tRange = tMax - tMin || 1;
+    chartStateRef.current.tMin = tMin;
+    chartStateRef.current.tMax = tMax;
+    chartStateRef.current.tRange = tRange;
+
+    const xp = (km: number) => PL + ((km - kmMin) / kmRange) * cW;
+    const yp = (temp: number) => PT + cH - ((temp - tMin) / tRange) * cH;
+
+    let out = `<rect x="${PL}" y="${PT}" width="${cW}" height="${cH}" fill="${clrBg}" rx="2"/>`;
+
+    // Y-axis grid + labels
+    const tempTick = tRange <= 6 ? 1 : tRange <= 15 ? 2 : tRange <= 30 ? 5 : 10;
+    for (let tv = Math.ceil(tMin / tempTick) * tempTick; tv <= tMax; tv += tempTick) {
+      const y = yp(tv);
+      out += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${PL + cW}" y2="${y.toFixed(1)}" stroke="${clrGrid}" stroke-width="0.8"/>`;
+      out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${clrMuted}" font-family="sans-serif">${tv}°</text>`;
+    }
+
+    // 0° reference
+    if (tMin < 0 && tMax > 0) {
+      const y0 = yp(0);
+      out += `<line x1="${PL}" y1="${y0.toFixed(1)}" x2="${PL + cW}" y2="${y0.toFixed(1)}" stroke="${clrAxis}" stroke-width="0.8" stroke-dasharray="3,3"/>`;
+    }
+
+    // Stop markers
+    for (const wp of wps) {
+      if (wp.type !== "stop" || wp.km < kmMin || wp.km > kmMax) continue;
+      const xv = xp(wp.km);
+      out += `<line x1="${xv.toFixed(1)}" y1="${PT}" x2="${xv.toFixed(1)}" y2="${axY}" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.7"/>`;
+      if (wp.nightLow != null) {
+        out += `<text x="${xv.toFixed(1)}" y="${(axY + 22).toFixed(1)}" text-anchor="middle" font-size="7.5" fill="#7c3aed" font-family="sans-serif">☽${Math.round(wp.nightLow)}°</text>`;
+      }
+      if (wp.stopTime && wp.nextStartTime) {
+        const pauseLabel = wp.stopTime.slice(11, 16) + "–" + wp.nextStartTime.slice(11, 16);
+        out += `<text x="${xv.toFixed(1)}" y="${(axY + 34).toFixed(1)}" text-anchor="middle" font-size="7" fill="#7c3aed" font-family="sans-serif">${pauseLabel}</text>`;
+      }
+    }
+
+    // Colored temperature line
+    for (let i = 0; i < tempData.length - 1; i++) {
+      const p0 = tempData[i], p1 = tempData[i + 1];
+      const col = tempToRgb((p0.temp + p1.temp) / 2, DESIRED_TEMP);
+      out += `<line x1="${xp(p0.km).toFixed(1)}" y1="${yp(p0.temp).toFixed(1)}" x2="${xp(p1.km).toFixed(1)}" y2="${yp(p1.temp).toFixed(1)}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>`;
+    }
+
+    // Axes
+    out += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${axY}" stroke="${clrAxis}" stroke-width="1"/>`;
+    out += `<line x1="${PL}" y1="${axY}" x2="${PL + cW}" y2="${axY}" stroke="${clrAxis}" stroke-width="1"/>`;
+
+    // X-axis km ticks
+    const xStep = Math.max(1, Math.ceil((kmMax - kmMin) / 6 / 5) * 5);
+    for (let km = Math.ceil(kmMin / xStep) * xStep; km <= kmMax; km += xStep) {
+      const x = xp(km);
+      out += `<text x="${x.toFixed(1)}" y="${(axY + 12).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="${clrMuted}" font-family="sans-serif">${Math.round(km)}km</text>`;
+      out += `<line x1="${x.toFixed(1)}" y1="${axY}" x2="${x.toFixed(1)}" y2="${(axY + 4).toFixed(1)}" stroke="${clrAxis}" stroke-width="0.8"/>`;
+    }
+
+    // Cursor elements
+    out += `<line id="gpx-tc-cursor" x1="0" y1="${PT}" x2="0" y2="${axY}" stroke="${clrCursor}" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>`;
+    out += `<circle id="gpx-tc-cursor-dot" cx="0" cy="0" r="3.5" fill="#f97316" stroke="white" stroke-width="1.5" opacity="0.9" visibility="hidden"/>`;
+
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("height", String(H));
+    svg.innerHTML = out;
+  }, [elevation, weatherPoints, visibleKmRange, isDark, dailyConfigs, startDate]);
+
+  useEffect(() => {
+    drawChart();
+    window.addEventListener("resize", drawChart);
+    return () => window.removeEventListener("resize", drawChart);
+  }, [drawChart]);
+
+  function onChartMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    const cs = chartStateRef.current;
+    const svg = svgRef.current;
+    const tooltip = tooltipRef.current;
+    if (!cs || !svg || !tooltip) return;
+
+    const rect = svg.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (x < cs.PL || x > cs.PL + cs.cW) {
+      tooltip.style.display = "none";
+      svg.querySelector("#gpx-tc-cursor")?.setAttribute("visibility", "hidden");
+      svg.querySelector("#gpx-tc-cursor-dot")?.setAttribute("visibility", "hidden");
+      onHover(null);
+      return;
+    }
+
+    const ttMuted = "hsl(var(--muted-foreground))";
+    let ttHtml = "";
+    let cxFixed = x;
+    let cy = cs.PT + cs.cH / 2;
+    let hoverKm: number | null = null;
+
+    if (cs.tMode === "time") {
+      const ms = cs.tStart + ((x - cs.PL) / cs.cW) * cs.msRange;
+      cxFixed = x;
+      let bestTemp: number | null = null;
+      let bestDist = Infinity;
+      for (const p of (cs.ridePoints as { ms: number; temp: number }[])) {
+        const d = Math.abs(p.ms - ms);
+        if (d < bestDist) { bestDist = d; bestTemp = p.temp; }
+      }
+      for (const ns of (cs.nightSegs as { pts: { ms: number; temp: number }[] }[])) {
+        for (const p of ns.pts) {
+          const d = Math.abs(p.ms - ms);
+          if (d < bestDist) { bestDist = d; bestTemp = p.temp; }
+        }
+      }
+      const timeStr = new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+      ttHtml = `<div style="color:${ttMuted};font-size:9px;margin-bottom:2px">🕐 ${timeStr}</div>`;
+      if (bestTemp != null) {
+        ttHtml += `<div style="color:${tempToRgb(bestTemp, DESIRED_TEMP)};font-size:13px;font-weight:600">☀ ${bestTemp.toFixed(1)}°C</div>`;
+        cy = cs.PT + cs.cH - ((bestTemp - cs.tMin) / cs.tRange) * cs.cH;
+      }
+    } else {
+      const km = cs.kmMin + ((x - cs.PL) / cs.cW) * (cs.kmMax - cs.kmMin);
+      let best = cs.drawProfile[0], bestDist = Infinity;
+      for (const p of cs.drawProfile) {
+        const d = Math.abs(p[0] - km);
+        if (d < bestDist) { bestDist = d; best = p; }
+      }
+      const [bestKm, bestEle] = best;
+      const temp = interpTempForGpx(bestKm, bestEle, wpRef.current);
+      cxFixed = cs.PL + ((km - cs.kmMin) / (cs.kmMax - cs.kmMin)) * cs.cW;
+      cy = temp != null && cs.tRange
+        ? cs.PT + cs.cH - ((temp - cs.tMin) / cs.tRange) * cs.cH
+        : cs.PT + cs.cH / 2;
+      ttHtml = `<div style="color:${ttMuted};font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
+      if (temp != null) {
+        ttHtml += `<div style="color:${tempToRgb(temp, DESIRED_TEMP)};font-size:13px;font-weight:600">☀ ${temp.toFixed(1)}°C</div>`;
+      }
+      hoverKm = km;
+    }
+
+    const cl = svg.querySelector("#gpx-tc-cursor");
+    if (cl) { cl.setAttribute("x1", String(cxFixed)); cl.setAttribute("x2", String(cxFixed)); cl.setAttribute("visibility", "visible"); }
+    const cdot = svg.querySelector("#gpx-tc-cursor-dot");
+    if (cdot) { cdot.setAttribute("cx", String(cxFixed)); cdot.setAttribute("cy", String(cy)); cdot.setAttribute("visibility", "visible"); }
+
+    tooltip.innerHTML = ttHtml;
+    tooltip.style.display = "block";
+    const tw = tooltip.offsetWidth;
+    const panelW = svg.parentElement?.offsetWidth ?? 700;
+    let tx = x + 14;
+    if (tx + tw + 4 > panelW) tx = x - tw - 14;
+    tooltip.style.left = `${tx}px`;
+    tooltip.style.bottom = "26px";
+    tooltip.style.top = "auto";
+
+    onHover(hoverKm);
+  }
+
+  function onChartMouseLeave() {
+    if (tooltipRef.current) tooltipRef.current.style.display = "none";
+    const svg = svgRef.current;
+    if (svg) {
+      svg.querySelector("#gpx-tc-cursor")?.setAttribute("visibility", "hidden");
+      svg.querySelector("#gpx-tc-cursor-dot")?.setAttribute("visibility", "hidden");
+    }
+    onHover(null);
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-3">
+      <p className="mb-1 text-xs font-medium text-muted-foreground">{t.gpx.results.tabTemperature}</p>
+      <div
+        className="relative w-full overflow-hidden"
+        onMouseMove={onChartMouseMove}
+        onMouseLeave={onChartMouseLeave}
+      >
+        <svg ref={svgRef} width="100%" style={{ display: "block" }} />
+        <div
+          ref={tooltipRef}
+          className="pointer-events-none absolute hidden whitespace-nowrap rounded border border-border bg-card/95 px-2 py-1.5 text-[11px] leading-relaxed text-foreground shadow-md"
+          style={{ zIndex: 20 }}
+        />
+      </div>
+      <div className="mt-1 flex items-center gap-2 px-10 text-[9px] text-muted-foreground">
+        <span>{DESIRED_TEMP - 15}°C</span>
+        <div className="h-2 flex-1 rounded-full" style={{ background: LEGEND_GRADIENT }} />
+        <span>{DESIRED_TEMP + 15}°C</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function GpxRouteMap({ results }: { results: GpxJobResults }) {
   const [visibleKmRange, setVisibleKmRange] = useState<[number, number] | null>(null);
   const [hoveredKm, setHoveredKm] = useState<number | null>(null);
+  const [chartMode, setChartMode] = useState<"elevation" | "temperature">("elevation");
   const isDark = useIsDark();
+  const t = useT();
 
   // trackPolyline: [cumKm, lat, lon][] scaled to match elevation profile km values
   const trackPolyline = useMemo<[number, number, number][]>(() => {
@@ -808,14 +1239,51 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
       </MapView>
 
       {results.elevation && (
-        <GpxMiniElevChart
-          elevation={results.elevation}
-          weatherPoints={results.weatherPoints}
-          visibleKmRange={visibleKmRange}
-          onHover={setHoveredKm}
-          dailyConfigs={results.dailyConfigs}
-          startDate={results.startDate}
-        />
+        <div className="space-y-2">
+          <div className="flex overflow-hidden rounded-lg border border-border w-fit">
+            <button
+              onClick={() => setChartMode("elevation")}
+              className={[
+                "border-r border-border px-3 py-1 text-xs font-medium transition-colors",
+                chartMode === "elevation"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-card text-muted-foreground hover:bg-muted",
+              ].join(" ")}
+            >
+              {t.gpx.results.tabElevation}
+            </button>
+            <button
+              onClick={() => setChartMode("temperature")}
+              className={[
+                "px-3 py-1 text-xs font-medium transition-colors",
+                chartMode === "temperature"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-card text-muted-foreground hover:bg-muted",
+              ].join(" ")}
+            >
+              {t.gpx.results.tabTemperature}
+            </button>
+          </div>
+          {chartMode === "elevation" ? (
+            <GpxMiniElevChart
+              elevation={results.elevation}
+              weatherPoints={results.weatherPoints}
+              visibleKmRange={visibleKmRange}
+              onHover={setHoveredKm}
+              dailyConfigs={results.dailyConfigs}
+              startDate={results.startDate}
+            />
+          ) : (
+            <GpxMiniTempChart
+              elevation={results.elevation}
+              weatherPoints={results.weatherPoints}
+              visibleKmRange={visibleKmRange}
+              onHover={setHoveredKm}
+              dailyConfigs={results.dailyConfigs}
+              startDate={results.startDate}
+            />
+          )}
+        </div>
       )}
     </div>
   );

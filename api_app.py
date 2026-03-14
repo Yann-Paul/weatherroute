@@ -2243,7 +2243,66 @@ def run_gpx_analysis(
                 stop_is_forecast = (stop_dt.date() - today).days <= 15
                 s_city = find_nearest_city_id(stop_lat, stop_lon, city_graph)
                 stop_temp = stop_prcp = stop_wspd = None
-                if s_city:
+                night_data: list = []
+
+                if stop_is_forecast:
+                    # Use Open-Meteo forecast API (same source as route points)
+                    try:
+                        _resp = requests.get(
+                            "https://api.open-meteo.com/v1/forecast",
+                            params={
+                                "latitude": stop_lat,
+                                "longitude": stop_lon,
+                                "hourly": "temperature_2m,precipitation,windspeed_10m",
+                                "forecast_days": 16,
+                                "timezone": "auto",
+                            },
+                            timeout=15,
+                        )
+                        _resp.raise_for_status()
+                        _fd = _resp.json()
+                        _htimes = _fd.get("hourly", {}).get("time", [])
+                        _htemp  = _fd.get("hourly", {}).get("temperature_2m", [])
+                        _hprcp  = _fd.get("hourly", {}).get("precipitation", [])
+                        _hwspd  = _fd.get("hourly", {}).get("windspeed_10m", [])
+                        _hw = {
+                            t: {
+                                "temp": _htemp[i] if i < len(_htemp) else None,
+                                "prcp": _hprcp[i] if i < len(_hprcp) else None,
+                                "wspd": _hwspd[i] if i < len(_hwspd) else None,
+                            }
+                            for i, t in enumerate(_htimes)
+                        }
+
+                        def _nearest_hw(dt):
+                            for delta in [0, 1, -1, 2, -2, 3, -3]:
+                                key = (dt + timedelta(hours=delta)).strftime("%Y-%m-%dT%H:00")
+                                if key in _hw:
+                                    return _hw[key]
+                            return {}
+
+                        _sw = _nearest_hw(stop_dt)
+                        stop_temp = round(_sw["temp"], 1) if _sw.get("temp") is not None else None
+                        stop_prcp = round(_sw["prcp"], 2) if _sw.get("prcp") is not None else None
+                        stop_wspd = round(_sw["wspd"], 1) if _sw.get("wspd") is not None else None
+
+                        slot = stop_dt
+                        while slot <= nxt_start_dt + timedelta(minutes=1):
+                            _slw = _nearest_hw(slot)
+                            night_data.append({
+                                "hour": slot.strftime("%H:%M"),
+                                "date": slot.date().isoformat(),
+                                "temp": round(_slw["temp"], 1) if _slw.get("temp") is not None else None,
+                                "prcp": round(_slw["prcp"], 2) if _slw.get("prcp") is not None else None,
+                                "wspd": round(_slw["wspd"], 1) if _slw.get("wspd") is not None else None,
+                            })
+                            slot = slot + timedelta(hours=3)
+                    except Exception as _exc:
+                        print(f"[GPX Stop Forecast] Failed: {_exc}", flush=True)
+                        stop_is_forecast = False
+
+                if not stop_is_forecast and s_city:
+                    # Climate normals fallback for stops > 15 days away
                     try:
                         ws = get_interpolated_weather(s_city, stop_dt.timetuple().tm_yday, temperatures, 0.0)
                         s_tmin = ws[0] if ws[0] is not None else 5.0
@@ -2257,13 +2316,11 @@ def run_gpx_analysis(
                         stop_wspd = round(ws[3], 1) if len(ws) > 3 and ws[3] is not None else None
                     except Exception:
                         pass
-                night_data: list = []
-                slot = stop_dt
-                while slot <= nxt_start_dt + timedelta(minutes=1):
-                    slot_doy = slot.timetuple().tm_yday
-                    slot_hf = slot.hour + slot.minute / 60.0
-                    sl_temp = sl_prcp = sl_wspd = None
-                    if s_city:
+                    slot = stop_dt
+                    while slot <= nxt_start_dt + timedelta(minutes=1):
+                        slot_doy = slot.timetuple().tm_yday
+                        slot_hf = slot.hour + slot.minute / 60.0
+                        sl_temp = sl_prcp = sl_wspd = None
                         try:
                             w2 = get_interpolated_weather(s_city, slot_doy, temperatures, 0.0)
                             sl_tmin = w2[0] if w2[0] is not None else 5.0
@@ -2276,14 +2333,14 @@ def run_gpx_analysis(
                             sl_wspd = round(w2[3], 1) if len(w2) > 3 and w2[3] is not None else None
                         except Exception:
                             pass
-                    night_data.append({
-                        "hour": slot.strftime("%H:%M"),
-                        "date": slot.date().isoformat(),
-                        "temp": sl_temp,
-                        "prcp": sl_prcp,
-                        "wspd": sl_wspd,
-                    })
-                    slot = slot + timedelta(hours=3)
+                        night_data.append({
+                            "hour": slot.strftime("%H:%M"),
+                            "date": slot.date().isoformat(),
+                            "temp": sl_temp,
+                            "prcp": sl_prcp,
+                            "wspd": sl_wspd,
+                        })
+                        slot = slot + timedelta(hours=3)
                 night_temps_arr = [d["temp"] for d in night_data if d["temp"] is not None]
                 night_low = round(min(night_temps_arr), 1) if night_temps_arr else None
                 weather_points.append({

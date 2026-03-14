@@ -3,7 +3,7 @@ import type { GpxWeatherPoint } from "@/api/types";
 import { tempToRgb } from "@/utils/tempColor";
 import { windDegreesToDirection } from "@/utils/constants";
 import { useT } from "@/i18n/useT";
-import { CloudRain, Cloud, Sun, Mountain, ArrowDown, ArrowRight, Play, Square } from "lucide-react";
+import { CloudRain, Cloud, Sun, Mountain, ArrowDown, ArrowRight, Play, Square, Moon } from "lucide-react";
 
 function WxSymbol({ prcp, cloud }: { prcp: number | null; cloud: number | null }): ReactNode {
   if (prcp != null && prcp >= 0.3) return <CloudRain className="inline h-3.5 w-3.5 text-chart-1" />;
@@ -20,6 +20,7 @@ function TypeBadge({ type }: { type: GpxWeatherPoint["type"] }) {
     regular: <><ArrowRight className="inline h-3 w-3 mr-0.5" />{t.gpx.results.typeRegular}</>,
     start: <><Play className="inline h-3 w-3 mr-0.5" />Start</>,
     end: <><Square className="inline h-3 w-3 mr-0.5" />Ende</>,
+    stop: <><Moon className="inline h-3 w-3 mr-0.5" />Stop</>,
   };
   const colors: Record<string, string> = {
     pass: "bg-warn/15 text-warn",
@@ -27,6 +28,7 @@ function TypeBadge({ type }: { type: GpxWeatherPoint["type"] }) {
     regular: "bg-muted text-muted-foreground",
     start: "bg-good/15 text-good",
     end: "bg-muted text-muted-foreground",
+    stop: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
   };
   return (
     <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${colors[type] ?? ""}`}>
@@ -60,6 +62,7 @@ export function GpxWeatherTable({ weatherPoints }: { weatherPoints: GpxWeatherPo
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Typ</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Höhe</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Ankunft</th>
+            <th className="px-3 py-2 text-left font-medium text-muted-foreground"><Moon className="inline h-3.5 w-3.5 mr-0.5" />Pause</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Temp</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Wetter</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground"><CloudRain className="inline h-3.5 w-3.5" /> mm/h</th>
@@ -83,6 +86,11 @@ export function GpxWeatherTable({ weatherPoints }: { weatherPoints: GpxWeatherPo
                 </td>
                 <td className="px-3 py-1.5 tabular-nums">{Math.round(wp.ele)} m</td>
                 <td className="px-3 py-1.5 whitespace-nowrap">{arrival}</td>
+                <td className="px-3 py-1.5 whitespace-nowrap tabular-nums">
+                  {wp.type === "stop" && wp.stopTime && wp.nextStartTime
+                    ? wp.stopTime.slice(11, 16) + "–" + wp.nextStartTime.slice(11, 16)
+                    : "—"}
+                </td>
                 <td
                   className="px-3 py-1.5 tabular-nums font-semibold"
                   style={{

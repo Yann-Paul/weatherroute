@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router";
-import { Map, Mountain, CloudSun, List, Bookmark, BookmarkCheck, SlidersHorizontal } from "lucide-react";
+import { Map, Mountain, Thermometer, CloudSun, List, Bookmark, BookmarkCheck, SlidersHorizontal } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ResultsHeader } from "./ResultsHeader";
 import { ForecastMap } from "./ForecastMap";
 import { ElevationChart } from "./ElevationChart";
+import { TemperatureChart } from "./TemperatureChart";
 import { WeatherGrid } from "./WeatherGrid";
 import { RouteList } from "./RouteList";
 import { useResultsStore } from "@/stores/resultsStore";
@@ -234,6 +235,10 @@ export function ResultsPage() {
             <Mountain className="h-4 w-4" />
             <span className="hidden sm:inline">{t.results.tabElevation}</span>
           </TabsTrigger>
+          <TabsTrigger value="temperature" className="gap-1.5">
+            <Thermometer className="h-4 w-4" />
+            <span className="hidden sm:inline">{t.results.tabTemperature}</span>
+          </TabsTrigger>
           <TabsTrigger value="weather" className="gap-1.5">
             <CloudSun className="h-4 w-4" />
             <span className="hidden sm:inline">{t.results.tabWeather}</span>
@@ -250,6 +255,10 @@ export function ResultsPage() {
 
         <TabsContent value="elevation">
           <ElevationChart />
+        </TabsContent>
+
+        <TabsContent value="temperature">
+          <TemperatureChart />
         </TabsContent>
 
         <TabsContent value="weather">

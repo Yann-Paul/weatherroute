@@ -1130,7 +1130,17 @@ function MapRoute({
   useEffect(() => {
     if (!isLoaded || !map || !map.getLayer(layerId)) return;
 
-    map.setPaintProperty(layerId, "line-color", color);
+    const resolveColor = (c: string) => {
+      if (!c.includes("var(")) return c;
+      const el = document.createElement("div");
+      el.style.color = c;
+      document.body.appendChild(el);
+      const resolved = getComputedStyle(el).color;
+      document.body.removeChild(el);
+      return resolved || "#4285F4";
+    };
+
+    map.setPaintProperty(layerId, "line-color", resolveColor(color));
     map.setPaintProperty(layerId, "line-width", width);
     map.setPaintProperty(layerId, "line-opacity", opacity);
     if (dashArray) {

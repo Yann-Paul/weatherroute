@@ -14,12 +14,15 @@ import { useResultsStore } from "@/stores/resultsStore";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
 import { dayToShortDE } from "@/utils/tempColor";
+import { useIsDark } from "@/stores/themeStore";
 import type { ForecastPoint, ForecastPointData, ForecastDailyData, ForecastHourData } from "@/api/types";
 
 const HOUR_STEPS = [0, 6, 12, 18, 24];
 
-const LEGEND_GRADIENT =
-  "linear-gradient(to right, rgb(60,0,80) 0%, rgb(30,30,160) 16.67%, rgb(100,160,255) 33.33%, rgb(255,255,255) 50%, rgb(255,150,100) 66.67%, rgb(200,40,40) 83.33%, rgb(160,0,120) 100%)";
+function legendGradient(isDark: boolean): string {
+  const mid = isDark ? "rgb(255,255,255)" : "rgb(160,160,160)";
+  return `linear-gradient(to right, rgb(60,0,80) 0%, rgb(30,30,160) 16.67%, rgb(100,160,255) 33.33%, ${mid} 50%, rgb(255,150,100) 66.67%, rgb(200,40,40) 83.33%, rgb(160,0,120) 100%)`;
+}
 
 // ─── Pure helpers ────────────────────────────────────────────────────────────
 
@@ -29,11 +32,16 @@ function compassDir16(deg: number | null): string {
   return dirs[Math.round(deg / 22.5) % 16];
 }
 
-function tempToRgb(temp: number, desired: number): string {
-  const STOPS: [number, [number, number, number]][] = [
-    [-1.0, [60, 0, 80]], [-0.667, [30, 30, 160]], [-0.333, [100, 160, 255]],
-    [0.0, [255, 255, 255]], [0.333, [255, 150, 100]], [0.667, [200, 40, 40]], [1.0, [160, 0, 120]],
-  ];
+function tempToRgb(temp: number, desired: number, isDark = true): string {
+  const STOPS: [number, [number, number, number]][] = isDark
+    ? [
+        [-1.0, [60, 0, 80]], [-0.667, [30, 30, 160]], [-0.333, [100, 160, 255]],
+        [0.0, [255, 255, 255]], [0.333, [255, 150, 100]], [0.667, [200, 40, 40]], [1.0, [160, 0, 120]],
+      ]
+    : [
+        [-1.0, [60, 0, 80]], [-0.667, [30, 30, 160]], [-0.333, [100, 160, 255]],
+        [0.0, [160, 160, 160]], [0.333, [255, 150, 100]], [0.667, [200, 40, 40]], [1.0, [160, 0, 120]],
+      ];
   const t = Math.max(-1, Math.min(1, (temp - desired) / 15));
   for (let i = 0; i < STOPS.length - 1; i++) {
     if (t <= STOPS[i + 1][0]) {
@@ -149,6 +157,7 @@ interface ClimateMarkersProps {
 function ClimateMarkers({ points, miniElev, currentHour, dailyMode, desiredHigh, desiredLow }: ClimateMarkersProps) {
   const { map, isLoaded } = useMap();
   const [zoom, setZoom] = useState(5);
+  const isDark = useIsDark();
   useEffect(() => {
     if (!map || !isLoaded) return;
     const onZoom = () => setZoom(map.getZoom());
@@ -170,7 +179,7 @@ function ClimateMarkers({ points, miniElev, currentHour, dailyMode, desiredHigh,
 
         if (dailyMode) {
           const tavg = (cp.tmax + cp.tmin) / 2;
-          bg = tempToRgb(tavg, desiredAvg);
+          bg = tempToRgb(tavg, desiredAvg, isDark);
           boxContent = (
             <>
               <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
@@ -195,7 +204,7 @@ function ClimateMarkers({ points, miniElev, currentHour, dailyMode, desiredHigh,
           const isNight = currentHour === 0 || currentHour === 6 || currentHour === 24;
           const temp = isNight ? cp.tmin : cp.tmax;
           const chartRef = isNight ? desiredLow : desiredHigh;
-          bg = tempToRgb(temp, chartRef);
+          bg = tempToRgb(temp, chartRef, isDark);
           const IconComp = isNight ? Moon : Sun;
           const iconColor = isNight ? "#bfdbfe" : "#fde68a";
           boxContent = (
@@ -267,6 +276,7 @@ function ForecastMarkers({
 }: MarkersProps) {
   const { map, isLoaded } = useMap();
   const [zoom, setZoom] = useState(5);
+  const isDark = useIsDark();
 
   useEffect(() => {
     if (!map || !isLoaded) return;
@@ -295,7 +305,7 @@ function ForecastMarkers({
         if (dailyMode) {
           const d = fd.daily;
           const tavg = d?.tmax != null && d?.tmin != null ? (d.tmax + d.tmin) / 2 : null;
-          bg = tavg != null ? tempToRgb(tavg, desiredAvg) : "#94a3b8";
+          bg = tavg != null ? tempToRgb(tavg, desiredAvg, isDark) : "#94a3b8";
           boxContent = (
             <>
               <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
@@ -333,7 +343,7 @@ function ForecastMarkers({
         } else {
           const h = fd.hourly?.[String(currentHour)];
           const chartRef = (currentHour === 0 || currentHour === 6 || currentHour === 24) ? desiredLow : desiredHigh;
-          bg = h?.temp != null ? tempToRgb(h.temp, chartRef) : "#94a3b8";
+          bg = h?.temp != null ? tempToRgb(h.temp, chartRef, isDark) : "#94a3b8";
           const isRainy = (h?.prcp ?? 0) > 1;
           const isHeavyCloud = (h?.cloud ?? 0) > 75;
           const iconColor = isRainy ? "#93c5fd" : isHeavyCloud ? "#cbd5e1" : "#fde68a";
@@ -480,6 +490,8 @@ const lang = useLangStore((s) => s.lang);
   const [dailyMode, setDailyMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [elevExpanded, setElevExpanded] = useState(true);
+  const [showTempProfile, setShowTempProfile] = useState(false);
+  const isDark = useIsDark();
   const t = useT();
 
   useEffect(() => {
@@ -490,7 +502,7 @@ const lang = useLangStore((s) => s.lang);
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartStateRef = useRef<any>(null);
-  const stateRef = useRef({ hourIdx, dailyMode, forecast, lang, climatePoints: [] as ClimatePoint[] });
+  const stateRef = useRef({ hourIdx, dailyMode, forecast, lang, climatePoints: [] as ClimatePoint[], showTempProfile: false });
   // stateRef.current is updated after climatePoints is defined below
 
   useEffect(() => {
@@ -602,7 +614,7 @@ const lang = useLangStore((s) => s.lang);
   }, [points, data]);
 
   // Keep stateRef current (used in event handlers)
-  stateRef.current = { hourIdx, dailyMode, forecast, lang, climatePoints };
+  stateRef.current = { hourIdx, dailyMode, forecast, lang, climatePoints, showTempProfile };
 
   const hourLabels = HOUR_STEPS.map((h) => t.forecastMap.hourLabel(h));
 
@@ -716,6 +728,96 @@ const lang = useLangStore((s) => s.lang);
       return climateInterp(km, key, climatePoints);
     }
 
+    // ─── Temperature profile mode ─────────────────────────────────────────────
+    if (showTempProfile) {
+      const workSlice = visSlice.length >= 2 ? visSlice : miniElev;
+      const chartRef2 = (currentHour === 0 || currentHour === 6 || currentHour === 24) ? desiredLow : desiredHigh;
+      const desired2 = dailyMode ? (desiredHigh + desiredLow) / 2 : chartRef2;
+      const temps2: (number | null)[] = workSlice.map(([km,,, e]) =>
+        dailyMode
+          ? (() => { const tx = interpTempByKey(km, e, "tmax"); const tn = interpTempByKey(km, e, "tmin"); return tx != null && tn != null ? (tx + tn) / 2 : tx ?? tn; })()
+          : interpTemp(km, e)
+      );
+      const valid2 = temps2.filter((t): t is number => t !== null);
+      const tMin2 = valid2.length > 0 ? Math.floor(Math.min(...valid2)) - 2 : -5;
+      const tMax2 = valid2.length > 0 ? Math.ceil(Math.max(...valid2)) + 2 : 35;
+      const tRange2 = tMax2 - tMin2 || 1;
+
+      chartStateRef.current = {
+        miniElev, kmMin, kmMax,
+        tMin: tMin2, tMax: tMax2, tRange: tRange2,
+        PL, cW, PT, PB, cH, H,
+        showTempProfile: true,
+        tempWorkSlice: workSlice,
+        tempTemps: temps2,
+        colAxisFallback: cssVar("--muted-foreground"),
+        colTextResolved: cssVar("--foreground"),
+      };
+
+      const ypT = (t: number) => PT + cH - ((t - tMin2) / tRange2) * cH;
+      const axY2 = PT + cH;
+
+      let out2 = `<defs><clipPath id="fc-clip"><rect x="${PL}" y="${PT}" width="${cW}" height="${cH}"/></clipPath></defs>`;
+      out2 += `<rect x="${PL}" y="${PT}" width="${cW}" height="${cH}" fill="${colBg}" rx="2"/>`;
+
+      const tempTick2 = tRange2 <= 10 ? 2 : tRange2 <= 25 ? 5 : 10;
+      for (let tv = Math.ceil(tMin2 / tempTick2) * tempTick2; tv <= tMax2; tv += tempTick2) {
+        const y = ypT(tv);
+        out2 += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${PL + cW}" y2="${y.toFixed(1)}" stroke="${colGrid}" stroke-width="0.8"/>`;
+        out2 += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8" fill="${colAxis}" font-family="sans-serif">${tv}°</text>`;
+      }
+      if (tMin2 < 0 && tMax2 > 0) {
+        const y0 = ypT(0);
+        out2 += `<line x1="${PL}" y1="${y0.toFixed(1)}" x2="${PL + cW}" y2="${y0.toFixed(1)}" stroke="${colAxis}" stroke-width="0.8" stroke-dasharray="4,3"/>`;
+      }
+
+      out2 += `<g clip-path="url(#fc-clip)">`;
+      for (let i = 0; i < workSlice.length - 1; i++) {
+        const [km0] = workSlice[i], [km1] = workSlice[i + 1];
+        const t0 = temps2[i], t1 = temps2[i + 1];
+        if (t0 == null || t1 == null) continue;
+        const col2 = tempToRgb((t0 + t1) / 2, desired2, isDark);
+        out2 += `<line x1="${xp(km0).toFixed(1)}" y1="${ypT(t0).toFixed(1)}" x2="${xp(km1).toFixed(1)}" y2="${ypT(t1).toFixed(1)}" stroke="${col2}" stroke-width="2.5" stroke-linecap="round"/>`;
+      }
+      out2 += `</g>`;
+
+      // City labels
+      for (const cd of (elevation?.cityData ?? [])) {
+        if (cd.km < kmMin - 1 || cd.km > kmMax + 1) continue;
+        const xv = xp(cd.km);
+        out2 += `<line x1="${xv.toFixed(1)}" y1="${PT}" x2="${xv.toFixed(1)}" y2="${axY2}" stroke="${colDot}" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>`;
+        const safe = cd.name.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+        out2 += `<text font-size="9.5" fill="${colText}" font-weight="600" text-anchor="end" font-family="sans-serif" transform="rotate(-38,${xv.toFixed(1)},${(axY2 + 14).toFixed(1)}) translate(${xv.toFixed(1)},${(axY2 + 14).toFixed(1)})">${safe}</text>`;
+      }
+      // Day markers
+      { let lastDmX2 = -Infinity;
+        for (const s of routeStops) {
+          if (s.km < kmMin - 1 || s.km > kmMax + 1) continue;
+          const xd = xp(s.km);
+          if (xd - lastDmX2 < 28) continue;
+          lastDmX2 = xd;
+          const lbl = lang === "de" ? `Tag ${s.relDay}` : `Day ${s.relDay}`;
+          out2 += `<line x1="${xd.toFixed(1)}" y1="${PT}" x2="${xd.toFixed(1)}" y2="${axY2}" stroke="${colAxis}" stroke-width="0.6" stroke-dasharray="2,3" opacity="0.45"/>`;
+          out2 += `<text x="${(xd + 1).toFixed(1)}" y="${(PT + 7).toFixed(1)}" font-size="6.5" fill="${colAxis}" font-family="sans-serif" opacity="0.6">${lbl}</text>`;
+        }
+      }
+      if (forecastEndKm != null && forecastEndKm > kmMin && forecastEndKm < kmMax) {
+        const xEnd = xp(forecastEndKm).toFixed(1);
+        const fLabel = lang === "de" ? "Vorhersage" : "Forecast";
+        out2 += `<line x1="${xEnd}" y1="${PT}" x2="${xEnd}" y2="${axY2}" stroke="${colWarn}" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.9"/>`;
+        out2 += `<text x="${(parseFloat(xEnd) + 3).toFixed(1)}" y="${(PT + 9).toFixed(1)}" font-size="8" fill="${colWarn}" font-weight="600" font-family="sans-serif">☁ ${fLabel}</text>`;
+      }
+      out2 += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${axY2}" stroke="${colAxis}" stroke-width="1"/>`;
+      out2 += `<line x1="${PL}" y1="${axY2}" x2="${PL + cW}" y2="${axY2}" stroke="${colAxis}" stroke-width="1"/>`;
+      out2 += `<line id="fc-cursor" x1="0" y1="${PT}" x2="0" y2="${axY2}" stroke="${colCursor}" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>`;
+      out2 += `<circle id="fc-cursor-dot" cx="0" cy="0" r="3.5" fill="${colWarn}" stroke="${colCard}" stroke-width="1.5" opacity="0.9" visibility="hidden"/>`;
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      svg.setAttribute("height", String(H));
+      svg.innerHTML = out2;
+      return;
+    }
+    // ─── Elevation profile mode ───────────────────────────────────────────────
+
     let out = `<defs><clipPath id="fc-clip"><rect x="${PL}" y="${PT}" width="${cW}" height="${cH}"/></clipPath></defs>`;
     const BAND = 10;
 
@@ -740,8 +842,8 @@ const lang = useLangStore((s) => s.lang);
         const hasData = tmaxV != null || tminV != null;
         const w = xp(km1) - xp(km0);
         out += `<polygon points="${xp(km0)},${yp(e0)} ${xp(km1)},${yp(e1)} ${xp(km1)},${axY} ${xp(km0)},${axY}" fill="${hasData ? colGrid : colBg}" opacity="0.8"/>`;
-        if (tmaxV != null) out += `<rect x="${xp(km0)}" y="${PT}" width="${w}" height="${BAND}" fill="${tempToRgb(tmaxV, desiredHigh)}" opacity="0.9"/>`;
-        if (tminV != null) out += `<rect x="${xp(km0)}" y="${PT+BAND+1}" width="${w}" height="${BAND}" fill="${tempToRgb(tminV, desiredLow)}" opacity="0.9"/>`;
+        if (tmaxV != null) out += `<rect x="${xp(km0)}" y="${PT}" width="${w}" height="${BAND}" fill="${tempToRgb(tmaxV, desiredHigh, isDark)}" opacity="0.9"/>`;
+        if (tminV != null) out += `<rect x="${xp(km0)}" y="${PT+BAND+1}" width="${w}" height="${BAND}" fill="${tempToRgb(tminV, desiredLow, isDark)}" opacity="0.9"/>`;
       }
       const outline = miniElev.map((p) => `${xp(p[0])},${yp(p[3])}`).join(" ");
       out += `<polyline points="${outline}" fill="none" stroke="${colLine}" stroke-width="1.2"/>`;
@@ -752,7 +854,7 @@ const lang = useLangStore((s) => s.lang);
       for (let i = 0; i < miniElev.length - 1; i++) {
         const [km0,,, e0] = miniElev[i], [km1,,, e1] = miniElev[i + 1];
         const tmid = interpTemp((km0 + km1) / 2, (e0 + e1) / 2);
-        const col = tmid != null ? tempToRgb(tmid, chartRef) : colBg;
+        const col = tmid != null ? tempToRgb(tmid, chartRef, isDark) : colBg;
         out += `<polygon points="${xp(km0)},${yp(e0)} ${xp(km1)},${yp(e1)} ${xp(km1)},${axY} ${xp(km0)},${axY}" fill="${col}" opacity="0.85"/>`;
       }
       const outline = miniElev.map((p) => `${xp(p[0])},${yp(p[3])}`).join(" ");
@@ -810,7 +912,7 @@ const lang = useLangStore((s) => s.lang);
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("height", String(H));
     svg.innerHTML = out;
-  }, [miniElev, dailyMode, currentHour, points, data, desiredHigh, desiredLow, visibleKmRange, climatePoints, elevation, forecastEndKm, routeStops, lang]);
+  }, [miniElev, dailyMode, currentHour, points, data, desiredHigh, desiredLow, visibleKmRange, climatePoints, elevation, forecastEndKm, routeStops, lang, showTempProfile, isDark]);
 
   useEffect(() => {
     drawChart();
@@ -893,7 +995,18 @@ const lang = useLangStore((s) => s.lang);
     }
     const ele = best[3];
     const cx = cs.PL + ((km - cs.kmMin) / (cs.kmMax - cs.kmMin)) * cs.cW;
-    const cy = cs.PT + cs.cH - ((ele - cs.eMin) / cs.eRange) * cs.cH;
+    let cy: number;
+    if (cs.showTempProfile && cs.tempWorkSlice && cs.tempTemps) {
+      let bi2 = 0, bd2 = Infinity;
+      for (let ii = 0; ii < (cs.tempWorkSlice as [number, ...number[]][]).length; ii++) {
+        const d2 = Math.abs(cs.tempWorkSlice[ii][0] - km);
+        if (d2 < bd2) { bd2 = d2; bi2 = ii; }
+      }
+      const t2 = cs.tempTemps[bi2] as number | null;
+      cy = t2 != null ? cs.PT + cs.cH - ((t2 - cs.tMin) / cs.tRange) * cs.cH : cs.PT + cs.cH / 2;
+    } else {
+      cy = cs.PT + cs.cH - ((ele - cs.eMin) / cs.eRange) * cs.cH;
+    }
     const cl = svg.querySelector("#fc-cursor");
     if (cl) { cl.setAttribute("x1", String(cx)); cl.setAttribute("x2", String(cx)); cl.setAttribute("visibility", "visible"); }
     const cdot = svg.querySelector("#fc-cursor-dot");
@@ -924,12 +1037,14 @@ const lang = useLangStore((s) => s.lang);
     if (dailyMode) {
       const tmax = interpByKey(km, ele, "tmax");
       const tmin = interpByKey(km, ele, "tmin");
-      if (tmax != null) ttHtml += `<div style="color:${tempToRgb(tmax, dHigh)}">☀ Tmax: ${tmax.toFixed(1)}°C</div>`;
-      if (tmin != null) ttHtml += `<div style="color:${tempToRgb(tmin, dLow)}">☽ Tmin: ${tmin.toFixed(1)}°C</div>`;
+      const ttDark = document.documentElement.classList.contains("dark");
+      if (tmax != null) ttHtml += `<div style="color:${tempToRgb(tmax, dHigh, ttDark)}">☀ Tmax: ${tmax.toFixed(1)}°C</div>`;
+      if (tmin != null) ttHtml += `<div style="color:${tempToRgb(tmin, dLow, ttDark)}">☽ Tmin: ${tmin.toFixed(1)}°C</div>`;
     } else {
+      const ttDark = document.documentElement.classList.contains("dark");
       const chartRef = (hour === 0 || hour === 6 || hour === 24) ? dLow : dHigh;
       const temp = interpTemp(km, ele);
-      if (temp != null) ttHtml += `<div style="color:${tempToRgb(temp, chartRef)}">🌡 ${temp.toFixed(1)}°C</div>`;
+      if (temp != null) ttHtml += `<div style="color:${tempToRgb(temp, chartRef, ttDark)}">🌡 ${temp.toFixed(1)}°C</div>`;
     }
 
     tooltip.innerHTML = ttHtml;
@@ -976,7 +1091,7 @@ const lang = useLangStore((s) => s.lang);
       const h = (fd.hourly?.[String(currentHour)] ?? {}) as ForecastHourData;
       lines.push(`<b style="color:#1e293b">${t.forecastMap.hourLabel(currentHour)}</b><br>`);
       if (h.temp  != null) {
-        const tColor = tempToRgb(h.temp, desiredAvg);
+        const tColor = tempToRgb(h.temp, desiredAvg, document.documentElement.classList.contains("dark"));
         lines.push(`${lbl("#64748b","Temp:")} <b style="color:${tColor}">${h.temp.toFixed(1)}°C</b><br>`);
       }
       if (h.prcp  != null) lines.push(`${lbl("#60a5fa","☂:")} ${val(h.prcp.toFixed(1)+" mm")}<br>`);
@@ -1141,6 +1256,22 @@ const lang = useLangStore((s) => s.lang);
             </div>
             {elevExpanded && (
               <div className="bg-card/95 p-2">
+                <div className="mb-1 flex justify-end">
+                  <div className="flex overflow-hidden rounded-md border border-border">
+                    <button
+                      onClick={() => setShowTempProfile(false)}
+                      className={["border-r border-border px-2.5 py-1 text-[11px] font-medium transition-colors", !showTempProfile ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"].join(" ")}
+                    >
+                      {lang === "de" ? "Höhenprofil" : "Elevation"}
+                    </button>
+                    <button
+                      onClick={() => setShowTempProfile(true)}
+                      className={["px-2.5 py-1 text-[11px] font-medium transition-colors", showTempProfile ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"].join(" ")}
+                    >
+                      {lang === "de" ? "Temperaturprofil" : "Temperature"}
+                    </button>
+                  </div>
+                </div>
                 <div
                   className="relative w-full overflow-hidden rounded-lg border border-border bg-card"
                   onMouseMove={onChartMouseMove}
@@ -1161,7 +1292,7 @@ const lang = useLangStore((s) => s.lang);
                 </div>
                 <div className="mt-1 flex items-center gap-2 px-10 text-[9px] text-muted-foreground">
                   <span>{t.routeMap.elevCold}</span>
-                  <div className="h-2 flex-1 rounded-full" style={{ background: LEGEND_GRADIENT }} />
+                  <div className="h-2 flex-1 rounded-full" style={{ background: legendGradient(isDark) }} />
                   <span>{t.routeMap.elevWarm}</span>
                 </div>
               </div>
@@ -1170,9 +1301,31 @@ const lang = useLangStore((s) => s.lang);
         )}
       </MapView>
 
-      {/* Elevation chart - shown below map when not fullscreen */}
+      {/* Elevation / Temperature chart - shown below map when not fullscreen */}
       {!isFullscreen && (
         <div className="rounded-lg border border-border bg-card p-1">
+          <div className="flex justify-end p-1 pb-0">
+            <div className="flex overflow-hidden rounded-md border border-border">
+              <button
+                onClick={() => setShowTempProfile(false)}
+                className={[
+                  "border-r border-border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                  !showTempProfile ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted",
+                ].join(" ")}
+              >
+                {lang === "de" ? "Höhenprofil" : "Elevation"}
+              </button>
+              <button
+                onClick={() => setShowTempProfile(true)}
+                className={[
+                  "px-2.5 py-1 text-[11px] font-medium transition-colors",
+                  showTempProfile ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted",
+                ].join(" ")}
+              >
+                {lang === "de" ? "Temperaturprofil" : "Temperature"}
+              </button>
+            </div>
+          </div>
           <div
             className="relative w-full overflow-hidden"
             onMouseMove={onChartMouseMove}
@@ -1193,7 +1346,7 @@ const lang = useLangStore((s) => s.lang);
           </div>
           <div className="mt-1 flex items-center gap-2 px-10 text-[9px] text-muted-foreground">
             <span>{t.routeMap.elevCold}</span>
-            <div className="h-2 flex-1 rounded-full" style={{ background: LEGEND_GRADIENT }} />
+            <div className="h-2 flex-1 rounded-full" style={{ background: legendGradient(isDark) }} />
             <span>{t.routeMap.elevWarm}</span>
           </div>
         </div>

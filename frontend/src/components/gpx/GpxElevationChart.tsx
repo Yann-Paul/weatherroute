@@ -3,6 +3,7 @@ import type { ElevationProfile, GpxDayConfig, GpxNightHour, GpxWeatherPoint } fr
 import { useT } from "@/i18n/useT";
 import { Moon } from "lucide-react";
 import { useIsDark } from "@/stores/themeStore";
+import { tempToRgb } from "@/utils/tempColor";
 
 function getCssColors() {
   const cs = getComputedStyle(document.documentElement);
@@ -34,6 +35,26 @@ function gpxArrivalTime(km: number, dailyConfigs: GpxDayConfig[], startDate: str
     cum += dayKm;
   }
   return base;
+}
+
+function interpTempForGpx(km: number, ele: number, weatherPoints: GpxWeatherPoint[]): number | null {
+  const pts = weatherPoints.filter((wp) => wp.temp != null);
+  if (pts.length === 0) return null;
+  if (pts.length === 1) {
+    const lapse = (1 - 0.4 * Math.min(1, (pts[0].prcp ?? 0) / 5)) / 100;
+    return pts[0].temp! - (ele - pts[0].ele) * lapse;
+  }
+  let upper = pts.findIndex((wp) => wp.km >= km);
+  if (upper < 0) upper = pts.length - 1;
+  if (upper === 0) upper = 1;
+  const wp0 = pts[upper - 1], wp1 = pts[upper];
+  const span = wp1.km - wp0.km;
+  const t = span > 0 ? Math.max(0, Math.min(1, (km - wp0.km) / span)) : 0;
+  const interpTemp = wp0.temp! + t * (wp1.temp! - wp0.temp!);
+  const interpEle = wp0.ele + t * (wp1.ele - wp0.ele);
+  const prcp = (wp0.prcp ?? 0) + t * ((wp1.prcp ?? 0) - (wp0.prcp ?? 0));
+  const lapse = (1 - 0.4 * Math.min(1, prcp / 5)) / 100;
+  return interpTemp - (ele - interpEle) * lapse;
 }
 
 function markerColor(type: GpxWeatherPoint["type"]): string {
@@ -97,27 +118,41 @@ function DayChart({
 
     const toX = (km: number) => PAD.left + ((km - startKm) / kmRange) * cw;
     const toY = (ele: number) => PAD.top + ch - ((ele - minEle) / eleRange) * ch;
+    const axY = PAD.top + ch;
 
-    // Gradient fill
-    const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + ch);
-    grad.addColorStop(0, "rgba(96,165,250,0.55)");
-    grad.addColorStop(1, "rgba(37,99,235,0.1)");
+    // Desired temperature: midpoint of observed range
+    const wTemps = weatherPoints.map((wp) => wp.temp).filter((t): t is number => t != null);
+    const desiredTemp = wTemps.length > 0
+      ? Math.round((Math.min(...wTemps) + Math.max(...wTemps)) / 2)
+      : 20;
 
+    // Temperature-colored fill: one trapezoid per segment
+    const stride = Math.max(1, Math.floor(points.length / 400));
+    const sampledPts = points.filter((_, i) => i % stride === 0 || i === points.length - 1);
+    ctx.save();
     ctx.beginPath();
-    ctx.moveTo(toX(points[0][0]), toY(points[0][1]));
-    for (let i = 1; i < points.length; i++) {
-      ctx.lineTo(toX(points[i][0]), toY(points[i][1]));
+    ctx.rect(PAD.left, PAD.top, cw, ch);
+    ctx.clip();
+    for (let i = 0; i < sampledPts.length - 1; i++) {
+      const [km0, e0] = sampledPts[i], [km1, e1] = sampledPts[i + 1];
+      const midKm = (km0 + km1) / 2, midEle = (e0 + e1) / 2;
+      const temp = interpTempForGpx(midKm, midEle, weatherPoints);
+      ctx.beginPath();
+      ctx.moveTo(toX(km0), toY(e0));
+      ctx.lineTo(toX(km1), toY(e1));
+      ctx.lineTo(toX(km1), axY);
+      ctx.lineTo(toX(km0), axY);
+      ctx.closePath();
+      ctx.fillStyle = temp != null ? tempToRgb(temp, desiredTemp) : "rgba(148,163,184,0.5)";
+      ctx.fill();
     }
-    ctx.lineTo(toX(endKm), PAD.top + ch);
-    ctx.lineTo(PAD.left, PAD.top + ch);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
+    ctx.restore();
 
-    // Profile line
+    // Profile line on top
     ctx.beginPath();
-    ctx.strokeStyle = "#2563eb";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = clr.axis;
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([]);
     ctx.moveTo(toX(points[0][0]), toY(points[0][1]));
     for (let i = 1; i < points.length; i++) {
       ctx.lineTo(toX(points[i][0]), toY(points[i][1]));
@@ -235,6 +270,8 @@ function DayChart({
     }
     const ele = points[closestIdx][1];
     let label = `${Math.round(km)} km · ${Math.round(ele)} m`;
+    const temp = interpTempForGpx(km, ele, weatherPoints);
+    if (temp != null) label += ` · ${temp.toFixed(1)}°C`;
     if (dailyConfigs && startDate) {
       const arrival = gpxArrivalTime(km, dailyConfigs, startDate);
       const timeStr = arrival.toLocaleString(undefined, {

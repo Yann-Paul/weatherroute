@@ -9,6 +9,7 @@ import type { GpxJobResults } from "@/api/types";
 import { useT } from "@/i18n/useT";
 import { GpxRouteMap } from "./GpxRouteMap";
 import { GpxElevationChart } from "./GpxElevationChart";
+import { GpxTemperatureChart } from "./GpxTemperatureChart";
 import { GpxWeatherTable } from "./GpxWeatherTable";
 
 export function GpxResultsPage() {
@@ -78,6 +79,7 @@ export function GpxResultsPage() {
         <TabsList className="w-full justify-start">
           <TabsTrigger value="map">{t.gpx.results.tabMap}</TabsTrigger>
           <TabsTrigger value="elevation">{t.gpx.results.tabElevation}</TabsTrigger>
+          <TabsTrigger value="temperature">{t.gpx.results.tabTemperature}</TabsTrigger>
           <TabsTrigger value="weather">{t.gpx.results.tabWeather}</TabsTrigger>
         </TabsList>
 
@@ -90,6 +92,23 @@ export function GpxResultsPage() {
             <CardContent className="pt-4">
               {elevation ? (
                 <GpxElevationChart
+                  elevation={elevation}
+                  weatherPoints={results.weatherPoints}
+                  dailyConfigs={results.dailyConfigs}
+                  startDate={results.startDate}
+                />
+              ) : (
+                <p className="text-muted-foreground">{t.results.elevationLoading}</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="temperature">
+          <Card>
+            <CardContent className="pt-4">
+              {elevation ? (
+                <GpxTemperatureChart
                   elevation={elevation}
                   weatherPoints={results.weatherPoints}
                   dailyConfigs={results.dailyConfigs}

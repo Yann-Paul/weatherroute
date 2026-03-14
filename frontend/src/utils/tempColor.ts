@@ -1,4 +1,4 @@
-const STOPS: [number, [number, number, number]][] = [
+const STOPS_DARK: [number, [number, number, number]][] = [
   [-1.0, [60, 0, 80]],
   [-0.667, [30, 30, 160]],
   [-0.333, [100, 160, 255]],
@@ -8,7 +8,19 @@ const STOPS: [number, [number, number, number]][] = [
   [1.0, [160, 0, 120]],
 ];
 
-export function tempToRgb(temp: number, desired: number): string {
+// Light mode: replace white midpoint with grey so it's visible on white backgrounds
+const STOPS_LIGHT: [number, [number, number, number]][] = [
+  [-1.0, [60, 0, 80]],
+  [-0.667, [30, 30, 160]],
+  [-0.333, [100, 160, 255]],
+  [0.0, [160, 160, 160]],
+  [0.333, [255, 150, 100]],
+  [0.667, [200, 40, 40]],
+  [1.0, [160, 0, 120]],
+];
+
+export function tempToRgb(temp: number, desired: number, isDark = true): string {
+  const STOPS = isDark ? STOPS_DARK : STOPS_LIGHT;
   const t = Math.max(-1, Math.min(1, (temp - desired) / 15));
   for (let i = 0; i < STOPS.length - 1; i++) {
     if (t <= STOPS[i + 1][0]) {
@@ -19,6 +31,11 @@ export function tempToRgb(temp: number, desired: number): string {
     }
   }
   return "rgb(160,0,120)";
+}
+
+/** The midpoint color for the temperature gradient legend, mode-dependent. */
+export function tempMidColor(isDark: boolean): string {
+  return isDark ? "rgb(255,255,255)" : "rgb(160,160,160)";
 }
 
 const MONTHS_DE = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
