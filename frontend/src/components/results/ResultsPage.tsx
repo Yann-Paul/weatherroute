@@ -13,6 +13,7 @@ import { RouteList } from "./RouteList";
 import { useResultsStore } from "@/stores/resultsStore";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { getJobResults, getJobStatus, saveRoute } from "@/api/client";
+import { toast } from "sonner";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
 import { dayOfYearToDate } from "@/utils/constants";
@@ -152,6 +153,8 @@ export function ResultsPage() {
       };
       await saveRoute(jobId, name, plannerSettings);
       setIsSaved(true);
+    } catch {
+      toast.error(t.results.saveFailed ?? "Could not save route.");
     } finally {
       setIsSaving(false);
     }
@@ -210,13 +213,13 @@ export function ResultsPage() {
       </div>
 
       {forecastUpdating && (
-        <div className="rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-foreground">
+        <div aria-live="polite" className="rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-foreground">
           {t.results.forecastUpdating}
         </div>
       )}
 
       {elevationComplete === false && (
-        <div className="rounded-lg border border-chart-1/30 bg-chart-1/10 px-3 py-2 text-xs text-foreground">
+        <div aria-live="polite" className="rounded-lg border border-chart-1/30 bg-chart-1/10 px-3 py-2 text-xs text-foreground">
           {t.results.elevationLoading}
         </div>
       )}
@@ -225,19 +228,19 @@ export function ResultsPage() {
         <TabsList className="w-full justify-start">
           <TabsTrigger value="map" className="gap-1.5">
             <Map className="h-4 w-4" />
-            {t.results.tabMap}
+            <span className="hidden sm:inline">{t.results.tabMap}</span>
           </TabsTrigger>
           <TabsTrigger value="elevation" className="gap-1.5">
             <Mountain className="h-4 w-4" />
-            {t.results.tabElevation}
+            <span className="hidden sm:inline">{t.results.tabElevation}</span>
           </TabsTrigger>
           <TabsTrigger value="weather" className="gap-1.5">
             <CloudSun className="h-4 w-4" />
-            {t.results.tabWeather}
+            <span className="hidden sm:inline">{t.results.tabWeather}</span>
           </TabsTrigger>
           <TabsTrigger value="route" className="gap-1.5">
             <List className="h-4 w-4" />
-            {t.results.tabRoute}
+            <span className="hidden sm:inline">{t.results.tabRoute}</span>
           </TabsTrigger>
         </TabsList>
 

@@ -14,7 +14,13 @@ export default function App() {
       <TooltipProvider>
         <div className="min-h-screen bg-background">
           <TopBar />
-          <main>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:left-4 focus:top-20 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:ring-2 focus:ring-ring"
+          >
+            Skip to content
+          </a>
+          <main id="main-content">
             <Routes>
               <Route path="/" element={<PlannerPage />} />
               <Route path="/progress/:jobId" element={<ProgressPage />} />

@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 
+import numpy as np
 import requests
 
 from module import (
@@ -43,7 +44,17 @@ from module import (
     fetch_open_meteo_forecast,
 )
 
-OPEN_ELEV = "https://api.open-elevation.com/api/v1/lookup"
+OPEN_ELEV_SRTM = "https://api.open-elevation.com/api/v1/lookup"   # SRTM: 56°S–60°N
+OPEN_ELEV_ASTER= "https://api.opentopodata.org/v1/aster30m"       # ASTER: global to 83°N
+
+def _elev_api(latlons):
+    """Return (url, batch_size, payload_fn) for the appropriate elevation API.
+    Uses ASTER (opentopodata) for routes above 59°N or below 56°S; SRTM otherwise."""
+    if any(lat > 59.0 or lat < -56.0 for lat, lon in latlons):
+        return (OPEN_ELEV_ASTER, 100,
+                lambda b: {"locations": "|".join(f"{lat},{lon}" for lat, lon in b)})
+    return (OPEN_ELEV_SRTM, 512,
+            lambda b: {"locations": [{"latitude": lat, "longitude": lon} for lat, lon in b]})
 
 SAVED_ROUTES_DIR = Path("data/saved_routes")
 SAVED_ROUTES_DIR.mkdir(parents=True, exist_ok=True)
@@ -70,6 +81,25 @@ if os.path.exists(german_names_path):
     for de_name, cid in german_city_names.items():
         if de_name not in city_names:
             city_names[de_name] = str(cid)
+
+# Rehydrate persisted nominatim cities (nodes + edges) into the in-memory graph
+_nominatim_cities_path = os.path.join(DATA_PATH, "nominatim_cities.json")
+if os.path.exists(_nominatim_cities_path):
+    with open(_nominatim_cities_path, encoding="utf-8") as f:
+        _nominatim_cities_data = json.load(f)
+    for _nid, _nd in _nominatim_cities_data.items():
+        city_graph.add_node(
+            _nid,
+            name=_nd["name"],
+            lat=float(_nd["lat"]),
+            lon=float(_nd["lon"]),
+            population=0,
+        )
+        for _nb_id, _weight in _nd.get("edges", {}).items():
+            if _nb_id in city_graph.nodes:
+                city_graph.add_edge(_nid, _nb_id, weight=_weight)
+        city_names[_nd["name"].lower()] = _nid
+    print(f"[Startup] {len(_nominatim_cities_data)} Nominatim-Städte rehydriert.", flush=True)
 
 
 def _normalize_ascii(s: str) -> str:
@@ -100,6 +130,315 @@ def resolve_city_name(raw: str):
         orig_key = city_names_ascii[matches[0]]
         return city_names[orig_key], orig_key
     return None, None
+
+
+_OSRM_TABLE_BASE = "https://router.project-osrm.org"
+
+# Coordinate cache for vectorized nearest-neighbor search.
+# Built once on first use; nominatim nodes are excluded so they are never
+# returned as candidates for edge connections.
+_graph_coord_cache: Optional[tuple] = None  # (node_ids, lats_arr, lons_arr)
+
+
+def _build_graph_coord_cache() -> None:
+    global _graph_coord_cache
+    node_ids, lats, lons = [], [], []
+    for nid, data in city_graph.nodes(data=True):
+        if str(nid).startswith("nominatim:"):
+            continue
+        try:
+            lats.append(float(data["lat"]))
+            lons.append(float(data["lon"]))
+            node_ids.append(nid)
+        except (KeyError, ValueError):
+            continue
+    _graph_coord_cache = (node_ids, np.array(lats, dtype=np.float64), np.array(lons, dtype=np.float64))
+
+
+def _find_nearest_graph_nodes(lat: float, lon: float, n: int = 12) -> list:
+    """Return list of (node_id, nlat, nlon, air_km) for the n nearest original graph nodes."""
+    global _graph_coord_cache
+    if _graph_coord_cache is None:
+        _build_graph_coord_cache()
+    node_ids, lats_arr, lons_arr = _graph_coord_cache
+
+    lat_r = math.radians(lat)
+    lon_r = math.radians(lon)
+    dlat = np.radians(lats_arr) - lat_r
+    dlon = np.radians(lons_arr) - lon_r
+    a = np.sin(dlat / 2) ** 2 + math.cos(lat_r) * np.cos(np.radians(lats_arr)) * np.sin(dlon / 2) ** 2
+    distances_km = 2.0 * 6371.0 * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0)))
+
+    top_idx = np.argsort(distances_km)[:n]
+    result = []
+    for i in top_idx:
+        nid = node_ids[i]
+        result.append((nid, float(lats_arr[i]), float(lons_arr[i]), float(distances_km[i])))
+    return result
+
+
+def _fetch_osrm_road_distances(origin_lat: float, origin_lon: float, neighbors: list) -> list:
+    """
+    Get road distances from origin to each neighbor in one OSRM Table API request.
+    neighbors: list of (node_id, nlat, nlon, air_km)
+    Returns: list of road distances in km (None if no route found), same order.
+    """
+    # OSRM expects lon,lat order
+    coords = [f"{origin_lon},{origin_lat}"] + [f"{nlon},{nlat}" for _, nlat, nlon, _ in neighbors]
+    try:
+        resp = requests.get(
+            f"{_OSRM_TABLE_BASE}/table/v1/driving/{';'.join(coords)}",
+            params={"sources": "0", "annotations": "distance"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("code") != "Ok":
+            print(f"[OSRM-Table] Unerwarteter Code: {data.get('code')}", flush=True)
+            return [None] * len(neighbors)
+        row = data.get("distances", [[]])[0]
+        # row[0] = distance to self (0 m), row[1..] = distances to neighbors (in meters)
+        return [
+            row[i + 1] / 1000.0 if (i + 1 < len(row) and row[i + 1] is not None) else None
+            for i in range(len(neighbors))
+        ]
+    except Exception as exc:
+        print(f"[OSRM-Table] Fehler: {exc}", flush=True)
+        return [None] * len(neighbors)
+
+
+def _fetch_climate_normals_openmeteo(lat: float, lon: float) -> Optional[dict]:
+    """
+    Fetch 1991-2020 monthly climate normals from Open-Meteo Archive API (ERA5).
+    Queries daily data in three 10-year chunks and aggregates to monthly means.
+    Returns {str(month): [tmin, tmax, prcp, wspd, None, None]} or None on failure.
+    """
+    buckets: dict = {m: {"tmin": [], "tmax": [], "prcp": [], "wspd": []} for m in range(1, 13)}
+    chunks = [("1991-01-01", "2000-12-31"), ("2001-01-01", "2010-12-31"), ("2011-01-01", "2020-12-31")]
+    try:
+        for start, end in chunks:
+            resp = requests.get(
+                "https://archive-api.open-meteo.com/v1/archive",
+                params={
+                    "latitude": round(lat, 4),
+                    "longitude": round(lon, 4),
+                    "start_date": start,
+                    "end_date": end,
+                    "daily": "temperature_2m_min,temperature_2m_max,precipitation_sum,wind_speed_10m_mean",
+                    "timezone": "UTC",
+                },
+                timeout=60,
+            )
+            resp.raise_for_status()
+            daily = resp.json().get("daily", {})
+            times  = daily.get("time", [])
+            tmin_v = daily.get("temperature_2m_min", [])
+            tmax_v = daily.get("temperature_2m_max", [])
+            prcp_v = daily.get("precipitation_sum", [])
+            wspd_v = daily.get("wind_speed_10m_mean", [])
+            for i, t in enumerate(times):
+                m = int(t[5:7])
+                if i < len(tmin_v) and tmin_v[i] is not None:
+                    buckets[m]["tmin"].append(tmin_v[i])
+                if i < len(tmax_v) and tmax_v[i] is not None:
+                    buckets[m]["tmax"].append(tmax_v[i])
+                if i < len(prcp_v) and prcp_v[i] is not None:
+                    buckets[m]["prcp"].append(prcp_v[i])
+                if i < len(wspd_v) and wspd_v[i] is not None:
+                    buckets[m]["wspd"].append(wspd_v[i])
+
+        result = {}
+        for m in range(1, 13):
+            b = buckets[m]
+            result[str(m)] = [
+                round(sum(b["tmin"]) / len(b["tmin"]), 2) if b["tmin"] else None,
+                round(sum(b["tmax"]) / len(b["tmax"]), 2) if b["tmax"] else None,
+                round(sum(b["prcp"]) / len(b["prcp"]), 2) if b["prcp"] else None,
+                round(sum(b["wspd"]) / len(b["wspd"]), 2) if b["wspd"] else None,
+                None,  # wdir — not available
+                None,  # wspd_resultant
+            ]
+        # Validate: all months need at least tmin and tmax
+        if any(result[str(m)][0] is None or result[str(m)][1] is None for m in range(1, 13)):
+            print(f"[OpenMeteo-Archive] Unvollständige Daten für ({lat}, {lon})", flush=True)
+            return None
+        return result
+    except Exception as exc:
+        print(f"[OpenMeteo-Archive] Fehler: {exc}", flush=True)
+        return None
+
+
+def _copy_nearest_temperatures(lat: float, lon: float) -> Optional[dict]:
+    """Return a copy of temperature data from the nearest city that has entries in temperatures."""
+    for nid, _, _, _ in _find_nearest_graph_nodes(lat, lon, n=30):
+        if nid in temperatures:
+            return {month: list(vals) for month, vals in temperatures[nid].items()}
+    return None
+
+
+def geocode_city_nominatim(name: str, lang: str = "en") -> Optional[dict]:
+    """Geocode a city name via Nominatim. Returns dict with name/lat/lon/country_code or None."""
+    params_base = {
+        "format": "json",
+        "limit": 1,
+        "addressdetails": 1,
+        "accept-language": lang,
+    }
+    try:
+        for extra in [{"featuretype": "city"}, {}]:
+            resp = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": name, **params_base, **extra},
+                headers={"User-Agent": "WeatherRoute/1.0"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            results = resp.json()
+            if results:
+                break
+        if not results:
+            return None
+        hit = results[0]
+        short_name = hit.get("display_name", name).split(",")[0].strip()
+        country_code = (hit.get("address") or {}).get("country_code", "").upper()
+        return {
+            "name": short_name,
+            "lat": float(hit["lat"]),
+            "lon": float(hit["lon"]),
+            "country_code": country_code,
+        }
+    except Exception as exc:
+        print(f"[Nominatim] Geocoding '{name}' (lang={lang}) fehlgeschlagen: {exc}", flush=True)
+        return None
+
+
+def geocode_and_register_city(raw_name: str) -> Optional[str]:
+    """
+    Geocode a city, connect it to 12 nearest neighbors via OSRM road distances,
+    fetch 30-year climate normals, and register it in city_graph / temperatures /
+    city_names / german_city_names.json / city_ids_by_country.json.
+    Returns the node ID or None on failure.
+    """
+    # 1. English coordinates + country code
+    en = geocode_city_nominatim(raw_name, lang="en")
+    if en is None:
+        return None
+    lat, lon = en["lat"], en["lon"]
+    country_code = en["country_code"]
+
+    # 2. German display name (best-effort)
+    de = geocode_city_nominatim(raw_name, lang="de")
+    de_name = de["name"] if de else None
+
+    node_id = f"nominatim:{raw_name.strip().lower()}"
+
+    # 3. 12 nearest neighbors by air distance (vectorized, no disk read)
+    neighbors = _find_nearest_graph_nodes(lat, lon, n=12)
+
+    # 4. Road distances — ONE OSRM Table request for all 12 neighbors
+    road_distances = _fetch_osrm_road_distances(lat, lon, neighbors)
+
+    # 5. Add node to graph (lat/lon as float, consistent with GEXF nodes)
+    city_graph.add_node(
+        node_id,
+        name=en["name"],
+        lat=lat,
+        lon=lon,
+        population=0,
+    )
+
+    # 6. Add edges for valid road distances
+    edges_added = 0
+    persisted_edges: dict = {}
+    for (nid, _, _, _), dist_km in zip(neighbors, road_distances):
+        if dist_km is not None and dist_km > 0:
+            city_graph.add_edge(node_id, nid, weight=dist_km)
+            persisted_edges[nid] = dist_km
+            edges_added += 1
+
+    # Persist node + edges to nominatim_cities.json
+    nom_path = os.path.join(DATA_PATH, "nominatim_cities.json")
+    try:
+        nom_data = json.load(open(nom_path, encoding="utf-8")) if os.path.exists(nom_path) else {}
+        nom_data[node_id] = {
+            "name": en["name"],
+            "lat": lat,
+            "lon": lon,
+            "country_code": country_code,
+            "edges": persisted_edges,
+        }
+        with open(nom_path, "w", encoding="utf-8") as f:
+            json.dump(nom_data, f, ensure_ascii=False, indent=2)
+    except Exception as exc:
+        print(f"[Register] nominatim_cities.json update fehlgeschlagen: {exc}", flush=True)
+
+    # 7. Climate normals via Open-Meteo Archive API (1991-2020)
+    climate = _fetch_climate_normals_openmeteo(lat, lon)
+    if not climate:
+        # Fallback: copy data from nearest city that already has temperature data
+        climate = _copy_nearest_temperatures(lat, lon)
+        if climate:
+            print(f"[Register] Klimadaten für '{en['name']}' von nächster Stadt kopiert.", flush=True)
+    if climate:
+        temperatures[node_id] = climate
+        # Persist to JSON so data survives server restarts
+        climate_file = os.path.join(DATA_PATH, "european_city_climate_normals.json")
+        try:
+            with open(climate_file, encoding="utf-8") as f:
+                climate_data = json.load(f)
+            climate_data[node_id] = climate
+            with open(climate_file, "w", encoding="utf-8") as f:
+                json.dump(climate_data, f, ensure_ascii=False)
+        except Exception as exc:
+            print(f"[Register] Klimadaten-Persistenz fehlgeschlagen: {exc}", flush=True)
+    else:
+        print(f"[Register] Keine Klimadaten für '{en['name']}' verfügbar — Routenoptimierung eingeschränkt.", flush=True)
+
+    # 8. Register in city_names (EN + input name)
+    city_names[raw_name.strip().lower()] = node_id
+    en_lower = en["name"].lower()
+    if en_lower not in city_names:
+        city_names[en_lower] = node_id
+
+    # 9. Register German name in memory and persist to german_city_names.json
+    if de_name:
+        de_lower = de_name.lower()
+        if de_lower not in city_names:
+            city_names[de_lower] = node_id
+        german_names_path = os.path.join(DATA_PATH, "german_city_names.json")
+        if os.path.exists(german_names_path):
+            try:
+                with open(german_names_path, encoding="utf-8") as f:
+                    gn_data = json.load(f)
+                if de_lower not in gn_data:
+                    gn_data[de_lower] = node_id
+                    with open(german_names_path, "w", encoding="utf-8") as f:
+                        json.dump(gn_data, f, ensure_ascii=False)
+            except Exception as exc:
+                print(f"[Register] german_city_names update fehlgeschlagen: {exc}", flush=True)
+
+    # 10. Add to city_ids_by_country (in memory via the per-job load is enough;
+    #     also persist to disk so optimization jobs see the new city)
+    if country_code:
+        country_file = os.path.join(DATA_PATH, "city_ids_by_country.json")
+        try:
+            with open(country_file, encoding="utf-8") as f:
+                cibc = json.load(f)
+            cibc.setdefault(country_code, [])
+            if node_id not in cibc[country_code]:
+                cibc[country_code].append(node_id)
+                with open(country_file, "w", encoding="utf-8") as f:
+                    json.dump(cibc, f, ensure_ascii=False)
+        except Exception as exc:
+            print(f"[Register] city_ids_by_country update fehlgeschlagen: {exc}", flush=True)
+
+    print(
+        f"[Register] '{raw_name}' → EN:'{en['name']}' DE:'{de_name}' "
+        f"({lat:.4f}, {lon:.4f}) land={country_code} "
+        f"edges={edges_added}/12 klima={'✓' if climate else '✗'}",
+        flush=True,
+    )
+    return node_id
 
 
 def interp_route_day(km_target, cum_km, route_days):
@@ -170,22 +509,60 @@ def search_cities(q: str = Query("", min_length=0)):
     query = q.lower()
     if len(query) < 2:
         return []
+
+    # Local graph results first
     results = []
+    seen_names: set[str] = set()
     for name_lower, cid in city_names.items():
         if query in name_lower:
             nd = city_graph.nodes.get(cid, {})
             display_name = nd.get("name", name_lower.title())
-            results.append(
-                {
-                    "id": cid,
-                    "name": display_name,
-                    "country": nd.get("country"),
-                    "lat": float(nd.get("lat", 0)),
-                    "lon": float(nd.get("lon", 0)),
-                }
-            )
+            results.append({
+                "id": cid,
+                "name": display_name,
+                "country": nd.get("country"),
+                "lat": float(nd.get("lat", 0)),
+                "lon": float(nd.get("lon", 0)),
+                "source": "graph",
+            })
+            seen_names.add(display_name.lower())
             if len(results) >= 10:
                 break
+
+    # Nominatim fallback when local results are sparse
+    if len(results) < 5:
+        try:
+            resp = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={
+                    "q": q,
+                    "format": "json",
+                    "limit": 5 - len(results),
+                    "addressdetails": 1,
+                    "featuretype": "city",
+                    "accept-language": "en",
+                },
+                headers={"User-Agent": "WeatherRoute/1.0"},
+                timeout=5,
+            )
+            resp.raise_for_status()
+            for hit in resp.json():
+                short_name = hit.get("display_name", q).split(",")[0].strip()
+                if short_name.lower() in seen_names:
+                    continue
+                country_code = (hit.get("address") or {}).get("country_code", "").upper()
+                results.append({
+                    "id": f"nominatim:{short_name.lower()}",
+                    "name": short_name,
+                    "country": country_code or None,
+                    "lat": float(hit["lat"]),
+                    "lon": float(hit["lon"]),
+                    "source": "nominatim",
+                })
+                seen_names.add(short_name.lower())
+        except Exception as exc:
+            print(f"[Search/Nominatim] Fehler: {exc}", flush=True)
+
     return results
 
 
@@ -209,10 +586,19 @@ def submit_job(data: JobSubmission):
     city_ids = []
     city_rest_days = {}
 
+    unresolved_names = []
     for entry in data.cities:
         cid = entry.id
+        # Nominatim ID from search results: register if not yet in graph
+        if cid and str(cid).startswith("nominatim:") and cid not in city_graph.nodes:
+            register_name = entry.name or str(cid).removeprefix("nominatim:")
+            cid = geocode_and_register_city(register_name) or cid
         if not cid:
             cid, _ = resolve_city_name(entry.name)
+        if not cid and entry.name:
+            cid = geocode_and_register_city(entry.name)
+            if cid is None:
+                unresolved_names.append(entry.name)
         if cid:
             city_ids.append(cid)
             if entry.restDays > 0:
@@ -220,6 +606,8 @@ def submit_job(data: JobSubmission):
 
     if not city_ids:
         raise HTTPException(400, "No valid cities provided.")
+    if unresolved_names:
+        print(f"[Job] Städte nicht gefunden: {unresolved_names}", flush=True)
 
     # Resolve connections
     connections = []
@@ -522,15 +910,26 @@ def find_nearest_city_id(lat: float, lon: float, graph) -> Optional[str]:
     return best_id
 
 
-def _run_elevation_worker(seg_queue, points_per_km, job, result_holder):
+def _run_elevation_worker(seg_queue, points_per_km, job, result_holder, use_aster=False):
     """
     Background thread: consumes (seg_idx, chunk) tuples from seg_queue,
-    samples each chunk at a fixed density, and calls Open-Elevation in 512-point
-    batches. Terminates on a None sentinel. Results written into result_holder.
+    samples each chunk at a fixed density, and calls the elevation API in batches.
+    Uses SRTM (open-elevation) for routes ≤59°N, ASTER (opentopodata) for higher.
+    Terminates on a None sentinel. Results written into result_holder.
     """
     import time as _t
 
-    _BATCH_SIZE = 512
+    if use_aster:
+        _elev_url, _BATCH_SIZE, _BATCH_DELAY = OPEN_ELEV_ASTER, 100, 1.1
+        _mk_payload = lambda latlons: {
+            "locations": "|".join(f"{round(lat, 4)},{round(lon, 4)}" for lat, lon in latlons)
+        }
+    else:
+        _elev_url, _BATCH_SIZE, _BATCH_DELAY = OPEN_ELEV_SRTM, 512, 0.0
+        _mk_payload = lambda latlons: {
+            "locations": [{"latitude": round(lat, 4), "longitude": round(lon, 4)} for lat, lon in latlons]
+        }
+
     _MAX_RETRIES = 4
     _RETRY_DELAYS = [5, 15, 30, 60]
 
@@ -543,13 +942,20 @@ def _run_elevation_worker(seg_queue, points_per_km, job, result_holder):
     segment_start_kms = {}
     elevation_error = None
     batch_done = 0
+    _last_request_t = 0.0
 
     def _fire_batch(latlons, kms):
-        nonlocal batch_done, elevation_error
-        payload = {"locations": [{"latitude": lat, "longitude": lon} for lat, lon in latlons]}
+        nonlocal batch_done, elevation_error, _last_request_t
+        # Proactive rate-limit throttle for ASTER (1 req/s)
+        if _BATCH_DELAY > 0:
+            elapsed = _t.monotonic() - _last_request_t
+            if elapsed < _BATCH_DELAY:
+                _t.sleep(_BATCH_DELAY - elapsed)
+        payload = _mk_payload(latlons)
         for attempt in range(_MAX_RETRIES):
             try:
-                resp = requests.post(OPEN_ELEV, json=payload, timeout=45)
+                _last_request_t = _t.monotonic()
+                resp = requests.post(_elev_url, json=payload, timeout=45)
                 resp.raise_for_status()
                 results = resp.json()["results"]
                 all_latlons.extend(latlons)
@@ -559,12 +965,20 @@ def _run_elevation_worker(seg_queue, points_per_km, job, result_holder):
                 job["elevation_batch_done"] = batch_done
                 return True
             except Exception as err:
+                is_rate_limit = (
+                    hasattr(err, "response")
+                    and err.response is not None
+                    and err.response.status_code == 429
+                )
                 wait = _RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)]
+                if is_rate_limit:
+                    wait = max(wait, 10)  # back off harder on 429
                 if attempt < _MAX_RETRIES - 1:
                     print(f"[Elevation] Batch {batch_done+1} attempt {attempt+1}: {err} — wait {wait}s", flush=True)
                     _t.sleep(wait)
+                    _last_request_t = _t.monotonic()
                 else:
-                    elevation_error = f"Open-Elevation API fehlgeschlagen (Batch {batch_done+1}): {err}"
+                    elevation_error = f"Elevation API fehlgeschlagen (Batch {batch_done+1}): {err}"
                     print(f"[Elevation] Batch {batch_done+1} failed: {err}", flush=True)
                     return False
 
@@ -840,7 +1254,9 @@ def run_calculation(job_id: str, params: dict):
         _estimated_total_km = sum(d for _, _, _, d, *_ in all_temps_data if d) or 1000
         _points_per_km = params["elev_points_per_1000km"] / 1000
         _estimated_n_points = max(200, round(_estimated_total_km * _points_per_km))
-        job["elevation_batch_total"] = max(1, (_estimated_n_points + 511) // 512)
+        _use_aster = any(lat > 59.0 or lat < -56.0 for lat, lon in route_locations)
+        _est_batch_size = 100 if _use_aster else 512
+        job["elevation_batch_total"] = max(1, (_estimated_n_points + _est_batch_size - 1) // _est_batch_size)
         job["elevation_batch_done"] = 0
 
         # Start elevation worker thread before OSRM loop so it can process
@@ -851,6 +1267,7 @@ def run_calculation(job_id: str, params: dict):
         _elev_thread = threading.Thread(
             target=_run_elevation_worker,
             args=(_seg_queue, _points_per_km, job, _elev_result),
+            kwargs={"use_aster": _use_aster},
             daemon=True,
         )
         _elev_thread.start()
@@ -1040,7 +1457,7 @@ def run_calculation(job_id: str, params: dict):
         elevation_result = None
 
         if _api_results and _all_kms:
-            _profile = [(km, r["elevation"]) for km, r in zip(_all_kms, _api_results)]
+            _profile = [(km, r["elevation"] or 0) for km, r in zip(_all_kms, _api_results)]
 
             # City km positions: segment i starts where city i is located.
             # The last city sits at the end of the whole route.
@@ -1208,6 +1625,7 @@ def run_direct_osrm_job(job_id: str, params: dict):
                 valid_city_ids.append(cid)
                 city_name_map[cid] = nd.get("name", cid)
             except KeyError:
+                print(f"[DirectOSRM] Stadt-ID '{cid}' nicht im Graph — wird übersprungen.", flush=True)
                 continue
 
         if len(valid_city_ids) < 2:
@@ -1243,7 +1661,9 @@ def run_direct_osrm_job(job_id: str, params: dict):
         # Estimate elevation batch total for progress bar
         _points_per_km = params["elev_points_per_1000km"] / 1000
         _estimated_n_points = max(200, round(500 * n_segments * _points_per_km))
-        job["elevation_batch_total"] = max(1, (_estimated_n_points + 511) // 512)
+        _use_aster = any(lat > 59.0 or lat < -56.0 for lat, lon in route_locations)
+        _est_batch_size = 100 if _use_aster else 512
+        job["elevation_batch_total"] = max(1, (_estimated_n_points + _est_batch_size - 1) // _est_batch_size)
         job["elevation_batch_done"] = 0
 
         # Start elevation worker before OSRM so they run in parallel
@@ -1252,6 +1672,7 @@ def run_direct_osrm_job(job_id: str, params: dict):
         _elev_thread = threading.Thread(
             target=_run_elevation_worker,
             args=(_seg_queue, _points_per_km, job, _elev_result),
+            kwargs={"use_aster": _use_aster},
             daemon=True,
         )
         _elev_thread.start()
@@ -1443,7 +1864,7 @@ def run_direct_osrm_job(job_id: str, params: dict):
         elevation_result = None
 
         if _api_results and _all_kms:
-            _profile = [(km, r["elevation"]) for km, r in zip(_all_kms, _api_results)]
+            _profile = [(km, r["elevation"] or 0) for km, r in zip(_all_kms, _api_results)]
 
             _city_kms = [_seg_start_kms.get(i, 0.0) for i in range(n_cities - 1)]
             _city_kms.append(_worker_total_km)
@@ -1626,8 +2047,8 @@ def run_gpx_analysis(
 
         update("elevation", "Höhenprofil wird geladen...")
 
-        _BATCH_SIZE = 512
-        _BATCH_DELAY = 1.5
+        _gpx_elev_url, _BATCH_SIZE, _gpx_payload_fn = _elev_api(sampled_latlons)
+        _BATCH_DELAY = 1.1 if _gpx_elev_url == OPEN_ELEV_ASTER else 0.0
         _MAX_RETRIES = 4
         _RETRY_DELAYS = [5, 15, 30, 60]
 
@@ -1644,12 +2065,12 @@ def run_gpx_analysis(
             b_start = batch_idx * _BATCH_SIZE
             b_end = min(b_start + _BATCH_SIZE, n_sampled)
             batch = sampled_latlons[b_start:b_end]
-            payload = {"locations": [{"latitude": lat, "longitude": lon} for lat, lon in batch]}
+            payload = _gpx_payload_fn(batch)
 
             batch_results = None
             for attempt in range(_MAX_RETRIES):
                 try:
-                    resp = requests.post(OPEN_ELEV, json=payload, timeout=45)
+                    resp = requests.post(_gpx_elev_url, json=payload, timeout=45)
                     resp.raise_for_status()
                     batch_results = resp.json()["results"]
                     break
@@ -1680,7 +2101,7 @@ def run_gpx_analysis(
 
         # Build elevation profile
         n_valid = min(len(all_api_results), len(sampled_km))
-        raw_eles = [r["elevation"] for r in all_api_results[:n_valid]]
+        raw_eles = [r["elevation"] or 0 for r in all_api_results[:n_valid]]
         # Smooth with rolling mean of 3
         smoothed_eles = []
         for i in range(n_valid):

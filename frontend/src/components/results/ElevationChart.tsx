@@ -342,7 +342,22 @@ function ElevationSegment({
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
     >
-      <svg ref={svgRef} width="100%" height="280" style={{ display: "block" }} />
+      <svg
+        ref={svgRef}
+        width="100%"
+        height="280"
+        style={{ display: "block" }}
+        role="img"
+        aria-label={(() => {
+          if (segPoints.length < 2) return "Elevation chart";
+          const kmStart = Math.round(segPoints[0][0]);
+          const kmEnd = Math.round(segPoints[segPoints.length - 1][0]);
+          const eles = segPoints.map(([, e]) => e);
+          const maxEle = Math.round(Math.max(...eles));
+          const cities = segCitiesVisible.map((c) => c.name).join(", ");
+          return `Elevation profile ${kmStart}–${kmEnd} km, max ${maxEle} m${cities ? `. Cities: ${cities}` : ""}`;
+        })()}
+      />
       <div
         ref={tooltipRef}
         className="pointer-events-none absolute hidden whitespace-nowrap rounded border px-2 py-1.5 text-[11px] leading-relaxed"

@@ -40,6 +40,7 @@ export function ConnectionList() {
             variant="ghost"
             size="icon"
             onClick={() => removeConnection(i)}
+            aria-label={t.connections.removeLabel ?? "Remove connection"}
             className="h-8 w-8 text-muted-foreground hover:text-destructive"
           >
             <X className="h-4 w-4" />

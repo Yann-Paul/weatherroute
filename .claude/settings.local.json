@@ -10,7 +10,10 @@
       "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\" && npm run build 2>&1)",
       "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\" && npm run build 2>&1 | tail -8)",
       "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\" && npm run build 2>&1 | tail -6)",
-      "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\\\\src\" && for func in \"haversineDist\" \"geoBearing\" \"windArrowColor\" \"routeBearingForMarker\" \"interpTempAtKm\" \"interpForecastByKey\" \"getForecastEndKm\" \"miniElevKmToLatLon\"; do echo \"=== Searching for: $func ===\"; grep -r \"$func\" . --include=\"*.tsx\" --include=\"*.ts\" | grep -v \"components/results/RouteMap.tsx\" || echo \"Not found elsewhere\"; done)"
+      "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\\\\src\" && for func in \"haversineDist\" \"geoBearing\" \"windArrowColor\" \"routeBearingForMarker\" \"interpTempAtKm\" \"interpForecastByKey\" \"getForecastEndKm\" \"miniElevKmToLatLon\"; do echo \"=== Searching for: $func ===\"; grep -r \"$func\" . --include=\"*.tsx\" --include=\"*.ts\" | grep -v \"components/results/RouteMap.tsx\" || echo \"Not found elsewhere\"; done)",
+      "Bash(find \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\\\\src\" -not -path \"*/node_modules/*\" -type f 2>/dev/null | head -40)",
+      "WebFetch(domain:climate-api.open-meteo.com)",
+      "Bash(curl -s \"https://climate-api.open-meteo.com/v1/climate?latitude=52.3906&longitude=13.0645&start_year=1991&end_year=2020&monthly=temperature_2m_min,temperature_2m_max,precipitation_sum,windspeed_10m_mean&models=ERA5\" 2>&1 | head -200)"
     ]
   }
 }

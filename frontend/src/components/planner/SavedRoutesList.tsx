@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { toast } from "sonner";
 import { FolderOpen, Trash2, Route as RouteIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ export function SavedRoutesList() {
       navigate(`/progress/${jobId}`);
     } catch {
       setOpeningId(null);
+      toast.error(t.savedRoutes.openFailed ?? "Could not open route.");
     }
   }
 
@@ -49,10 +51,7 @@ export function SavedRoutesList() {
     }
   }
 
-  if (loading || routes.length === 0) {
-    if (loading) return null;
-    return null;
-  }
+  if (loading || routes.length === 0) return null;
 
   return (
     <Card>
@@ -99,6 +98,7 @@ export function SavedRoutesList() {
                   variant="ghost"
                   onClick={() => handleDelete(route.id)}
                   disabled={openingId === route.id}
+                  aria-label={t.savedRoutes.deleteLabel ?? "Delete route"}
                   className="text-destructive hover:text-destructive"
                 >
                   <Trash2 className="h-3.5 w-3.5" />

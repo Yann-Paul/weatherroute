@@ -115,16 +115,12 @@ export function AdvancedPanel() {
 
             <div className="space-y-2">
               <Label>{tc.temperature.warmingFactor(store.warmingFactor.toFixed(1))}</Label>
-              <p className="text-xs text-muted-foreground">
-                {tc.temperature.warmingFactorDesc1}
-                <br />
-                {tc.temperature.warmingFactorDesc2}
-                <br />
-                {tc.temperature.warmingFactorDesc3}{" "}
-                <span className="font-medium">{tc.temperature.recommended}</span>
-                <br />
-                {tc.temperature.warmingFactorDesc4}
-              </p>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>{tc.temperature.warmingFactorDesc1}</p>
+                <p>{tc.temperature.warmingFactorDesc2}</p>
+                <p>{tc.temperature.warmingFactorDesc3}{" "}<span className="font-medium">{tc.temperature.recommended}</span></p>
+                <p>{tc.temperature.warmingFactorDesc4}</p>
+              </div>
               <Slider
                 min={-1}
                 max={4}
@@ -136,14 +132,11 @@ export function AdvancedPanel() {
 
             <div className="space-y-2">
               <Label>{tc.temperature.tempWeight(store.tempWeight.toFixed(2))}</Label>
-              <p className="text-xs text-muted-foreground">
-                {tc.temperature.tempWeightDesc1}
-                <br />
-                {tc.temperature.tempWeightDesc2}{" "}
-                <span className="font-medium">{tc.temperature.recommended}</span>
-                <br />
-                {tc.temperature.tempWeightDesc3}
-              </p>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>{tc.temperature.tempWeightDesc1}</p>
+                <p>{tc.temperature.tempWeightDesc2}{" "}<span className="font-medium">{tc.temperature.recommended}</span></p>
+                <p>{tc.temperature.tempWeightDesc3}</p>
+              </div>
               <Slider
                 min={0}
                 max={1}

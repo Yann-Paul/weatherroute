@@ -43,7 +43,7 @@ export function PreviewMap({ data }: PreviewMapProps) {
         />
       )}
       {data.cities.map((city, i) => (
-        <MapMarker key={city.id} longitude={city.lon} latitude={city.lat}>
+        <MapMarker key={`${city.id}-${i}`} longitude={city.lon} latitude={city.lat}>
           <MarkerContent>
             <div
               className="flex size-6 items-center justify-center rounded-full border-2 border-white text-[11px] font-bold text-white shadow-md"

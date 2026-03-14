@@ -90,6 +90,7 @@ export const WeatherCell = memo(function WeatherCell({
             viewBox="0 0 16 16"
             className="h-3 w-3 text-muted-foreground"
             style={{ transform: `rotate(${data.wdir ?? 0}deg)` }}
+            aria-hidden="true"
           >
             <path d="M8 1l3 12H5z" fill="currentColor" />
           </svg>

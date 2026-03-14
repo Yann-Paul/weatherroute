@@ -29,7 +29,7 @@ export function TopBar() {
           <button
             onClick={toggleTheme}
             aria-label={isDark ? t.nav.toggleLight : t.nav.toggleDark}
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </button>
@@ -63,7 +63,7 @@ export function TopBar() {
             <Button variant="outline" size="sm" asChild>
               <Link to="/gpx">
                 <FileUp className="h-4 w-4" />
-                {t.nav.gpx}
+                <span className="hidden sm:inline">{t.nav.gpx}</span>
               </Link>
             </Button>
           )}
@@ -71,7 +71,7 @@ export function TopBar() {
             <Button variant="outline" size="sm" asChild>
               <Link to="/">
                 <Plus className="h-4 w-4" />
-                {t.nav.newRoute}
+                <span className="hidden sm:inline">{t.nav.newRoute}</span>
               </Link>
             </Button>
           )}

@@ -89,7 +89,7 @@ export function PlannerPage() {
     }
   }
 
-  const daysInMonth = new Date(2025, parseInt(startMonth), 0).getDate();
+  const daysInMonth = new Date(new Date().getFullYear(), parseInt(startMonth), 0).getDate();
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4 pb-16">

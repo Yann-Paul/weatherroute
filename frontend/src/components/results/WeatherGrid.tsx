@@ -57,7 +57,7 @@ export function WeatherGrid() {
     for (let i = 0; i < tableColumns; i++) {
       const colOffset = dateOffset + i * tableStep;
       const calDay = ((startDay + colOffset - 1 + 3650) % 365) + 1;
-      cols.push({ colOffset, label: dayOfYearToDate(calDay, 2025, t.dateLocale) });
+      cols.push({ colOffset, label: dayOfYearToDate(calDay, new Date().getFullYear(), t.dateLocale) });
     }
     return cols;
   }, [startDay, dateOffset, tableStep, tableColumns, t.dateLocale]);
@@ -149,7 +149,7 @@ export function WeatherGrid() {
                     style={{ minWidth: "140px" }}
                   >
                     <div className="text-xs font-bold">{col.label}</div>
-                    <div className="text-[10px] text-muted-foreground">
+                    <div className="text-[11px] text-muted-foreground">
                       {col.colOffset >= 0 ? "+" : ""}{col.colOffset}d
                     </div>
                   </th>
@@ -167,7 +167,7 @@ export function WeatherGrid() {
                 >
                   <td className="sticky left-0 z-10 bg-background px-3 py-1 whitespace-nowrap">
                     <div className="font-medium leading-tight">{row.stop.cityName}</div>
-                    <div className="text-[10px] text-muted-foreground">
+                    <div className="text-[11px] text-muted-foreground">
                       {t.weatherGrid.dayHeader} {row.relDay}
                       {row.restDayOffset > 0 && (
                         <Pause className="ml-1 inline h-2.5 w-2.5 text-warn" />
@@ -178,7 +178,7 @@ export function WeatherGrid() {
                     const lookupOffset = col.colOffset + row.restDayOffset;
                     const data = row.stop.byOffset[String(lookupOffset)] ?? null;
                     const calDay = ((startDay + col.colOffset + row.relDay - 1 + 3650) % 365) + 1;
-                    const dateStr = dayOfYearToDate(calDay, 2025, t.dateLocale);
+                    const dateStr = dayOfYearToDate(calDay, new Date().getFullYear(), t.dateLocale);
                     return (
                       <td key={col.colOffset} className="px-1 py-1">
                         <WeatherCell

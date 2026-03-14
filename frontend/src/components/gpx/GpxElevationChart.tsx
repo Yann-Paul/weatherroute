@@ -251,9 +251,14 @@ function DayChart({
     drawChart();
   }
 
+  const maxEle = points.length ? Math.round(Math.max(...points.map((p) => p[1]))) : 0;
+  const ariaLabel = `Elevation profile ${Math.round(startKm)}–${Math.round(endKm)} km, max ${maxEle} m`;
+
   return (
     <canvas
       ref={canvasRef}
+      role="img"
+      aria-label={ariaLabel}
       style={{ width: "100%", height: `${height}px`, display: "block" }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
@@ -498,6 +503,8 @@ function NightTempChart({
   return (
     <canvas
       ref={canvasRef}
+      role="img"
+      aria-label={`Overnight temperature chart from ${stopTime} to ${nextStartTime}`}
       style={{ width: "100%", height: `${height}px`, display: "block" }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}

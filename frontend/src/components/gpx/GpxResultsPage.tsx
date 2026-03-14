@@ -3,6 +3,7 @@ import { useParams } from "react-router";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getGpxResults } from "@/api/client";
 import type { GpxJobResults } from "@/api/types";
 import { useT } from "@/i18n/useT";
@@ -36,7 +37,12 @@ export function GpxResultsPage() {
   }
 
   if (!results) {
-    return <div className="p-8 text-center text-muted-foreground">Laden...</div>;
+    return (
+      <div className="space-y-4 p-4">
+        <Skeleton className="h-8 w-64 rounded-xl" />
+        <Skeleton className="h-[400px] w-full rounded-3xl" />
+      </div>
+    );
   }
 
   const { elevation } = results;
@@ -69,7 +75,7 @@ export function GpxResultsPage() {
       </div>
 
       <Tabs defaultValue="map">
-        <TabsList>
+        <TabsList className="w-full justify-start">
           <TabsTrigger value="map">{t.gpx.results.tabMap}</TabsTrigger>
           <TabsTrigger value="elevation">{t.gpx.results.tabElevation}</TabsTrigger>
           <TabsTrigger value="weather">{t.gpx.results.tabWeather}</TabsTrigger>

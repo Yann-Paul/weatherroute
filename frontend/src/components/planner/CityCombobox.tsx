@@ -99,11 +99,12 @@ export function CityCombobox({
                     )}
                   />
                   {city.name}
-                  {city.country && (
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {city.country}
-                    </span>
-                  )}
+                  <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+                    {city.country && <span>{city.country}</span>}
+                    {city.source === "nominatim" && (
+                      <span title="Externe Stadt (OpenStreetMap)">🌐</span>
+                    )}
+                  </span>
                 </CommandItem>
               ))}
             </CommandGroup>

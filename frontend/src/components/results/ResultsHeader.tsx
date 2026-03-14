@@ -23,7 +23,7 @@ export function ResultsHeader() {
         </Badge>
         <Badge variant="secondary" className="gap-1.5 px-3 py-1.5 text-sm">
           <Calendar className="h-3.5 w-3.5" />
-          {dayOfYearToDate(startDay, 2025, t.dateLocale)} · <NumberTicker value={totalDays} /> {t.results.days}
+          {dayOfYearToDate(startDay, new Date().getFullYear(), t.dateLocale)} · <NumberTicker value={totalDays} /> {t.results.days}
         </Badge>
       </CardContent>
     </Card>

@@ -1069,6 +1069,17 @@ function MapRoute({
   useEffect(() => {
     if (!isLoaded || !map) return;
 
+    // MapLibre can't resolve CSS variables — evaluate them against the document
+    const resolveColor = (c: string) => {
+      if (!c.includes("var(")) return c;
+      const el = document.createElement("div");
+      el.style.color = c;
+      document.body.appendChild(el);
+      const resolved = getComputedStyle(el).color;
+      document.body.removeChild(el);
+      return resolved || "#4285F4";
+    };
+
     map.addSource(sourceId, {
       type: "geojson",
       data: {
@@ -1084,7 +1095,7 @@ function MapRoute({
       source: sourceId,
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": color,
+        "line-color": resolveColor(color),
         "line-width": width,
         "line-opacity": opacity,
         ...(dashArray && { "line-dasharray": dashArray }),

@@ -293,7 +293,7 @@ export function GpxPage() {
                       </p>
                     ) : (
                       <p className="mt-1 text-xs text-muted-foreground animate-pulse">
-                        Berechne Strecke…
+                        {t.gpx.calculating}
                       </p>
                     )}
                   </div>

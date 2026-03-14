@@ -83,7 +83,7 @@ function SortableCityRow({ index }: { index: number }) {
           className="w-16 text-center"
           aria-label={t.cityList.pauseLabel}
         />
-        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground leading-none">
+        <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground leading-none">
           <Pause className="h-2.5 w-2.5" />{t.cityList.pauseLabel}
         </span>
       </div>

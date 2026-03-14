@@ -4,6 +4,7 @@ export interface CitySearchResult {
   country?: string;
   lat: number;
   lon: number;
+  source?: "graph" | "nominatim";
 }
 
 export interface CountrySearchResult {

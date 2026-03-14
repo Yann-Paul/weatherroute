@@ -16,9 +16,20 @@ from sklearn.cluster import AgglomerativeClustering
 import numpy as np
 
 # No API keys needed — both services are free and open
-OSRM_BASE     = "https://router.project-osrm.org"
-VALHALLA_BASE = "https://valhalla1.openstreetmap.de"
-OPEN_ELEV     = "https://api.open-elevation.com/api/v1/lookup"
+OSRM_BASE      = "https://router.project-osrm.org"
+VALHALLA_BASE  = "https://valhalla1.openstreetmap.de"
+OPEN_ELEV_SRTM = "https://api.open-elevation.com/api/v1/lookup"   # SRTM: 56°S–60°N
+OPEN_ELEV_ASTER= "https://api.opentopodata.org/v1/aster30m"       # ASTER: global to 83°N
+
+def _elev_api(latlons):
+    """Return (url, batch_size, payload_fn) for the appropriate elevation API.
+    Uses ASTER (opentopodata) for routes above 59°N or below 56°S; SRTM otherwise.
+    Coordinates are rounded to 4 decimal places (~11 m precision), sufficient for elevation."""
+    if any(lat > 59.0 or lat < -56.0 for lat, lon in latlons):
+        return (OPEN_ELEV_ASTER, 100,
+                lambda b: {"locations": "|".join(f"{round(lat,4)},{round(lon,4)}" for lat, lon in b)})
+    return (OPEN_ELEV_SRTM, 512,
+            lambda b: {"locations": [{"latitude": round(lat,4), "longitude": round(lon,4)} for lat, lon in b]})
 
 def day_to_month(day):
     """Convert day-of-year (1-366) to month (1-12)."""
@@ -1815,27 +1826,28 @@ def get_elevation_profile(route_locations, city_names, skip_segments=None, max_e
         indices[-1] = n - 1
         road_coords = [road_coords[i] for i in indices]
     
-    # Open-Elevation lookup (batched)
-    _ELEV_BATCH = 512
+    # Elevation lookup — SRTM for ≤59°N, ASTER for higher latitudes (batched)
+    _elev_url, _ELEV_BATCH, _payload_fn = _elev_api(road_coords)
     results = []
     try:
         for b_start in range(0, len(road_coords), _ELEV_BATCH):
             batch = road_coords[b_start:b_start + _ELEV_BATCH]
-            payload = {"locations": [{"latitude": lat, "longitude": lon}
-                                      for lat, lon in batch]}
-            resp = requests.post(OPEN_ELEV, json=payload, timeout=30)
+            resp = requests.post(_elev_url, json=_payload_fn(batch), timeout=30)
             resp.raise_for_status()
             results.extend(resp.json()["results"])
     except Exception as e:
         print(f"Open-Elevation request failed: {e}")
         return None
-    
+
     # Build elevation profile (stop at first flight)
     profile = []
     max_road_km = sum(d for d in leg_distances_km if d > 0)
-    
+
     for i, r in enumerate(results):
-        lat, lon, ele = r["latitude"], r["longitude"], r["elevation"]
+        loc = r.get("location", {})
+        lat = r.get("latitude") or loc.get("lat", 0)
+        lon = r.get("longitude") or loc.get("lng", 0)
+        ele = r["elevation"] or 0
         if i == 0:
             profile.append((0.0, ele))
         else:
@@ -2022,7 +2034,7 @@ def assemble_elevation_profile(api_results, prep):
         result_offset += take
 
         for (slat, slon), km, r in zip(seg_latlons[:take], sampled_kms[:take], sub_results):
-            combined_profile.append((km_offset + km, r["elevation"]))
+            combined_profile.append((km_offset + km, r["elevation"] or 0))
             combined_latlons.append((slat, slon))
 
         if not combined_profile:
@@ -2191,24 +2203,22 @@ def build_combined_elevation_profile(sub_route_data, max_elev_points=None, point
 
     # Step 3: Open-Elevation calls (batched to stay within API payload limits)
     import time as _time
-    _ELEV_BATCH = 256          # smaller batches → less likely to hit rate limits
-    _BATCH_DELAY = 1.5         # seconds between batches (rate limit: 1 req/s per IP)
+    _elev_url, _ELEV_BATCH, _payload_fn = _elev_api(all_sampled_latlon)
+    _BATCH_DELAY = 1.1 if _elev_url == OPEN_ELEV_ASTER else 0.0
     _MAX_RETRIES = 4
     _RETRY_DELAYS = [5, 15, 30, 60]   # backoff schedule for 429 / transient errors
     n_batches = (n_sampled + _ELEV_BATCH - 1) // _ELEV_BATCH
-    print(f"[Höhenprofil] Schritt 3 — Open-Elevation Anfrage mit {n_sampled} Koordinaten "
-          f"in {n_batches} Batch(es) …", flush=True)
+    print(f"[Höhenprofil] Schritt 3 — Elevation-Anfrage mit {n_sampled} Koordinaten "
+          f"in {n_batches} Batch(es) via {_elev_url.split('/')[2]} …", flush=True)
     all_results = []
     try:
         for batch_idx, b_start in enumerate(range(0, n_sampled, _ELEV_BATCH)):
             if batch_idx > 0:
                 _time.sleep(_BATCH_DELAY)
             batch = all_sampled_latlon[b_start:b_start + _ELEV_BATCH]
-            payload = {"locations": [{"latitude": lat, "longitude": lon}
-                                      for lat, lon in batch]}
             for attempt in range(_MAX_RETRIES):
                 try:
-                    resp = requests.post(OPEN_ELEV, json=payload, timeout=45)
+                    resp = requests.post(_elev_url, json=_payload_fn(batch), timeout=45)
                     resp.raise_for_status()
                     all_results.extend(resp.json()["results"])
                     break
@@ -2219,7 +2229,9 @@ def build_combined_elevation_profile(sub_route_data, max_elev_points=None, point
                         and batch_err.response.status_code == 429
                     )
                     if attempt < _MAX_RETRIES - 1:
-                        wait = _RETRY_DELAYS[attempt] if is_rate_limit else _RETRY_DELAYS[0]
+                        wait = _RETRY_DELAYS[attempt]
+                        if is_rate_limit:
+                            wait = max(wait, 10)  # back off harder on 429
                         print(f"[Höhenprofil] Batch {batch_idx+1}/{n_batches} Fehler "
                               f"(Versuch {attempt+1}/{_MAX_RETRIES}): {batch_err} — "
                               f"warte {wait}s …", flush=True)
@@ -2250,7 +2262,7 @@ def build_combined_elevation_profile(sub_route_data, max_elev_points=None, point
         result_offset += count
 
         for (slat, slon), km, r in zip(seg_latlons, sampled_kms, sub_results):
-            combined_profile.append((km_offset + km, r["elevation"]))
+            combined_profile.append((km_offset + km, r["elevation"] or 0))
             combined_latlons.append((slat, slon))
 
         city_temps_sub = info.get('city_temps', [])

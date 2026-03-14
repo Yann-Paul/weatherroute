@@ -116,7 +116,7 @@ export function ProgressPage() {
         <CardHeader>
           <CardTitle>{t.progress.heading}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1">
+        <CardContent className="space-y-1" aria-live="polite" aria-atomic="false">
           {!isGpxJob && !isWeatherRoute && (
             <StepIndicator
               label={t.progress.stepRoute}
