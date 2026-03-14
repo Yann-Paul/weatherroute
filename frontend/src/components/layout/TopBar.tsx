@@ -29,11 +29,11 @@ export function TopBar() {
           <button
             onClick={toggleTheme}
             aria-label={isDark ? t.nav.toggleLight : t.nav.toggleDark}
-            className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </button>
-          <div role="group" aria-label="Language" className="flex overflow-hidden rounded-md border border-border">
+          <div role="group" aria-label={t.nav.languageGroup} className="flex overflow-hidden rounded-md border border-border">
             <button
               onClick={() => setLang("de")}
               aria-pressed={lang === "de"}
@@ -60,17 +60,17 @@ export function TopBar() {
             </button>
           </div>
           {showGpx && (
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/gpx">
-                <FileUp className="h-4 w-4" />
+            <Button variant="secondary" size="sm" asChild>
+              <Link to="/gpx" aria-label={t.nav.gpx}>
+                <FileUp className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden sm:inline">{t.nav.gpx}</span>
               </Link>
             </Button>
           )}
           {showNewRoute && (
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/">
-                <Plus className="h-4 w-4" />
+            <Button variant="default" size="sm" asChild>
+              <Link to="/" aria-label={t.nav.newRoute}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden sm:inline">{t.nav.newRoute}</span>
               </Link>
             </Button>

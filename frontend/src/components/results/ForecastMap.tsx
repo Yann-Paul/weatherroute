@@ -166,7 +166,7 @@ function ClimateMarkers({ points, miniElev, currentHour, dailyMode, desiredHigh,
     return () => { map.off("zoom", onZoom); };
   }, [map, isLoaded]);
 
-  const step = zoom < 3.5 ? 10 : zoom < 4.5 ? 6 : zoom < 5.5 ? 3 : zoom < 6.5 ? 2 : 1;
+  const step = zoom < 4 ? 20 : zoom < 5 ? 12 : zoom < 6 ? 6 : zoom < 7 ? 3 : zoom < 8 ? 2 : 1;
   const desiredAvg = (desiredHigh + desiredLow) / 2;
   const textShadow = "0 1px 3px rgba(0,0,0,0.65)";
 
@@ -286,7 +286,7 @@ function ForecastMarkers({
     return () => { map.off("zoom", onZoom); };
   }, [map, isLoaded]);
 
-  const step = zoom < 3.5 ? 10 : zoom < 4.5 ? 6 : zoom < 5.5 ? 3 : zoom < 6.5 ? 2 : 1;
+  const step = zoom < 4 ? 20 : zoom < 5 ? 12 : zoom < 6 ? 6 : zoom < 7 ? 3 : zoom < 8 ? 2 : 1;
   const desiredAvg = (desiredHigh + desiredLow) / 2;
 
   return (
@@ -1127,7 +1127,7 @@ const lang = useLangStore((s) => s.lang);
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+    <div className="space-y-2 rounded-2xl border border-border bg-card p-2 sm:space-y-3 sm:p-4">
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm font-medium text-muted-foreground">{t.forecastMap.time}</span>

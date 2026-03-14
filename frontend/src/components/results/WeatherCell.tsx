@@ -7,7 +7,6 @@ import { useT } from "@/i18n/useT";
 import type { WeatherOffsetData } from "@/api/types";
 
 interface WeatherCellProps {
-  cityName: string;
   date?: string;
   isRestDay: boolean;        // true = this is a rest-day row (not arrival)
   restDayOffset?: number;    // 1, 2, ... for rest days
@@ -17,7 +16,6 @@ interface WeatherCellProps {
 }
 
 export const WeatherCell = memo(function WeatherCell({
-  cityName,
   date,
   isRestDay,
   restDayOffset,
@@ -49,10 +47,9 @@ export const WeatherCell = memo(function WeatherCell({
     <div
       className={`space-y-1 rounded-md border-l-4 p-2 transition-colors duration-200 ${borderColor} ${bgTint}`}
     >
-      <div className="flex items-baseline justify-between gap-1">
-        <p className="text-sm font-medium leading-tight">{cityName}</p>
-        {date && <span className="text-[10px] text-muted-foreground">{date}</span>}
-      </div>
+      {date && (
+        <div className="text-[10px] text-muted-foreground">{date}</div>
+      )}
 
       {isRestDay && restDayOffset != null && (
         <Badge variant="outline" className="gap-1 text-[10px]">

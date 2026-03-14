@@ -119,18 +119,24 @@ export function PlannerPage() {
 
           <div className="flex items-center gap-3">
             <Switch
+              id="sorted-input"
               checked={store.sortedInput}
               onCheckedChange={store.setSortedInput}
             />
-            <Label>{t.advanced.travel.sortedInput}</Label>
+            <Label htmlFor="sorted-input">{t.advanced.travel.sortedInput}</Label>
           </div>
 
           <div className="flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3">
             <div>
-              <p className="text-sm font-medium">{t.planner.directOsrm}</p>
+              <p className="text-sm font-medium" id="direct-osrm-label">{t.planner.directOsrm}</p>
               <p className="text-xs text-muted-foreground">{t.planner.directOsrmDesc}</p>
             </div>
-            <Switch checked={store.directOsrm} onCheckedChange={store.setDirectOsrm} />
+            <Switch
+              id="direct-osrm"
+              aria-labelledby="direct-osrm-label"
+              checked={store.directOsrm}
+              onCheckedChange={store.setDirectOsrm}
+            />
           </div>
 
           <div className="space-y-2">
@@ -146,10 +152,11 @@ export function PlannerPage() {
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <Switch
+                id="auto-detect-date"
                 checked={store.autoDetectStart}
                 onCheckedChange={store.setAutoDetectStart}
               />
-              <Label>{t.planner.autoDetectDate}</Label>
+              <Label htmlFor="auto-detect-date">{t.planner.autoDetectDate}</Label>
             </div>
 
             {!store.autoDetectStart && (

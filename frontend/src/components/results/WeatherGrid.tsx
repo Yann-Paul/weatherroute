@@ -24,6 +24,8 @@ interface GridRow {
   restDayOffset: number; // 0 = arrival day, 1+ = nth rest day at this city
 }
 
+const currentYear = new Date().getFullYear();
+
 export function WeatherGrid() {
   const {
     weather,
@@ -57,7 +59,7 @@ export function WeatherGrid() {
     for (let i = 0; i < tableColumns; i++) {
       const colOffset = dateOffset + i * tableStep;
       const calDay = ((startDay + colOffset - 1 + 3650) % 365) + 1;
-      cols.push({ colOffset, label: dayOfYearToDate(calDay, new Date().getFullYear(), t.dateLocale) });
+      cols.push({ colOffset, label: dayOfYearToDate(calDay, currentYear, t.dateLocale) });
     }
     return cols;
   }, [startDay, dateOffset, tableStep, tableColumns, t.dateLocale]);
@@ -139,14 +141,14 @@ export function WeatherGrid() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-left font-medium whitespace-nowrap">
+                <th scope="col" className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-left font-medium whitespace-nowrap">
                   {t.weatherGrid.dayHeader}
                 </th>
                 {columns.map((col) => (
                   <th
                     key={col.colOffset}
-                    className="whitespace-nowrap px-3 py-2 text-center font-medium"
-                    style={{ minWidth: "140px" }}
+                    scope="col"
+                    className="whitespace-nowrap px-3 py-2 text-center font-medium min-w-[140px]"
                   >
                     <div className="text-xs font-bold">{col.label}</div>
                     <div className="text-[11px] text-muted-foreground">
@@ -165,24 +167,23 @@ export function WeatherGrid() {
                     row.restDayOffset > 0 ? "bg-warn/5" : "",
                   ].join(" ")}
                 >
-                  <td className="sticky left-0 z-10 bg-background px-3 py-1 whitespace-nowrap">
+                  <th scope="row" className="sticky left-0 z-10 bg-background px-3 py-1 whitespace-nowrap text-left font-normal">
                     <div className="font-medium leading-tight">{row.stop.cityName}</div>
                     <div className="text-[11px] text-muted-foreground">
                       {t.weatherGrid.dayHeader} {row.relDay}
                       {row.restDayOffset > 0 && (
-                        <Pause className="ml-1 inline h-2.5 w-2.5 text-warn" />
+                        <Pause className="ml-1 inline h-2.5 w-2.5 text-warn" aria-hidden="true" />
                       )}
                     </div>
-                  </td>
+                  </th>
                   {columns.map((col) => {
                     const lookupOffset = col.colOffset + row.restDayOffset;
                     const data = row.stop.byOffset[String(lookupOffset)] ?? null;
                     const calDay = ((startDay + col.colOffset + row.relDay - 1 + 3650) % 365) + 1;
-                    const dateStr = dayOfYearToDate(calDay, new Date().getFullYear(), t.dateLocale);
+                    const dateStr = dayOfYearToDate(calDay, currentYear, t.dateLocale);
                     return (
                       <td key={col.colOffset} className="px-1 py-1">
                         <WeatherCell
-                          cityName={row.stop.cityName}
                           date={dateStr}
                           isRestDay={row.restDayOffset > 0}
                           restDayOffset={row.restDayOffset > 0 ? row.restDayOffset : undefined}

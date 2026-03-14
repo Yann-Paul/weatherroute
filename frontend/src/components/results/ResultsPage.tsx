@@ -163,7 +163,7 @@ export function ResultsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4 p-4">
+      <div className="space-y-4 p-4" role="status" aria-label={t.results.loading}>
         <Skeleton className="h-16 w-full rounded-3xl" />
         <Skeleton className="h-[500px] w-full rounded-3xl" />
       </div>
@@ -182,14 +182,14 @@ export function ResultsPage() {
   }
 
   return (
-    <div className="space-y-4 p-4 pb-16">
+    <div className="space-y-2 p-2 pb-16 sm:space-y-4 sm:p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
           <ResultsHeader />
         </div>
         <div className="mt-1 flex shrink-0 gap-1.5">
           <Button
-            variant="outline"
+            variant="default"
             size="sm"
             onClick={handleEditSettings}
             className="gap-1.5"
@@ -227,24 +227,24 @@ export function ResultsPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start">
-          <TabsTrigger value="map" className="gap-1.5">
-            <Map className="h-4 w-4" />
+          <TabsTrigger value="map" className="gap-1.5" aria-label={t.results.tabMap}>
+            <Map className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t.results.tabMap}</span>
           </TabsTrigger>
-          <TabsTrigger value="elevation" className="gap-1.5">
-            <Mountain className="h-4 w-4" />
+          <TabsTrigger value="elevation" className="gap-1.5" aria-label={t.results.tabElevation}>
+            <Mountain className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t.results.tabElevation}</span>
           </TabsTrigger>
-          <TabsTrigger value="temperature" className="gap-1.5">
-            <Thermometer className="h-4 w-4" />
+          <TabsTrigger value="temperature" className="gap-1.5" aria-label={t.results.tabTemperature}>
+            <Thermometer className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t.results.tabTemperature}</span>
           </TabsTrigger>
-          <TabsTrigger value="weather" className="gap-1.5">
-            <CloudSun className="h-4 w-4" />
+          <TabsTrigger value="weather" className="gap-1.5" aria-label={t.results.tabWeather}>
+            <CloudSun className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t.results.tabWeather}</span>
           </TabsTrigger>
-          <TabsTrigger value="route" className="gap-1.5">
-            <List className="h-4 w-4" />
+          <TabsTrigger value="route" className="gap-1.5" aria-label={t.results.tabRoute}>
+            <List className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t.results.tabRoute}</span>
           </TabsTrigger>
         </TabsList>

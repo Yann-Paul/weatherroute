@@ -17,7 +17,10 @@
       "Bash(find \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\" -type f -name \"*.ts\" -o -name \"*.tsx\" 2>/dev/null | head -20)",
       "Bash(find /c/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute/frontend/src -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" -o -name \"*.jsx\" \\\\\\) 2>/dev/null | sort)",
       "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\" && npm run build 2>&1 | tail -50)",
-      "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\" && npm run build 2>&1 | tail -20)"
+      "Bash(cd \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\\\\frontend\" && npm run build 2>&1 | tail -20)",
+      "Bash(cd \"C:/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute/frontend\" && npm install 2>&1 | tail -5)",
+      "Bash(cd \"C:/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute/frontend\" && npm run build 2>&1 | tail -30)",
+      "Bash(cd \"C:/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute/frontend\" && npm run build 2>&1 | tail -20)"
     ]
   }
 }
