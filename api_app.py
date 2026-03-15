@@ -278,38 +278,30 @@ def _copy_nearest_temperatures(lat: float, lon: float) -> Optional[dict]:
 
 
 def geocode_city_nominatim(name: str, lang: str = "en") -> Optional[dict]:
-    """Geocode a city name via Nominatim. Returns dict with name/lat/lon/country_code or None."""
-    params_base = {
-        "format": "json",
-        "limit": 1,
-        "addressdetails": 1,
-        "accept-language": lang,
-    }
+    """Geocode a city name via Photon (Komoot). Returns dict with name/lat/lon/country_code or None."""
     try:
-        for extra in [{"featuretype": "city"}, {}]:
-            resp = requests.get(
-                "https://nominatim.openstreetmap.org/search",
-                params={"q": name, **params_base, **extra},
-                headers={"User-Agent": "WeatherRoute/1.0"},
-                timeout=10,
-            )
-            resp.raise_for_status()
-            results = resp.json()
-            if results:
-                break
-        if not results:
+        resp = requests.get(
+            "https://photon.komoot.io/api/",
+            params={"q": name, "limit": 1, "lang": lang},
+            headers={"User-Agent": "WeatherRoute/1.0"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        features = resp.json().get("features", [])
+        if not features:
             return None
-        hit = results[0]
-        short_name = hit.get("display_name", name).split(",")[0].strip()
-        country_code = (hit.get("address") or {}).get("country_code", "").upper()
+        props = features[0].get("properties", {})
+        coords = features[0].get("geometry", {}).get("coordinates", [0, 0])
+        short_name = props.get("name") or props.get("city") or name
+        country_code = props.get("country_code", "").upper()
         return {
             "name": short_name,
-            "lat": float(hit["lat"]),
-            "lon": float(hit["lon"]),
+            "lat": float(coords[1]),
+            "lon": float(coords[0]),
             "country_code": country_code,
         }
     except Exception as exc:
-        print(f"[Nominatim] Geocoding '{name}' (lang={lang}) fehlgeschlagen: {exc}", flush=True)
+        print(f"[Photon] Geocoding '{name}' (lang={lang}) fehlgeschlagen: {exc}", flush=True)
         return None
 
 
