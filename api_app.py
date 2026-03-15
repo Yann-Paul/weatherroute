@@ -17,6 +17,7 @@ from pathlib import Path
 
 import difflib
 import math
+import time
 import xml.etree.ElementTree as ET
 import pycountry
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
@@ -504,6 +505,10 @@ class JobSubmission(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+_nominatim_cache: dict[str, tuple[float, list]] = {}  # query -> (timestamp, results)
+_NOMINATIM_CACHE_TTL = 3600  # 1 hour
+
+
 @app.get("/api/cities/search")
 def search_cities(q: str = Query("", min_length=0)):
     query = q.lower()
@@ -531,37 +536,45 @@ def search_cities(q: str = Query("", min_length=0)):
 
     # Nominatim fallback when local results are sparse
     if len(results) < 5:
-        try:
-            resp = requests.get(
-                "https://nominatim.openstreetmap.org/search",
-                params={
-                    "q": q,
-                    "format": "json",
-                    "limit": 5 - len(results),
-                    "addressdetails": 1,
-                    "featuretype": "city",
-                    "accept-language": "en",
-                },
-                headers={"User-Agent": "WeatherRoute/1.0"},
-                timeout=5,
-            )
-            resp.raise_for_status()
-            for hit in resp.json():
-                short_name = hit.get("display_name", q).split(",")[0].strip()
-                if short_name.lower() in seen_names:
-                    continue
-                country_code = (hit.get("address") or {}).get("country_code", "").upper()
-                results.append({
-                    "id": f"nominatim:{short_name.lower()}",
-                    "name": short_name,
-                    "country": country_code or None,
-                    "lat": float(hit["lat"]),
-                    "lon": float(hit["lon"]),
-                    "source": "nominatim",
-                })
-                seen_names.add(short_name.lower())
-        except Exception as exc:
-            print(f"[Search/Nominatim] Fehler: {exc}", flush=True)
+        cache_key = q.lower()
+        cached = _nominatim_cache.get(cache_key)
+        if cached and (time.time() - cached[0]) < _NOMINATIM_CACHE_TTL:
+            nom_results = cached[1]
+        else:
+            nom_results = []
+            try:
+                resp = requests.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={
+                        "q": q,
+                        "format": "json",
+                        "limit": 5,
+                        "addressdetails": 1,
+                        "featuretype": "city",
+                        "accept-language": "en",
+                    },
+                    headers={"User-Agent": "WeatherRoute/1.0"},
+                    timeout=5,
+                )
+                resp.raise_for_status()
+                for hit in resp.json():
+                    short_name = hit.get("display_name", q).split(",")[0].strip()
+                    country_code = (hit.get("address") or {}).get("country_code", "").upper()
+                    nom_results.append({
+                        "id": f"nominatim:{short_name.lower()}",
+                        "name": short_name,
+                        "country": country_code or None,
+                        "lat": float(hit["lat"]),
+                        "lon": float(hit["lon"]),
+                        "source": "nominatim",
+                    })
+                _nominatim_cache[cache_key] = (time.time(), nom_results)
+            except Exception as exc:
+                print(f"[Search/Nominatim] Fehler: {exc}", flush=True)
+        for hit in nom_results:
+            if hit["name"].lower() not in seen_names and len(results) < 10:
+                results.append(hit)
+                seen_names.add(hit["name"].lower())
 
     return results
 
@@ -2536,7 +2549,10 @@ if FRONTEND_DIST.exists():
         file_path = FRONTEND_DIST / full_path
         if file_path.is_file():
             return FileResponse(str(file_path))
-        return FileResponse(str(FRONTEND_DIST / "index.html"))
+        return FileResponse(
+            str(FRONTEND_DIST / "index.html"),
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
 
 
 if __name__ == "__main__":

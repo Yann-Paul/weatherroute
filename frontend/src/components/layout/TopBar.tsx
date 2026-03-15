@@ -23,7 +23,7 @@ export function TopBar() {
       <div className="flex h-14 items-center justify-between px-4">
         <Link to="/" className="flex items-center gap-2">
           <MapPin className="h-5 w-5 text-primary" />
-          <span className="font-sans text-xl font-medium">WeatherRoute</span>
+          <span className="hidden sm:inline font-sans text-xl font-medium">WeatherRoute</span>
         </Link>
         <div className="flex items-center gap-2">
           <button
@@ -63,6 +63,7 @@ export function TopBar() {
             <Button variant="secondary" size="sm" asChild>
               <Link to="/gpx" aria-label={t.nav.gpx}>
                 <FileUp className="h-4 w-4" aria-hidden="true" />
+                <span className="sm:hidden">GPX</span>
                 <span className="hidden sm:inline">{t.nav.gpx}</span>
               </Link>
             </Button>

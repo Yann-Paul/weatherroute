@@ -120,7 +120,7 @@ const de = {
     tabWeather: "Tabelle",
     tabRoute: "Route",
     tabForecast: "Vorhersage",
-    stops: "Haltepunkte",
+    stops: "Stops",
     days: "Tage",
     errorTitle: "Fehler",
     loadFailed: "Ergebnisse konnten nicht geladen werden",
