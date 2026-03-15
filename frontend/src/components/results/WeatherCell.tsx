@@ -47,6 +47,9 @@ export const WeatherCell = memo(function WeatherCell({
     <div
       className={`space-y-1 rounded-md border-l-4 p-2 transition-colors duration-200 ${borderColor} ${bgTint}`}
     >
+      <span className="sr-only">
+        {variant === "good" ? t.weatherGrid.legendGood : variant === "warn" ? t.weatherGrid.legendOk : t.weatherGrid.legendBad}:{" "}
+      </span>
       {date && (
         <div className="text-[10px] text-muted-foreground">{date}</div>
       )}

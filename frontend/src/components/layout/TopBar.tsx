@@ -29,7 +29,7 @@ export function TopBar() {
           <button
             onClick={toggleTheme}
             aria-label={isDark ? t.nav.toggleLight : t.nav.toggleDark}
-            className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            className="flex h-11 w-11 items-center justify-center rounded-md bg-secondary text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </button>
@@ -38,7 +38,7 @@ export function TopBar() {
               onClick={() => setLang("de")}
               aria-pressed={lang === "de"}
               className={[
-                "px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                "flex min-h-[44px] items-center justify-center px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 lang === "de"
                   ? "bg-primary text-primary-foreground"
                   : "bg-background text-muted-foreground hover:bg-muted",
@@ -50,7 +50,7 @@ export function TopBar() {
               onClick={() => setLang("en")}
               aria-pressed={lang === "en"}
               className={[
-                "px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                "flex min-h-[44px] items-center justify-center px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 lang === "en"
                   ? "bg-primary text-primary-foreground"
                   : "bg-background text-muted-foreground hover:bg-muted",

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { DragEvent, ChangeEvent, FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { FileUp, Upload } from "lucide-react";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { submitGpxJob } from "@/api/client";
 import type { GpxDayConfig } from "@/api/types";
 import { useT } from "@/i18n/useT";
+import { useLangStore } from "@/i18n/store";
 import { useJobStore } from "@/stores/jobStore";
 import { toast } from "sonner";
 import { parseGpxTotalKm } from "@/utils/gpxParser";
@@ -130,7 +131,13 @@ function numDaysFor(totalKm: number, dailyKm: number): number {
 export function GpxPage() {
   const navigate = useNavigate();
   const t = useT();
+  const lang = useLangStore((s) => s.lang);
   const setJobId = useJobStore((s) => s.setJobId);
+
+  useEffect(() => {
+    document.title = lang === "de" ? "WeatherRoute — GPX hochladen" : "WeatherRoute — Upload GPX";
+    return () => { document.title = "WeatherRoute"; };
+  }, [lang]);
 
   const [file, setFile] = useState<File | null>(null);
   const [totalKm, setTotalKm] = useState<number | null>(null);
@@ -466,7 +473,8 @@ function PerDayTable({
   const PARAMS: Param[] = ["speed", "dailyKm", "ridingHours"];
 
   return (
-    <div className="space-y-1 text-sm">
+    <div className="overflow-x-auto">
+    <div className="min-w-[22rem] space-y-1 text-sm">
       {/* Header */}
       <div className="grid grid-cols-[2rem_5.5rem_3.5rem_4rem_4.5rem] gap-2 px-1 text-xs text-muted-foreground">
         <span>{t.gpx.day}</span>
@@ -524,6 +532,7 @@ function PerDayTable({
           );
         })}
       </div>
+    </div>
     </div>
   );
 }

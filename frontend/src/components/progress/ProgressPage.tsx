@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
-import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -10,6 +9,7 @@ import { PreviewMap } from "./PreviewMap";
 import { useJobStore } from "@/stores/jobStore";
 import { getJobStatus } from "@/api/client";
 import { useT } from "@/i18n/useT";
+import { useLangStore } from "@/i18n/store";
 
 type StepStatus = "waiting" | "active" | "done" | "error";
 
@@ -40,6 +40,11 @@ export function ProgressPage() {
   const pollingRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const retryCount = useRef(0);
   const t = useT();
+  const lang = useLangStore((s) => s.lang);
+
+  useEffect(() => {
+    document.title = lang === "de" ? "WeatherRoute — Wird berechnet…" : "WeatherRoute — Computing…";
+  }, [lang]);
   // Capture strings into ref so poll callback always sees latest lang
   const tRef = useRef(t);
   tRef.current = t;
@@ -64,6 +69,8 @@ export function ProgressPage() {
         elevationBatchTotal: data.elevationBatchTotal ?? 0,
         forecastDone: data.forecastDone ?? 0,
         forecastTotal: data.forecastTotal ?? 0,
+        registeringDone: data.registeringDone ?? 0,
+        registeringTotal: data.registeringTotal ?? 0,
       });
 
       if (data.status === "done" || data.status === "preview") {
@@ -100,12 +107,13 @@ export function ProgressPage() {
 
   const isGpxJob = job.jobType === "gpx";
   const isWeatherRoute = job.jobType === "weather_route";
+  const hasRegistering = job.registeringTotal > 0;
   const stepOrder = isGpxJob
     ? ["elevation", "forecast"]
     : isWeatherRoute
-    ? ["osrm", "elevation", "forecast"]
-    : ["route", "osrm", "elevation", "forecast"];
-  const defaultStep = isGpxJob ? "elevation" : isWeatherRoute ? "osrm" : "route";
+    ? hasRegistering ? ["registering", "osrm", "elevation", "forecast"] : ["osrm", "elevation", "forecast"]
+    : hasRegistering ? ["registering", "route", "osrm", "elevation", "forecast"] : ["route", "osrm", "elevation", "forecast"];
+  const defaultStep = isGpxJob ? "elevation" : hasRegistering ? "registering" : isWeatherRoute ? "osrm" : "route";
   const isError = job.status === "error";
   const osrmProgress =
     job.osrmTotal > 0 ? (job.osrmDone / job.osrmTotal) * 100 : 0;
@@ -117,6 +125,18 @@ export function ProgressPage() {
           <CardTitle>{t.progress.heading}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1" aria-live="polite" aria-atomic="false">
+          {!isGpxJob && hasRegistering && (
+            <StepIndicator
+              label={t.progress.stepRegistering}
+              status={getStepStatus(job.step || defaultStep, "registering", isError, stepOrder)}
+              detail={job.step === "registering" ? job.message : undefined}
+              progress={
+                job.step === "registering" && job.registeringTotal > 0
+                  ? (job.registeringDone / job.registeringTotal) * 100
+                  : undefined
+              }
+            />
+          )}
           {!isGpxJob && !isWeatherRoute && (
             <StepIndicator
               label={t.progress.stepRoute}
@@ -171,18 +191,11 @@ export function ProgressPage() {
         </CardContent>
       </Card>
 
-      <AnimatePresence>
-        {job.roughMap && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4, ease: [0.33, 1, 0.68, 1] }}
-            className="min-h-[400px] overflow-hidden rounded-3xl border border-border"
-          >
-            <PreviewMap data={job.roughMap} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {job.roughMap && (
+        <div className="animate-fade-in-scale min-h-[400px] overflow-hidden rounded-3xl border border-border">
+          <PreviewMap data={job.roughMap} />
+        </div>
+      )}
     </div>
   );
 }

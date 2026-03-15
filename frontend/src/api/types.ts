@@ -62,6 +62,8 @@ export interface JobStatusResponse {
   elevationBatchTotal: number;
   forecastDone: number;
   forecastTotal: number;
+  registeringDone: number;
+  registeringTotal: number;
 }
 
 export interface RoughMapData {

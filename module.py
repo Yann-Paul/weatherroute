@@ -2451,6 +2451,8 @@ def fetch_open_meteo_forecast(points, on_progress=None):
     OPEN_METEO = "https://api.open-meteo.com/v1/forecast"
     HOUR_STEPS = [0, 6, 12, 18, 24]
 
+    LAPSE_RATE = 0.0065  # °C per metre (standard environmental lapse rate)
+
     def fetch_one(args):
         i, pt = args
         try:
@@ -2468,6 +2470,15 @@ def fetch_open_meteo_forecast(points, on_progress=None):
             }, timeout=15)
             resp.raise_for_status()
             data = resp.json()
+
+            # Elevation correction: actual GPS elevation vs. model terrain elevation.
+            # Open-Meteo returns "elevation" (model orography) automatically.
+            model_ele = data.get("elevation")
+            actual_ele = pt.get("ele")
+            elev_corr = (actual_ele - model_ele) * LAPSE_RATE if (model_ele is not None and actual_ele is not None) else 0.0
+
+            def _tc(v):
+                return round(v - elev_corr, 1) if v is not None else None
 
             htimes = data.get("hourly", {}).get("time", [])
             htemp  = data.get("hourly", {}).get("temperature_2m", [])
@@ -2493,7 +2504,7 @@ def fetch_open_meteo_forecast(points, on_progress=None):
                     idx = htimes.index(lookup)
                     sun_min = round(hsun[idx] / 60.0, 1) if idx < len(hsun) and hsun[idx] is not None else None
                     hourly_result[str(h)] = {
-                        "temp":  htemp[idx]  if idx < len(htemp)  else None,
+                        "temp":  _tc(htemp[idx]  if idx < len(htemp)  else None),
                         "prcp":  hprcp[idx]  if idx < len(hprcp)  else None,
                         "wspd":  hwspd[idx]  if idx < len(hwspd)  else None,
                         "wdir":  hwdir[idx]  if idx < len(hwdir)  else None,
@@ -2508,8 +2519,8 @@ def fetch_open_meteo_forecast(points, on_progress=None):
                     "prcp": dprcp[di] if di < len(dprcp) else None,
                     "wspd": dwspd[di] if di < len(dwspd) else None,
                     "sun":  round(dsun[di] / 3600.0, 2) if di < len(dsun) and dsun[di] is not None else None,
-                    "tmax": dtmax[di] if di < len(dtmax) else None,
-                    "tmin": dtmin[di] if di < len(dtmin) else None,
+                    "tmax": _tc(dtmax[di] if di < len(dtmax) else None),
+                    "tmin": _tc(dtmin[di] if di < len(dtmin) else None),
                 }
 
             return i, {"ok": True, "hourly": hourly_result, "daily": daily_result}

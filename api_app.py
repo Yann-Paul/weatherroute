@@ -584,34 +584,52 @@ def search_countries(q: str = Query("", min_length=0)):
     return results
 
 
+def _register_pending_cities(job_id: str, params: dict) -> None:
+    """Register pending nominatim cities in the background thread with progress updates."""
+    pending = params.get("pending_registration", [])
+    if not pending:
+        return
+    job = jobs[job_id]
+    total = len(pending)
+    for i, entry in enumerate(pending, 1):
+        job["message"] = f"{entry['name']} ({i}/{total})"
+        cid = geocode_and_register_city(entry["name"])
+        job["registering_done"] = i
+        if cid:
+            params["city_ids"].append(cid)
+            if entry.get("restDays", 0) > 0:
+                params["city_rest_days"][cid] = entry["restDays"]
+        else:
+            print(f"[Job] Stadt nicht gefunden: {entry['name']}", flush=True)
+
+
 @app.post("/api/jobs")
 def submit_job(data: JobSubmission):
-    # Resolve city IDs (frontend may send name-only cities)
+    # Resolve city IDs — cities needing Nominatim registration are deferred to the background thread
     city_ids = []
     city_rest_days = {}
+    pending_registration: list[dict] = []
 
-    unresolved_names = []
     for entry in data.cities:
         cid = entry.id
-        # Nominatim ID from search results: register if not yet in graph
+        # Nominatim city not yet in graph → defer registration to background thread
         if cid and str(cid).startswith("nominatim:") and cid not in city_graph.nodes:
             register_name = entry.name or str(cid).removeprefix("nominatim:")
-            cid = geocode_and_register_city(register_name) or cid
+            pending_registration.append({"name": register_name, "restDays": entry.restDays})
+            continue
         if not cid:
             cid, _ = resolve_city_name(entry.name)
+        # Unknown name not in local graph → defer to background thread
         if not cid and entry.name:
-            cid = geocode_and_register_city(entry.name)
-            if cid is None:
-                unresolved_names.append(entry.name)
+            pending_registration.append({"name": entry.name, "restDays": entry.restDays})
+            continue
         if cid:
             city_ids.append(cid)
             if entry.restDays > 0:
                 city_rest_days[cid] = entry.restDays
 
-    if not city_ids:
+    if not city_ids and not pending_registration:
         raise HTTPException(400, "No valid cities provided.")
-    if unresolved_names:
-        print(f"[Job] Städte nicht gefunden: {unresolved_names}", flush=True)
 
     # Resolve connections
     connections = []
@@ -628,8 +646,13 @@ def submit_job(data: JobSubmission):
 
     start_day = None if data.autoDetectStart else data.startDay
 
+    has_pending = bool(pending_registration)
+    initial_step = "registering" if has_pending else ("osrm" if data.directOsrm else "route")
+
     params = dict(
         city_ids=city_ids,
+        pending_registration=pending_registration,
+        city_rest_days=city_rest_days,
         start_city=start_city,
         connections=connections,
         start_day=start_day,
@@ -647,14 +670,13 @@ def submit_job(data: JobSubmission):
         routing_mode="car",
         sorted_input=data.sortedInput,
         blocked_countries=data.blockedCountries,
-        city_rest_days=city_rest_days,
     )
 
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "status": "pending",
-        "step": "osrm" if data.directOsrm else "route",
-        "message": "Starting calculation...",
+        "step": initial_step,
+        "message": "Neue Städte werden registriert..." if has_pending else "Starting calculation...",
         "jobType": "weather_route" if data.directOsrm else "route",
         "osrm_done": 0,
         "osrm_total": 0,
@@ -665,6 +687,8 @@ def submit_job(data: JobSubmission):
         "elevation_batch_total": 0,
         "forecast_done": 0,
         "forecast_total": 0,
+        "registering_done": 0,
+        "registering_total": len(pending_registration),
     }
 
     if data.directOsrm:
@@ -696,6 +720,8 @@ def job_status(job_id: str):
         "elevationBatchTotal": job.get("elevation_batch_total", 0),
         "forecastDone": job.get("forecast_done", 0),
         "forecastTotal": job.get("forecast_total", 0),
+        "registeringDone": job.get("registering_done", 0),
+        "registeringTotal": job.get("registering_total", 0),
     }
 
 
@@ -1126,8 +1152,9 @@ def run_calculation(job_id: str, params: dict):
             job[k] = v
 
     try:
-        update("route", "Running route algorithm...")
         job["status"] = "running"
+        _register_pending_cities(job_id, params)
+        update("route", "Running route algorithm...")
 
         city_ids_by_country = load_city_ids_by_country(
             "data/city_ids_by_country.json"
@@ -1614,6 +1641,7 @@ def run_direct_osrm_job(job_id: str, params: dict):
 
     try:
         job["status"] = "running"
+        _register_pending_cities(job_id, params)
         update("osrm", "Straßendaten werden geladen...")
 
         # Resolve city coordinates in input order
@@ -2265,6 +2293,14 @@ def run_gpx_analysis(
                         )
                         _resp.raise_for_status()
                         _fd = _resp.json()
+
+                        # Elevation correction: actual stop elevation vs. model terrain elevation
+                        _model_ele = _fd.get("elevation")
+                        _elev_corr = (stop_ele - _model_ele) * 0.0065 if _model_ele is not None else 0.0
+
+                        def _tc_stop(v):
+                            return round(v - _elev_corr, 1) if v is not None else None
+
                         _htimes = _fd.get("hourly", {}).get("time", [])
                         _htemp  = _fd.get("hourly", {}).get("temperature_2m", [])
                         _hprcp  = _fd.get("hourly", {}).get("precipitation", [])
@@ -2286,21 +2322,31 @@ def run_gpx_analysis(
                             return {}
 
                         _sw = _nearest_hw(stop_dt)
-                        stop_temp = round(_sw["temp"], 1) if _sw.get("temp") is not None else None
+                        stop_temp = _tc_stop(_sw.get("temp"))
                         stop_prcp = round(_sw["prcp"], 2) if _sw.get("prcp") is not None else None
                         stop_wspd = round(_sw["wspd"], 1) if _sw.get("wspd") is not None else None
 
                         slot = stop_dt
-                        while slot <= nxt_start_dt + timedelta(minutes=1):
+                        while slot < nxt_start_dt - timedelta(minutes=1):
                             _slw = _nearest_hw(slot)
                             night_data.append({
                                 "hour": slot.strftime("%H:%M"),
                                 "date": slot.date().isoformat(),
-                                "temp": round(_slw["temp"], 1) if _slw.get("temp") is not None else None,
+                                "temp": _tc_stop(_slw.get("temp")),
                                 "prcp": round(_slw["prcp"], 2) if _slw.get("prcp") is not None else None,
                                 "wspd": round(_slw["wspd"], 1) if _slw.get("wspd") is not None else None,
                             })
                             slot = slot + timedelta(hours=3)
+                        # Always include an explicit point at departure time so that
+                        # interpNightMs(tNightEnd) and adjStartTemp on day N+1 are accurate.
+                        _slw_dep = _nearest_hw(nxt_start_dt)
+                        night_data.append({
+                            "hour": nxt_start_dt.strftime("%H:%M"),
+                            "date": nxt_start_dt.date().isoformat(),
+                            "temp": _tc_stop(_slw_dep.get("temp")),
+                            "prcp": round(_slw_dep["prcp"], 2) if _slw_dep.get("prcp") is not None else None,
+                            "wspd": round(_slw_dep["wspd"], 1) if _slw_dep.get("wspd") is not None else None,
+                        })
                     except Exception as _exc:
                         print(f"[GPX Stop Forecast] Failed: {_exc}", flush=True)
                         stop_is_forecast = False
@@ -2320,31 +2366,32 @@ def run_gpx_analysis(
                         stop_wspd = round(ws[3], 1) if len(ws) > 3 and ws[3] is not None else None
                     except Exception:
                         pass
-                    slot = stop_dt
-                    while slot <= nxt_start_dt + timedelta(minutes=1):
-                        slot_doy = slot.timetuple().tm_yday
-                        slot_hf = slot.hour + slot.minute / 60.0
-                        sl_temp = sl_prcp = sl_wspd = None
+                    def _climate_slot_entry(sl):
+                        _sl_doy = sl.timetuple().tm_yday
+                        _sl_hf  = sl.hour + sl.minute / 60.0
+                        _sl_temp = _sl_prcp = _sl_wspd = None
                         try:
-                            w2 = get_interpolated_weather(s_city, slot_doy, temperatures, 0.0)
+                            w2 = get_interpolated_weather(s_city, _sl_doy, temperatures, 0.0)
                             sl_tmin = w2[0] if w2[0] is not None else 5.0
                             sl_tmax = w2[1] if w2[1] is not None else 15.0
                             sl_mean = (sl_tmin + sl_tmax) / 2.0
-                            sl_amp = (sl_tmax - sl_tmin) / 2.0
-                            sl_temp = round(sl_mean + sl_amp * math.cos(2 * math.pi * (slot_hf - 14.0) / 24.0), 1)
+                            sl_amp  = (sl_tmax - sl_tmin) / 2.0
+                            _sl_temp = round(sl_mean + sl_amp * math.cos(2 * math.pi * (_sl_hf - 14.0) / 24.0), 1)
                             sl_prcp_day = w2[2] if len(w2) > 2 and w2[2] is not None else None
-                            sl_prcp = round(sl_prcp_day / 24.0, 2) if sl_prcp_day is not None else None
-                            sl_wspd = round(w2[3], 1) if len(w2) > 3 and w2[3] is not None else None
+                            _sl_prcp = round(sl_prcp_day / 24.0, 2) if sl_prcp_day is not None else None
+                            _sl_wspd = round(w2[3], 1) if len(w2) > 3 and w2[3] is not None else None
                         except Exception:
                             pass
-                        night_data.append({
-                            "hour": slot.strftime("%H:%M"),
-                            "date": slot.date().isoformat(),
-                            "temp": sl_temp,
-                            "prcp": sl_prcp,
-                            "wspd": sl_wspd,
-                        })
+                        return {"hour": sl.strftime("%H:%M"), "date": sl.date().isoformat(),
+                                "temp": _sl_temp, "prcp": _sl_prcp, "wspd": _sl_wspd}
+
+                    slot = stop_dt
+                    while slot < nxt_start_dt - timedelta(minutes=1):
+                        night_data.append(_climate_slot_entry(slot))
                         slot = slot + timedelta(hours=3)
+                    # Always include an explicit point at departure time so that
+                    # interpNightMs(tNightEnd) and adjStartTemp on day N+1 are accurate.
+                    night_data.append(_climate_slot_entry(nxt_start_dt))
                 night_temps_arr = [d["temp"] for d in night_data if d["temp"] is not None]
                 night_low = round(min(night_temps_arr), 1) if night_temps_arr else None
                 weather_points.append({

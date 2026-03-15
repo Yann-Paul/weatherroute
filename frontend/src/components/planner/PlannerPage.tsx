@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Route as RouteIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +22,7 @@ import { useJobStore } from "@/stores/jobStore";
 import { submitJob } from "@/api/client";
 import { monthDayToDayOfYear } from "@/utils/constants";
 import { useT } from "@/i18n/useT";
+import { useLangStore } from "@/i18n/store";
 import type { CitySearchResult } from "@/api/types";
 
 export function PlannerPage() {
@@ -29,7 +30,13 @@ export function PlannerPage() {
   const setJobId = useJobStore((s) => s.setJobId);
   const navigate = useNavigate();
   const t = useT();
+  const lang = useLangStore((s) => s.lang);
   const [errors, setErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    document.title = lang === "de" ? "WeatherRoute — Route planen" : "WeatherRoute — Plan Route";
+    return () => { document.title = "WeatherRoute"; };
+  }, [lang]);
   const [submitting, setSubmitting] = useState(false);
 
   // Restore date from store if returning from results (loadFromResults sets startDay + autoDetectStart=false)

@@ -102,6 +102,7 @@ const de = {
   },
   progress: {
     heading: "Route wird berechnet",
+    stepRegistering: "Neue Städte zum Graphen hinzufügen",
     stepRoute: "Routenberechnung",
     stepOsrm: "Straßendaten (OSRM)",
     stepOsrmDetail: (done: number, total: number) => `${done} / ${total} Segmente`,
@@ -175,6 +176,7 @@ const de = {
     restDayBadge: (n: number) => `Pause +${n}`,
     noData: "Keine Wetterdaten verfügbar.",
     dayHeader: "Tag",
+    scrollHint: "scrollen für mehr",
   },
   routeList: {
     day: (n: number) => `Tag ${n}`,
@@ -348,6 +350,7 @@ const en = {
   },
   progress: {
     heading: "Calculating Route",
+    stepRegistering: "Adding new cities to graph",
     stepRoute: "Route calculation",
     stepOsrm: "Street data (OSRM)",
     stepOsrmDetail: (done: number, total: number) => `${done} / ${total} segments`,
@@ -421,6 +424,7 @@ const en = {
     restDayBadge: (n: number) => `Rest +${n}`,
     noData: "No weather data available.",
     dayHeader: "Day",
+    scrollHint: "scroll for more",
   },
   routeList: {
     day: (n: number) => `Day ${n}`,

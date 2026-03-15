@@ -137,6 +137,10 @@ export function WeatherGrid() {
           {t.weatherGrid.noData}
         </div>
       ) : (
+        <>
+        <p className="text-right text-[11px] text-muted-foreground sm:hidden">
+          ← {t.weatherGrid.scrollHint} →
+        </p>
         <div className="overflow-x-auto rounded-2xl border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -199,6 +203,7 @@ export function WeatherGrid() {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

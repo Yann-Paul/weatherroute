@@ -161,6 +161,17 @@ export function ResultsPage() {
     }
   }
 
+  useEffect(() => {
+    if (loading || !route.length) return;
+    const cities = route.map((s) => s.cityName);
+    const label =
+      cities.length <= 3
+        ? cities.join(" → ")
+        : `${cities[0]} → ${cities[cities.length - 1]}`;
+    document.title = `WeatherRoute — ${label}`;
+    return () => { document.title = "WeatherRoute"; };
+  }, [loading, route]);
+
   if (loading) {
     return (
       <div className="space-y-4 p-4" role="status" aria-label={t.results.loading}>
