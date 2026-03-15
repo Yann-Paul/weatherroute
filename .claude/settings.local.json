@@ -22,7 +22,9 @@
       "Bash(cd \"C:/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute/frontend\" && npm run build 2>&1 | tail -30)",
       "Bash(cd \"C:/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute/frontend\" && npm run build 2>&1 | tail -20)",
       "Bash(find /c/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute/frontend/src -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.jsx\" -o -name \"*.js\" \\\\\\) 2>/dev/null | head -30)",
-      "Bash(find \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute/frontend/src\" -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.jsx\" -o -name \"*.js\" \\\\\\) 2>/dev/null | grep -v node_modules)"
+      "Bash(find \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute/frontend/src\" -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.jsx\" -o -name \"*.js\" \\\\\\) 2>/dev/null | grep -v node_modules)",
+      "Bash(ls:*)",
+      "Bash(find:*)"
     ]
   }
 }

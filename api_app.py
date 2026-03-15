@@ -544,33 +544,32 @@ def search_cities(q: str = Query("", min_length=0)):
             nom_results = []
             try:
                 resp = requests.get(
-                    "https://nominatim.openstreetmap.org/search",
+                    "https://photon.komoot.io/api/",
                     params={
                         "q": q,
-                        "format": "json",
                         "limit": 5,
-                        "addressdetails": 1,
-                        "featuretype": "city",
-                        "accept-language": "en",
+                        "lang": "en",
                     },
                     headers={"User-Agent": "WeatherRoute/1.0"},
                     timeout=5,
                 )
                 resp.raise_for_status()
-                for hit in resp.json():
-                    short_name = hit.get("display_name", q).split(",")[0].strip()
-                    country_code = (hit.get("address") or {}).get("country_code", "").upper()
+                for feature in resp.json().get("features", []):
+                    props = feature.get("properties", {})
+                    coords = feature.get("geometry", {}).get("coordinates", [0, 0])
+                    short_name = props.get("name") or props.get("city") or q
+                    country_code = props.get("country_code", "").upper()
                     nom_results.append({
                         "id": f"nominatim:{short_name.lower()}",
                         "name": short_name,
                         "country": country_code or None,
-                        "lat": float(hit["lat"]),
-                        "lon": float(hit["lon"]),
+                        "lat": float(coords[1]),
+                        "lon": float(coords[0]),
                         "source": "nominatim",
                     })
                 _nominatim_cache[cache_key] = (time.time(), nom_results)
             except Exception as exc:
-                print(f"[Search/Nominatim] Fehler: {exc}", flush=True)
+                print(f"[Search/Photon] Fehler: {exc}", flush=True)
         for hit in nom_results:
             if hit["name"].lower() not in seen_names and len(results) < 10:
                 results.append(hit)
