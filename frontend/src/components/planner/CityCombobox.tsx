@@ -70,7 +70,12 @@ export function CityCombobox({
           {value || effectivePlaceholder}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
+      <PopoverContent
+          className="w-64 p-0"
+          align="start"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+        >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder={effectivePlaceholder}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIsDark } from "@/stores/themeStore";
-import { Sun, Moon, CloudRain, Cloud, Wind } from "lucide-react";
+import { Sun, Moon, CloudRain, Cloud, Wind, ChevronDown, ChevronUp } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import {
   Map as MapView,
@@ -89,6 +89,18 @@ function gpxArrivalTime(km: number, dailyConfigs: GpxDayConfig[], startDate: str
 // ─── Temperature interpolation with lapse-rate correction ─────────────────────
 
 const DESIRED_TEMP = 20;
+
+/** Linear interpolation of temperature from a sorted {ms, temp}[] array at a given timestamp. */
+function interpNightMs(ms: number, pts: { ms: number; temp: number }[]): number {
+  if (pts.length === 0) return NaN;
+  if (ms <= pts[0].ms) return pts[0].temp;
+  if (ms >= pts[pts.length - 1].ms) return pts[pts.length - 1].temp;
+  const i = pts.findIndex((p) => p.ms >= ms);
+  if (i <= 0) return pts[0].temp;
+  const p0 = pts[i - 1], p1 = pts[i];
+  const t = p1.ms > p0.ms ? (ms - p0.ms) / (p1.ms - p0.ms) : 0;
+  return p0.temp + t * (p1.temp - p0.temp);
+}
 
 function interpTempForGpx(
   km: number,
@@ -875,11 +887,62 @@ function GpxMiniTempChart({
       const tMax = Math.ceil(Math.max(...allTemps)) + 2;
       const tRange = tMax - tMin || 1;
 
+      // Build unified temp points: per-day riding segments interleaved with night data
+      const rideSegs: { ms: number; temp: number }[][] = [];
+      let curSeg: { ms: number; temp: number }[] = [];
+      for (let i = 0; i < ridePoints.length; i++) {
+        curSeg.push(ridePoints[i]);
+        if (i < ridePoints.length - 1 && ridePoints[i + 1].ms - ridePoints[i].ms > 30 * 60_000) {
+          rideSegs.push(curSeg);
+          curSeg = [];
+        }
+      }
+      if (curSeg.length > 0) rideSegs.push(curSeg);
+
+      const unifiedPts: { ms: number; temp: number }[] = [];
+      for (let si = 0; si < rideSegs.length; si++) {
+        unifiedPts.push(...rideSegs[si]);
+        if (si < rideSegs.length - 1) {
+          const lastRide = rideSegs[si][rideSegs[si].length - 1];
+          const ns = nightSegs.find((n) => Math.abs(n.stopMs - lastRide.ms) < 2 * 3_600_000);
+          if (ns && ns.pts.length >= 2) {
+            // Pause start: use riding day's last temp (= wp.temp at stop time)
+            // Pause end:   interpolate nightData at nextStartMs for correct boundary
+            const tempAtEnd = interpNightMs(ns.nextStartMs, ns.pts);
+            const nightBoundary: { ms: number; temp: number }[] = [
+              { ms: ns.stopMs, temp: lastRide.temp },
+              ...ns.pts.filter((p) => p.ms > ns.stopMs + 60_000 && p.ms < ns.nextStartMs - 60_000),
+              { ms: ns.nextStartMs, temp: tempAtEnd },
+            ];
+            unifiedPts.push(...nightBoundary);
+            // Override first riding point of next day to use the night's boundary temperature
+            rideSegs[si + 1] = [
+              { ms: rideSegs[si + 1][0].ms, temp: tempAtEnd },
+              ...rideSegs[si + 1].slice(1),
+            ];
+          } else {
+            // No nightData: straight interpolated line across the pause
+            const stopMs = ns?.stopMs ?? lastRide.ms;
+            const nextStartMs = ns?.nextStartMs ?? rideSegs[si + 1][0].ms;
+            unifiedPts.push({ ms: stopMs, temp: lastRide.temp });
+            unifiedPts.push({ ms: nextStartMs, temp: rideSegs[si + 1][0].temp });
+          }
+        }
+      }
+
+      const kmMsLookup: { km: number; ms: number }[] = drawProfile
+        .filter(([km]) => km >= kmMin && km <= kmMax)
+        .map(([km]) => ({
+          km,
+          ms: gpxArrivalTime(km, dailyConfigs!, startDate!).getTime(),
+        }));
+
       chartStateRef.current = {
         drawProfile: drawProfile.filter(([km]) => km >= kmMin && km <= kmMax),
         kmMin, kmMax, PL, cW, PT, cH,
         tMode: "time", tStart, msRange, tMin, tMax, tRange,
-        ridePoints, nightSegs,
+        unifiedPts,
+        kmMsLookup,
       };
 
       const xp = (ms: number) => PL + ((ms - tStart) / msRange) * cW;
@@ -907,20 +970,11 @@ function GpxMiniTempChart({
         out += `<line x1="${PL}" y1="${y0.toFixed(1)}" x2="${PL + cW}" y2="${y0.toFixed(1)}" stroke="${clrAxis}" stroke-width="0.8" stroke-dasharray="3,3"/>`;
       }
 
-      // Riding temp line
-      for (let i = 0; i < ridePoints.length - 1; i++) {
-        const p0 = ridePoints[i], p1 = ridePoints[i + 1];
+      // Single continuous temperature line (riding + pauses merged)
+      for (let i = 0; i < unifiedPts.length - 1; i++) {
+        const p0 = unifiedPts[i], p1 = unifiedPts[i + 1];
         const col = tempToRgb((p0.temp + p1.temp) / 2, DESIRED_TEMP);
         out += `<line x1="${xp(p0.ms).toFixed(1)}" y1="${yp(p0.temp).toFixed(1)}" x2="${xp(p1.ms).toFixed(1)}" y2="${yp(p1.temp).toFixed(1)}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>`;
-      }
-
-      // Night temp lines (dashed)
-      for (const ns of nightSegs) {
-        for (let i = 0; i < ns.pts.length - 1; i++) {
-          const p0 = ns.pts[i], p1 = ns.pts[i + 1];
-          const col = tempToRgb((p0.temp + p1.temp) / 2, DESIRED_TEMP);
-          out += `<line x1="${xp(p0.ms).toFixed(1)}" y1="${yp(p0.temp).toFixed(1)}" x2="${xp(p1.ms).toFixed(1)}" y2="${yp(p1.temp).toFixed(1)}" stroke="${col}" stroke-width="1.5" stroke-dasharray="3,2" stroke-linecap="round"/>`;
-        }
       }
 
       // Stop marker lines + labels
@@ -1086,21 +1140,24 @@ function GpxMiniTempChart({
       cxFixed = x;
       let bestTemp: number | null = null;
       let bestDist = Infinity;
-      for (const p of (cs.ridePoints as { ms: number; temp: number }[])) {
+      for (const p of (cs.unifiedPts as { ms: number; temp: number }[])) {
         const d = Math.abs(p.ms - ms);
         if (d < bestDist) { bestDist = d; bestTemp = p.temp; }
-      }
-      for (const ns of (cs.nightSegs as { pts: { ms: number; temp: number }[] }[])) {
-        for (const p of ns.pts) {
-          const d = Math.abs(p.ms - ms);
-          if (d < bestDist) { bestDist = d; bestTemp = p.temp; }
-        }
       }
       const timeStr = new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
       ttHtml = `<div style="color:${ttMuted};font-size:9px;margin-bottom:2px">🕐 ${timeStr}</div>`;
       if (bestTemp != null) {
         ttHtml += `<div style="color:${tempToRgb(bestTemp, DESIRED_TEMP)};font-size:13px;font-weight:600">☀ ${bestTemp.toFixed(1)}°C</div>`;
         cy = cs.PT + cs.cH - ((bestTemp - cs.tMin) / cs.tRange) * cs.cH;
+      }
+      if (cs.kmMsLookup && cs.kmMsLookup.length > 0) {
+        let bestKm = cs.kmMsLookup[0].km;
+        let bestKmDist = Infinity;
+        for (const { ms: pMs, km: pKm } of cs.kmMsLookup) {
+          const d = Math.abs(pMs - ms);
+          if (d < bestKmDist) { bestKmDist = d; bestKm = pKm; }
+        }
+        hoverKm = bestKm;
       }
     } else {
       const km = cs.kmMin + ((x - cs.PL) / cs.cW) * (cs.kmMax - cs.kmMin);
@@ -1180,8 +1237,16 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
   const [visibleKmRange, setVisibleKmRange] = useState<[number, number] | null>(null);
   const [hoveredKm, setHoveredKm] = useState<number | null>(null);
   const [chartMode, setChartMode] = useState<"elevation" | "temperature">("elevation");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [elevExpanded, setElevExpanded] = useState(true);
   const isDark = useIsDark();
   const t = useT();
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
 
   // trackPolyline: [cumKm, lat, lon][] scaled to match elevation profile km values
   const trackPolyline = useMemo<[number, number, number][]>(() => {
@@ -1210,6 +1275,57 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
       ? [results.trackPoints[0][1], results.trackPoints[0][0]]
       : [10, 48];
 
+  const chartTabs = results.elevation && (
+    <div className="flex overflow-hidden rounded-md border border-border">
+      <button
+        onClick={() => setChartMode("elevation")}
+        className={[
+          "border-r border-border px-2.5 py-1 text-[11px] font-medium transition-colors",
+          chartMode === "elevation"
+            ? "bg-primary text-primary-foreground"
+            : "bg-card text-muted-foreground hover:bg-muted",
+        ].join(" ")}
+      >
+        {t.gpx.results.tabElevation}
+      </button>
+      <button
+        onClick={() => setChartMode("temperature")}
+        className={[
+          "px-2.5 py-1 text-[11px] font-medium transition-colors",
+          chartMode === "temperature"
+            ? "bg-primary text-primary-foreground"
+            : "bg-card text-muted-foreground hover:bg-muted",
+        ].join(" ")}
+      >
+        {t.gpx.results.tabTemperature}
+      </button>
+    </div>
+  );
+
+  const chartContent = results.elevation && (
+    chartMode === "elevation" ? (
+      <GpxMiniElevChart
+        key={`elev-${isFullscreen}`}
+        elevation={results.elevation}
+        weatherPoints={results.weatherPoints}
+        visibleKmRange={visibleKmRange}
+        onHover={setHoveredKm}
+        dailyConfigs={results.dailyConfigs}
+        startDate={results.startDate}
+      />
+    ) : (
+      <GpxMiniTempChart
+        key={`temp-${isFullscreen}`}
+        elevation={results.elevation}
+        weatherPoints={results.weatherPoints}
+        visibleKmRange={visibleKmRange}
+        onHover={setHoveredKm}
+        dailyConfigs={results.dailyConfigs}
+        startDate={results.startDate}
+      />
+    )
+  );
+
   return (
     <div className="space-y-3">
       <MapView
@@ -1218,7 +1334,7 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
         zoom={8}
         className="h-[500px] w-full rounded-lg lg:h-[600px]"
       >
-        <MapControls />
+        <MapControls showFullscreen />
         <FitTrack coordinates={trackCoords} />
         {trackCoords.length > 1 && (
           <MapRoute
@@ -1236,9 +1352,33 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
           onRangeChange={setVisibleKmRange}
         />
         <GpxHoverDot hoveredKm={hoveredKm} trackPolyline={trackPolyline} />
+
+        {isFullscreen && results.elevation && (
+          <div className="absolute bottom-0 left-0 right-0 z-10">
+            <div
+              className="flex cursor-pointer items-center justify-between border-t border-border bg-card/90 px-3 py-1 backdrop-blur-sm"
+              onClick={() => setElevExpanded((v) => !v)}
+            >
+              <span className="text-xs font-medium text-muted-foreground">
+                {chartMode === "elevation" ? t.gpx.results.tabElevation : t.gpx.results.tabTemperature}
+              </span>
+              {elevExpanded
+                ? <ChevronDown className="size-4 text-muted-foreground" />
+                : <ChevronUp className="size-4 text-muted-foreground" />}
+            </div>
+            {elevExpanded && (
+              <div className="bg-card/95 p-2">
+                <div className="mb-1 flex justify-end">
+                  {chartTabs}
+                </div>
+                {chartContent}
+              </div>
+            )}
+          </div>
+        )}
       </MapView>
 
-      {results.elevation && (
+      {!isFullscreen && results.elevation && (
         <div className="space-y-2">
           <div className="flex overflow-hidden rounded-lg border border-border w-fit">
             <button
@@ -1264,25 +1404,7 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
               {t.gpx.results.tabTemperature}
             </button>
           </div>
-          {chartMode === "elevation" ? (
-            <GpxMiniElevChart
-              elevation={results.elevation}
-              weatherPoints={results.weatherPoints}
-              visibleKmRange={visibleKmRange}
-              onHover={setHoveredKm}
-              dailyConfigs={results.dailyConfigs}
-              startDate={results.startDate}
-            />
-          ) : (
-            <GpxMiniTempChart
-              elevation={results.elevation}
-              weatherPoints={results.weatherPoints}
-              visibleKmRange={visibleKmRange}
-              onHover={setHoveredKm}
-              dailyConfigs={results.dailyConfigs}
-              startDate={results.startDate}
-            />
-          )}
+          {chartContent}
         </div>
       )}
     </div>

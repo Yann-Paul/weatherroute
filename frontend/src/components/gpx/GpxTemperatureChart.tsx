@@ -47,6 +47,18 @@ function markerColor(type: GpxWeatherPoint["type"]): string {
   return "#9ca3af";
 }
 
+/** Linear interpolation of temperature from a sorted {ms, temp}[] array at a given timestamp. */
+function interpNightMs(ms: number, pts: { ms: number; temp: number }[]): number {
+  if (pts.length === 0) return NaN;
+  if (ms <= pts[0].ms) return pts[0].temp;
+  if (ms >= pts[pts.length - 1].ms) return pts[pts.length - 1].temp;
+  const i = pts.findIndex((p) => p.ms >= ms);
+  if (i <= 0) return pts[0].temp;
+  const p0 = pts[i - 1], p1 = pts[i];
+  const t = p1.ms > p0.ms ? (ms - p0.ms) / (p1.ms - p0.ms) : 0;
+  return p0.temp + t * (p1.temp - p0.temp);
+}
+
 // Linear temperature interpolation from sparse weather points
 function interpTempAtKm(
   km: number,
@@ -393,6 +405,36 @@ function GpxCombinedDayTempChart({
         .filter((p) => Number.isFinite(p.ms) && Number.isFinite(p.temp)) as { ms: number; temp: number }[]
     : [];
 
+  // Previous night's data (for day 2+): used to get the correct temperature at the start of this day's riding
+  const prevNightPts: { ms: number; temp: number }[] = (prevStopPt?.nightData && prevStopPt.nextStartTime)
+    ? (prevStopPt.nightData as GpxNightHour[])
+        .map((d) => ({ ms: new Date(`${d.date}T${d.hour}:00`).getTime(), temp: d.temp ?? NaN }))
+        .filter((p) => Number.isFinite(p.ms) && Number.isFinite(p.temp)) as { ms: number; temp: number }[]
+    : [];
+
+  // Temperature at the very start of this day's riding = last night's data at tStart
+  const adjStartTemp: number | null = prevNightPts.length > 0 ? interpNightMs(tStart, prevNightPts) : null;
+
+  // For day 2+: replace the start boundary temp in sortedWPs with the night departure temp
+  const effectiveSortedWPs =
+    adjStartTemp != null && sortedWPs.length > 0 && sortedWPs[0].km <= startKm + 0.1
+      ? [{ ...sortedWPs[0], temp: adjStartTemp }, ...sortedWPs.slice(1)]
+      : sortedWPs;
+
+  // Night pts with explicit boundary points:
+  //   start = tNightStart with the stop-point temperature (= last riding temp)
+  //   end   = tNightEnd with nightData-interpolated temperature
+  const stopTemp = sortedWPs.length > 0 ? interpTempAtKm(endKm, sortedWPs) : null;
+  const nightEndTemp = nightPts.length >= 2 ? interpNightMs(tNightEnd, nightPts) : null;
+  const nightPtsAdj: { ms: number; temp: number }[] =
+    hasNight && nightPts.length >= 2 && stopTemp != null && nightEndTemp != null
+      ? [
+          { ms: tNightStart, temp: stopTemp },
+          ...nightPts.filter((p) => p.ms > tNightStart + 60_000 && p.ms < tNightEnd - 60_000),
+          { ms: tNightEnd, temp: nightEndTemp },
+        ]
+      : nightPts;
+
   const drawChart = useCallback(() => {
     const clr = getCssColors();
     const canvas = canvasRef.current;
@@ -423,15 +465,20 @@ function GpxCombinedDayTempChart({
     // Build day temp points: km → time → interpolated temp
     const stride = Math.max(1, Math.floor(points.length / 300));
     const sampledPts = points.filter((_, i) => i % stride === 0 || i === points.length - 1);
+
+    // Linear km → ms mapping using known start/end times for this segment
+    const kmToMs = (km: number) =>
+      tStart + ((km - startKm) / (endKm - startKm || 1)) * (tDayEnd - tStart);
+
     const dayTempPts: { ms: number; temp: number }[] = sampledPts
       .map(([km]) => {
-        const t = interpTempAtKm(km, sortedWPs);
+        const t = interpTempAtKm(km, effectiveSortedWPs);
         if (t == null) return null;
-        return { ms: gpxArrivalTime(km, dailyConfigs!, startDate!).getTime(), temp: t };
+        return { ms: kmToMs(km), temp: t };
       })
       .filter((p): p is { ms: number; temp: number } => p != null);
 
-    const allTemps = [...dayTempPts.map((p) => p.temp), ...nightPts.map((p) => p.temp)];
+    const allTemps = [...dayTempPts.map((p) => p.temp), ...nightPtsAdj.map((p) => p.temp)];
     if (allTemps.length === 0) {
       ctx.fillStyle = clr.muted;
       ctx.font = "12px sans-serif";
@@ -507,7 +554,7 @@ function GpxCombinedDayTempChart({
     }
 
     // Night separator + night temperature line
-    if (hasNight && nightPts.length > 0) {
+    if (hasNight && nightPtsAdj.length > 0) {
       const xSep = toX(tNightStart);
       ctx.save();
       ctx.strokeStyle = "#7c3aed";
@@ -520,18 +567,18 @@ function GpxCombinedDayTempChart({
       ctx.stroke();
       ctx.restore();
 
-      if (nightPts.length >= 2) {
+      if (nightPtsAdj.length >= 2) {
         ctx.strokeStyle = "#6366f1";
         ctx.lineWidth = 2;
         ctx.setLineDash([]);
         ctx.beginPath();
-        ctx.moveTo(toX(nightPts[0].ms), toY(nightPts[0].temp));
-        for (let i = 1; i < nightPts.length; i++) {
-          ctx.lineTo(toX(nightPts[i].ms), toY(nightPts[i].temp));
+        ctx.moveTo(toX(nightPtsAdj[0].ms), toY(nightPtsAdj[0].temp));
+        for (let i = 1; i < nightPtsAdj.length; i++) {
+          ctx.lineTo(toX(nightPtsAdj[i].ms), toY(nightPtsAdj[i].temp));
         }
         ctx.stroke();
       }
-      for (const p of nightPts) {
+      for (const p of nightPtsAdj) {
         ctx.beginPath();
         ctx.arc(toX(p.ms), toY(p.temp), 2.5, 0, Math.PI * 2);
         ctx.fillStyle = "#6366f1";
@@ -581,7 +628,7 @@ function GpxCombinedDayTempChart({
       ctx.fillText(label, x + (x > W / 2 ? -8 : 8), PAD.top + 14);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [points, startKm, endKm, weatherPoints, stopPt, desiredTemp, isDark, dailyConfigs, startDate]);
+  }, [points, startKm, endKm, weatherPoints, stopPt, prevStopPt, desiredTemp, isDark, dailyConfigs, startDate]);
 
   useEffect(() => {
     drawChart();
@@ -603,16 +650,11 @@ function GpxCombinedDayTempChart({
     if (!hasNight || ms <= tNightStart) {
       const dayFrac = (tNightStart - tStart) || 1;
       const kmPos = startKm + ((ms - tStart) / dayFrac) * (endKm - startKm);
-      const temp = interpTempAtKm(kmPos, sortedWPs);
+      const temp = interpTempAtKm(kmPos, effectiveSortedWPs);
       if (temp != null) tempStr = `${temp.toFixed(1)}°C`;
     } else {
-      let closest: { ms: number; temp: number } | null = null;
-      let minDist = Infinity;
-      for (const p of nightPts) {
-        const dist = Math.abs(p.ms - ms);
-        if (dist < minDist) { minDist = dist; closest = p; }
-      }
-      if (closest) tempStr = `${closest.temp.toFixed(1)}°C`;
+      const nightTemp = interpNightMs(ms, nightPtsAdj);
+      if (Number.isFinite(nightTemp)) tempStr = `${nightTemp.toFixed(1)}°C`;
     }
     hovRef.current = { x, label: `${hhmm} · ${tempStr}` };
     drawChart();
