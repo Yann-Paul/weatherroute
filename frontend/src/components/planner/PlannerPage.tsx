@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Route as RouteIcon } from "lucide-react";
+import { NewHereBanner } from "@/components/layout/NewHereBanner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -114,6 +115,8 @@ export function PlannerPage() {
           </AlertDescription>
         </Alert>
       )}
+
+      <NewHereBanner href="/wizard" />
 
       {/* Route Card */}
       <Card>

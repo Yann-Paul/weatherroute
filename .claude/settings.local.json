@@ -39,7 +39,8 @@
       "WebFetch(domain:account.heigit.org)",
       "WebFetch(domain:www.naviki.org)",
       "WebFetch(domain:routing.openstreetmap.de)",
-      "WebFetch(domain:project-osrm.org)"
+      "WebFetch(domain:project-osrm.org)",
+      "Bash(cd:*)"
     ]
   }
 }

@@ -19,6 +19,12 @@ const GpxPage = lazy(() =>
 const GpxResultsPage = lazy(() =>
   import("@/components/gpx/GpxResultsPage").then((m) => ({ default: m.GpxResultsPage }))
 );
+const WizardPage = lazy(() =>
+  import("@/components/wizard/WizardPage").then((m) => ({ default: m.WizardPage }))
+);
+const GpxWizardPage = lazy(() =>
+  import("@/components/wizard/GpxWizardPage").then((m) => ({ default: m.GpxWizardPage }))
+);
 
 export default function App() {
   const t = useT();
@@ -48,6 +54,8 @@ export default function App() {
                 <Route path="/results/:jobId" element={<ResultsPage />} />
                 <Route path="/gpx" element={<GpxPage />} />
                 <Route path="/gpx/results/:jobId" element={<GpxResultsPage />} />
+                <Route path="/wizard" element={<WizardPage />} />
+                <Route path="/gpx/wizard" element={<GpxWizardPage />} />
               </Routes>
             </Suspense>
           </main>

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import type { DragEvent, ChangeEvent, FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { FileUp, Upload } from "lucide-react";
+import { NewHereBanner } from "@/components/layout/NewHereBanner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -264,7 +265,8 @@ export function GpxPage() {
   // ── render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="mx-auto max-w-2xl p-4">
+    <div className="mx-auto max-w-2xl space-y-4 p-4">
+      <NewHereBanner href="/gpx/wizard" />
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
