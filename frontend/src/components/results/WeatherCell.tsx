@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Moon, Sun, Pause } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { getWeatherScore, scoreToVariant } from "@/utils/weatherScoring";
-import { windDegreesToDirection } from "@/utils/constants";
+import { windDegreesToDirection, relativeWindLabel } from "@/utils/constants";
 import { useT } from "@/i18n/useT";
 import type { WeatherOffsetData } from "@/api/types";
 
@@ -13,6 +13,7 @@ interface WeatherCellProps {
   data: WeatherOffsetData | null;
   desiredHigh: number;
   desiredLow: number;
+  bearing?: number | null;
 }
 
 export const WeatherCell = memo(function WeatherCell({
@@ -22,6 +23,7 @@ export const WeatherCell = memo(function WeatherCell({
   data,
   desiredHigh,
   desiredLow,
+  bearing,
 }: WeatherCellProps) {
   const t = useT();
 
@@ -96,6 +98,9 @@ export const WeatherCell = memo(function WeatherCell({
           </svg>
           <span className="text-[10px] text-muted-foreground">
             {Math.round(data.wspd ?? 0)} km/h {windDegreesToDirection(data.wdir ?? 0)}
+            {bearing != null && data.wdir != null && (
+              <> · {relativeWindLabel(data.wdir, bearing)}</>
+            )}
           </span>
         </div>
       )}

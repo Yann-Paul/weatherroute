@@ -60,6 +60,32 @@ def _elev_api(latlons):
 SAVED_ROUTES_DIR = Path("data/saved_routes")
 SAVED_ROUTES_DIR.mkdir(parents=True, exist_ok=True)
 
+
+def _friendly_error(err, api_name: str = "") -> str:
+    """Convert a raw exception into a user-friendly German error message."""
+    prefix = f"{api_name}: " if api_name else ""
+    err_str = str(err).lower()
+    if "ssl" in err_str or "certificate" in err_str:
+        return f"{prefix}SSL-Zertifikat-Fehler (abgelaufen oder ungültig)"
+    if isinstance(err, requests.exceptions.Timeout):
+        return f"{prefix}Zeitüberschreitung – API antwortet nicht"
+    if isinstance(err, requests.exceptions.ConnectionError):
+        return f"{prefix}Verbindung nicht möglich – API nicht erreichbar"
+    if isinstance(err, requests.exceptions.HTTPError):
+        code = getattr(getattr(err, "response", None), "status_code", None)
+        if code == 429:
+            return f"{prefix}Zu viele Anfragen (Rate Limit)"
+        if code in (500, 502, 503, 504):
+            return f"{prefix}Server nicht verfügbar (HTTP {code})"
+        if code:
+            return f"{prefix}HTTP-Fehler {code}"
+        return f"{prefix}HTTP-Fehler"
+    short = str(err)
+    if len(short) > 150:
+        short = short[:150] + "…"
+    return f"{prefix}{short}"
+
+
 app = FastAPI()
 
 # ---------------------------------------------------------------------------
@@ -701,6 +727,7 @@ def submit_job(data: JobSubmission):
         "forecast_total": 0,
         "registering_done": 0,
         "registering_total": len(pending_registration),
+        "warnings": [],
     }
 
     if data.directOsrm:
@@ -734,6 +761,7 @@ def job_status(job_id: str):
         "forecastTotal": job.get("forecast_total", 0),
         "registeringDone": job.get("registering_done", 0),
         "registeringTotal": job.get("registering_total", 0),
+        "warnings": job.get("warnings", []),
     }
 
 
@@ -776,6 +804,7 @@ async def submit_gpx_job(
         "elevation_batch_total": 0,
         "forecast_done": 0,
         "forecast_total": 0,
+        "warnings": [],
     }
     t = threading.Thread(
         target=run_gpx_analysis,
@@ -1017,10 +1046,16 @@ def _run_elevation_worker(seg_queue, points_per_km, job, result_holder, use_aste
                     wait = max(wait, 10)  # back off harder on 429
                 if attempt < _MAX_RETRIES - 1:
                     print(f"[Elevation] Batch {batch_done+1} attempt {attempt+1}: {err} — wait {wait}s", flush=True)
+                    warn = _friendly_error(err, "Höhenprofil-API") + f" – Versuch {attempt+2} in {wait}s"
+                    warnings = job.setdefault("warnings", [])
+                    if not warnings or warnings[-1] != warn:
+                        warnings.append(warn)
+                        if len(warnings) > 5:
+                            warnings.pop(0)
                     _t.sleep(wait)
                     _last_request_t = _t.monotonic()
                 else:
-                    elevation_error = f"Elevation API fehlgeschlagen (Batch {batch_done+1}): {err}"
+                    elevation_error = _friendly_error(err, "Höhenprofil-API") + f" (Batch {batch_done+1})"
                     print(f"[Elevation] Batch {batch_done+1} failed: {err}", flush=True)
                     return False
 
@@ -1456,6 +1491,8 @@ def run_calculation(job_id: str, params: dict):
                 "relDay": rel_day,
                 "cityId": city_id,
                 "cityName": city_name,
+                "lat": lat,
+                "lon": lon,
                 "isRestDay": city_id in rest_days_map,
                 "restDays": rest_days_map.get(city_id, 0),
                 "byOffset": by_offset,
@@ -1585,7 +1622,7 @@ def run_calculation(job_id: str, params: dict):
         import traceback
         traceback.print_exc()
         job["status"] = "error"
-        job["error"] = str(e)
+        job["error"] = _friendly_error(e)
 
 
 # ---------------------------------------------------------------------------
@@ -1872,6 +1909,8 @@ def run_direct_osrm_job(job_id: str, params: dict):
                 "relDay": rel_day,
                 "cityId": city_id,
                 "cityName": city_name,
+                "lat": lat,
+                "lon": lon,
                 "isRestDay": city_id in rest_days_map,
                 "restDays": rest_days_map.get(city_id, 0),
                 "byOffset": by_offset,
@@ -1990,7 +2029,7 @@ def run_direct_osrm_job(job_id: str, params: dict):
         import traceback
         traceback.print_exc()
         job["status"] = "error"
-        job["error"] = str(e)
+        job["error"] = _friendly_error(e)
 
 
 # ---------------------------------------------------------------------------
@@ -2095,7 +2134,7 @@ def run_gpx_analysis(
         update("elevation", "Höhenprofil wird geladen...")
 
         _gpx_elev_url, _BATCH_SIZE, _gpx_payload_fn = _elev_api(sampled_latlons)
-        _BATCH_DELAY = 1.1 if _gpx_elev_url == OPEN_ELEV_ASTER else 0.0
+        _BATCH_DELAY = 1.1  # both opentopodata APIs (SRTM + ASTER) require ~1 req/s
         _MAX_RETRIES = 4
         _RETRY_DELAYS = [5, 15, 30, 60]
 
@@ -2128,11 +2167,15 @@ def run_gpx_analysis(
                             f"[GPX Elevation] Batch {batch_idx+1} attempt {attempt+1}: {batch_err} — wait {wait}s",
                             flush=True,
                         )
+                        warn = _friendly_error(batch_err, "Höhenprofil-API") + f" – Versuch {attempt+2} in {wait}s"
+                        warnings = job.setdefault("warnings", [])
+                        if not warnings or warnings[-1] != warn:
+                            warnings.append(warn)
+                            if len(warnings) > 5:
+                                warnings.pop(0)
                         _time.sleep(wait)
                     else:
-                        elevation_error = (
-                            f"Open-Elevation API fehlgeschlagen (Batch {batch_idx+1}/{n_batches}): {batch_err}"
-                        )
+                        elevation_error = _friendly_error(batch_err, "Höhenprofil-API") + f" (Batch {batch_idx+1}/{n_batches})"
                         print(f"[GPX Elevation] Batch {batch_idx+1} failed: {batch_err}", flush=True)
 
             if batch_results is None:
@@ -2471,7 +2514,7 @@ def run_gpx_analysis(
         import traceback
         traceback.print_exc()
         job["status"] = "error"
-        job["error"] = str(e)
+        job["error"] = _friendly_error(e)
 
 
 # ---------------------------------------------------------------------------

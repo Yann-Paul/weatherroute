@@ -24,7 +24,7 @@ OPEN_ELEV_ASTER= "https://api.opentopodata.org/v1/aster30m"       # ASTER: globa
 # Wind / rain scoring constants
 # These relate weather units to temperature-equivalent units so that
 # temp_weight, wind_weight and rain_weight produce comparable score magnitudes.
-WIND_SCALE = 6.0   # 6 km/h effective headwind  ≈ 1 °C temperature deviation
+WIND_SCALE = 2.0   # 2 km/h effective headwind  ≈ 1 °C temperature deviation
 RAIN_SCALE = 2.0   # 2 mm/day precipitation      ≈ 1 °C temperature deviation
 
 def _elev_api(latlons):
@@ -427,7 +427,7 @@ def calculate_daily_temperature_scores(from_city, to_city, start_day, travel_day
 
                 # Direction wind blows TO = wdir + 180
                 angle_diff = radians((wdir_interp + 180) - bearing)
-                effective_wind = wspd_interp * cos(angle_diff)
+                effective_wind = wspd_interp * (cos(angle_diff) - 0.5)  # neutral at 60° from tailwind
 
                 # Score: headwind (negative effective) → positive score (bad)
                 wind_equiv = -effective_wind / WIND_SCALE

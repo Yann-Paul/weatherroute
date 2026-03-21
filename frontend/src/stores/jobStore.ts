@@ -17,6 +17,7 @@ interface JobState {
   forecastTotal: number;
   registeringDone: number;
   registeringTotal: number;
+  warnings: string[];
 
   setJobId: (id: string) => void;
   updateStatus: (update: Partial<JobState>) => void;
@@ -39,6 +40,7 @@ const initialState = {
   forecastTotal: 0,
   registeringDone: 0,
   registeringTotal: 0,
+  warnings: [] as string[],
 };
 
 export const useJobStore = create<JobState>()((set) => ({

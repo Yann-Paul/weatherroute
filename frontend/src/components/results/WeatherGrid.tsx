@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { WeatherCell } from "./WeatherCell";
 import { useResultsStore } from "@/stores/resultsStore";
-import { dayOfYearToDate } from "@/utils/constants";
+import { dayOfYearToDate, computeBearing } from "@/utils/constants";
 import { useT } from "@/i18n/useT";
 import type { WeatherStop } from "@/api/types";
 
@@ -22,6 +22,7 @@ interface GridRow {
   relDay: number;
   stop: WeatherStop;
   restDayOffset: number; // 0 = arrival day, 1+ = nth rest day at this city
+  bearing: number | null; // bearing from previous stop to this stop
 }
 
 const currentYear = new Date().getFullYear();
@@ -44,10 +45,15 @@ export function WeatherGrid() {
   // Build rows: arrival day + rest days per stop
   const rows = useMemo<GridRow[]>(() => {
     const result: GridRow[] = [];
-    for (const stop of weather) {
-      result.push({ relDay: stop.relDay, stop, restDayOffset: 0 });
+    for (let i = 0; i < weather.length; i++) {
+      const stop = weather[i];
+      const prev = weather[i - 1];
+      const bearing = prev
+        ? computeBearing(prev.lat, prev.lon, stop.lat, stop.lon)
+        : null;
+      result.push({ relDay: stop.relDay, stop, restDayOffset: 0, bearing });
       for (let k = 1; k <= stop.restDays; k++) {
-        result.push({ relDay: stop.relDay + k, stop, restDayOffset: k });
+        result.push({ relDay: stop.relDay + k, stop, restDayOffset: k, bearing });
       }
     }
     return result.sort((a, b) => a.relDay - b.relDay);
@@ -194,6 +200,7 @@ export function WeatherGrid() {
                           data={data}
                           desiredHigh={desiredHigh}
                           desiredLow={desiredLow}
+                          bearing={row.bearing}
                         />
                       </td>
                     );

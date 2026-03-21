@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, AlertTriangle } from "lucide-react";
 import { StepIndicator } from "./StepIndicator";
 import { PreviewMap } from "./PreviewMap";
 import { useJobStore } from "@/stores/jobStore";
@@ -71,6 +71,7 @@ export function ProgressPage() {
         forecastTotal: data.forecastTotal ?? 0,
         registeringDone: data.registeringDone ?? 0,
         registeringTotal: data.registeringTotal ?? 0,
+        warnings: data.warnings ?? [],
       });
 
       if (data.status === "done" || data.status === "preview") {
@@ -180,6 +181,18 @@ export function ProgressPage() {
                 : undefined
             }
           />
+
+          {job.warnings && job.warnings.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {job.warnings.map((w, i) => (
+                <Alert key={i} className="border-yellow-400 bg-yellow-50 text-yellow-900 dark:border-yellow-600 dark:bg-yellow-950 dark:text-yellow-200">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                  <AlertTitle>{t.progress.warningTitle}</AlertTitle>
+                  <AlertDescription>{w}</AlertDescription>
+                </Alert>
+              ))}
+            </div>
+          )}
 
           {isError && job.error && (
             <Alert variant="destructive" className="mt-4">

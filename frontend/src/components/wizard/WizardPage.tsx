@@ -40,9 +40,9 @@ import { useLangStore } from "@/i18n/store";
 import { getCountryName } from "@/utils/countries";
 import type { CitySearchResult } from "@/api/types";
 
-type Step = "welcome" | "cities" | "routing" | "travel" | "temperature" | "api";
+type Step = "welcome" | "intro" | "cities" | "routing" | "travel" | "temperature" | "api";
 
-const WIZARD_STEPS: Step[] = ["cities", "routing", "travel", "temperature", "api"];
+const WIZARD_STEPS: Step[] = ["intro", "cities", "routing", "travel", "temperature", "api"];
 
 // ─── shared helpers ──────────────────────────────────────────────────────────
 
@@ -218,7 +218,31 @@ function StepHeader({
   );
 }
 
-// ─── step 1 — cities ─────────────────────────────────────────────────────────
+// ─── step 1 — route optimisation intro ───────────────────────────────────────
+
+function IntroStep() {
+  const t = useT();
+  const w = t.wizard;
+  return (
+    <div className="space-y-5">
+      <StepHeader step="intro" title={w.introTitle} subtitle={w.introSubtitle} />
+      <div className="rounded-xl border bg-card p-4">
+        <ul className="space-y-3">
+          {w.introPoints.map((point, i) => (
+            <li key={i} className="flex items-start gap-3 text-sm">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                {i + 1}
+              </span>
+              <span>{point}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+// ─── step 2 — cities ─────────────────────────────────────────────────────────
 
 function CitiesStep() {
   const store = usePlannerStore();
@@ -418,6 +442,11 @@ function TravelStep({
         )}
       </div>
 
+      {/* Forecast vs climate note */}
+      <div className="rounded-xl border border-muted bg-muted/40 p-3">
+        <p className="text-xs text-muted-foreground">{w.forecastNote}</p>
+      </div>
+
       {/* km & days */}
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-xl border bg-card p-4 space-y-2">
@@ -538,6 +567,10 @@ function TemperatureStep() {
           />
         </div>
 
+        <div className="rounded-lg border border-muted bg-muted/40 p-3">
+          <p className="text-xs text-muted-foreground">{w.tempRangeWarning}</p>
+        </div>
+
         <div className="space-y-1.5">
           <Label>{tc.warmingFactor(store.warmingFactor.toFixed(1))}</Label>
           <div className="space-y-0.5 text-xs text-muted-foreground">
@@ -629,6 +662,11 @@ function ApiStep() {
             </Select>
           </div>
         )}
+      </div>
+
+      {/* Routing API note */}
+      <div className="rounded-xl border border-muted bg-muted/40 p-3">
+        <p className="text-xs text-muted-foreground">{w.apiNote}</p>
       </div>
 
       {/* Elevation resolution */}
@@ -753,6 +791,21 @@ export function WizardPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 text-left sm:grid-cols-2">
+          {/* New tour option */}
+          <button
+            type="button"
+            onClick={() => setStep("intro")}
+            className="flex flex-col gap-4 rounded-2xl border-2 border-border bg-card p-6 text-left transition-all hover:border-primary/50 hover:shadow-sm"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <RouteIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold">{w.newTourTitle}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{w.newTourDesc}</p>
+            </div>
+          </button>
+
           {/* GPX option */}
           <button
             type="button"
@@ -765,21 +818,6 @@ export function WizardPage() {
             <div>
               <h3 className="font-semibold">{w.gpxTitle}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{w.gpxDesc}</p>
-            </div>
-          </button>
-
-          {/* New tour option */}
-          <button
-            type="button"
-            onClick={() => setStep("cities")}
-            className="flex flex-col gap-4 rounded-2xl border-2 border-primary bg-primary/5 p-6 text-left transition-all hover:bg-primary/8 hover:shadow-sm"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <RouteIcon className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="font-semibold">{w.newTourTitle}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{w.newTourDesc}</p>
             </div>
           </button>
         </div>
@@ -813,6 +851,7 @@ export function WizardPage() {
       )}
 
       <div key={step} className="animate-fade-in-scale">
+        {step === "intro" && <IntroStep />}
         {step === "cities" && <CitiesStep />}
         {step === "routing" && <RoutingStep />}
         {step === "travel" && (

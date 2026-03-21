@@ -69,6 +69,7 @@ export interface JobStatusResponse {
   forecastTotal: number;
   registeringDone: number;
   registeringTotal: number;
+  warnings: string[];
 }
 
 export interface RoughMapData {
@@ -150,6 +151,8 @@ export interface WeatherStop {
   relDay: number;
   cityId: string;
   cityName: string;
+  lat: number;
+  lon: number;
   isRestDay: boolean;
   restDays: number;
   byOffset: Record<string, WeatherOffsetData>;

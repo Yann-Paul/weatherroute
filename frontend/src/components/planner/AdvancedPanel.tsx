@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,16 @@ export function AdvancedPanel() {
   const tc = t.advanced;
   const locale = t.dateLocale;
   const lang = t.dateLocale === "de-DE" ? "de" : "en";
+
+  // Local slider states for smooth dragging (store only updated on commit)
+  const [dayTempRange, setDayTempRange] = useState([store.dayTempMin, store.dayTempMax]);
+  const [nightTempRange, setNightTempRange] = useState([store.nightTempMin, store.nightTempMax]);
+  const [warmingFactor, setWarmingFactor] = useState([store.warmingFactor]);
+  const [distanceWeight, setDistanceWeight] = useState([store.distanceWeight]);
+  const [tempWeight, setTempWeight] = useState([store.tempWeight]);
+  const [windWeight, setWindWeight] = useState([store.windWeight]);
+  const [rainWeight, setRainWeight] = useState([store.rainWeight]);
+  const [elevResolution, setElevResolution] = useState([store.elevResolution]);
 
   return (
     <Collapsible>
@@ -83,7 +94,7 @@ export function AdvancedPanel() {
             </p>
 
             <div className="space-y-2">
-              <Label>{tc.temperature.dayRange(store.dayTempMin, store.dayTempMax)}</Label>
+              <Label>{tc.temperature.dayRange(dayTempRange[0], dayTempRange[1])}</Label>
               <p className="text-xs text-muted-foreground">
                 {tc.temperature.dayRangeDesc}
               </p>
@@ -91,8 +102,9 @@ export function AdvancedPanel() {
                 min={-20}
                 max={50}
                 step={1}
-                value={[store.dayTempMin, store.dayTempMax]}
-                onValueChange={([min, max]) => {
+                value={dayTempRange}
+                onValueChange={setDayTempRange}
+                onValueCommit={([min, max]) => {
                   store.setTemp("dayTempMin", min);
                   store.setTemp("dayTempMax", max);
                 }}
@@ -100,7 +112,7 @@ export function AdvancedPanel() {
             </div>
 
             <div className="space-y-2">
-              <Label>{tc.temperature.nightRange(store.nightTempMin, store.nightTempMax)}</Label>
+              <Label>{tc.temperature.nightRange(nightTempRange[0], nightTempRange[1])}</Label>
               <p className="text-xs text-muted-foreground">
                 {tc.temperature.nightRangeDesc}
               </p>
@@ -108,8 +120,9 @@ export function AdvancedPanel() {
                 min={-30}
                 max={40}
                 step={1}
-                value={[store.nightTempMin, store.nightTempMax]}
-                onValueChange={([min, max]) => {
+                value={nightTempRange}
+                onValueChange={setNightTempRange}
+                onValueCommit={([min, max]) => {
                   store.setTemp("nightTempMin", min);
                   store.setTemp("nightTempMax", max);
                 }}
@@ -117,7 +130,7 @@ export function AdvancedPanel() {
             </div>
 
             <div className="space-y-2">
-              <Label>{tc.temperature.warmingFactor(store.warmingFactor.toFixed(1))}</Label>
+              <Label>{tc.temperature.warmingFactor(warmingFactor[0].toFixed(1))}</Label>
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>{tc.temperature.warmingFactorDesc1}</p>
                 <p>{tc.temperature.warmingFactorDesc2}</p>
@@ -128,13 +141,14 @@ export function AdvancedPanel() {
                 min={-1}
                 max={4}
                 step={0.1}
-                value={[store.warmingFactor]}
-                onValueChange={([v]) => store.setWarmingFactor(v)}
+                value={warmingFactor}
+                onValueChange={setWarmingFactor}
+                onValueCommit={([v]) => store.setWarmingFactor(v)}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>{tc.temperature.distanceWeight(store.distanceWeight.toFixed(2))}</Label>
+              <Label>{tc.temperature.distanceWeight(distanceWeight[0].toFixed(2))}</Label>
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>{tc.temperature.distanceWeightDesc1}</p>
                 <p>{tc.temperature.distanceWeightDesc2}{" "}<span className="font-medium">{tc.temperature.recommended}</span></p>
@@ -144,13 +158,14 @@ export function AdvancedPanel() {
                 min={0}
                 max={1}
                 step={0.05}
-                value={[store.distanceWeight]}
-                onValueChange={([v]) => store.setDistanceWeight(v)}
+                value={distanceWeight}
+                onValueChange={setDistanceWeight}
+                onValueCommit={([v]) => store.setDistanceWeight(v)}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>{tc.temperature.tempWeight(store.tempWeight.toFixed(2))}</Label>
+              <Label>{tc.temperature.tempWeight(tempWeight[0].toFixed(2))}</Label>
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>{tc.temperature.tempWeightDesc1}</p>
                 <p>{tc.temperature.tempWeightDesc2}</p>
@@ -160,13 +175,14 @@ export function AdvancedPanel() {
                 min={0}
                 max={1}
                 step={0.05}
-                value={[store.tempWeight]}
-                onValueChange={([v]) => store.setTempWeight(v)}
+                value={tempWeight}
+                onValueChange={setTempWeight}
+                onValueCommit={([v]) => store.setTempWeight(v)}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>{tc.temperature.windWeight(store.windWeight.toFixed(2))}</Label>
+              <Label>{tc.temperature.windWeight(windWeight[0].toFixed(2))}</Label>
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>{tc.temperature.windWeightDesc1}</p>
                 <p>{tc.temperature.windWeightDesc2}</p>
@@ -176,13 +192,14 @@ export function AdvancedPanel() {
                 min={0}
                 max={1}
                 step={0.05}
-                value={[store.windWeight]}
-                onValueChange={([v]) => store.setWindWeight(v)}
+                value={windWeight}
+                onValueChange={setWindWeight}
+                onValueCommit={([v]) => store.setWindWeight(v)}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>{tc.temperature.rainWeight(store.rainWeight.toFixed(2))}</Label>
+              <Label>{tc.temperature.rainWeight(rainWeight[0].toFixed(2))}</Label>
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>{tc.temperature.rainWeightDesc1}</p>
                 <p>{tc.temperature.rainWeightDesc2}</p>
@@ -192,8 +209,9 @@ export function AdvancedPanel() {
                 min={0}
                 max={1}
                 step={0.05}
-                value={[store.rainWeight]}
-                onValueChange={([v]) => store.setRainWeight(v)}
+                value={rainWeight}
+                onValueChange={setRainWeight}
+                onValueCommit={([v]) => store.setRainWeight(v)}
               />
             </div>
           </CardContent>
@@ -246,7 +264,7 @@ export function AdvancedPanel() {
           <CardContent>
             <div className="space-y-2">
               <Label>
-                {tc.elevation.resolution(store.elevResolution.toLocaleString(locale))}
+                {tc.elevation.resolution(elevResolution[0].toLocaleString(locale))}
               </Label>
               <p className="text-xs text-muted-foreground">
                 {tc.elevation.resolutionDesc}
@@ -255,8 +273,9 @@ export function AdvancedPanel() {
                 min={100}
                 max={3000}
                 step={100}
-                value={[store.elevResolution]}
-                onValueChange={([v]) => store.setElevResolution(v)}
+                value={elevResolution}
+                onValueChange={setElevResolution}
+                onValueCommit={([v]) => store.setElevResolution(v)}
               />
             </div>
           </CardContent>
