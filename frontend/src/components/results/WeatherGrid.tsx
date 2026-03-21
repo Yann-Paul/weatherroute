@@ -31,8 +31,6 @@ export function WeatherGrid() {
   const {
     weather,
     startDay,
-    desiredHigh,
-    desiredLow,
     dateOffset,
     tableStep,
     tableColumns,

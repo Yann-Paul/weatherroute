@@ -128,9 +128,7 @@ function TempSegment({
     );
 
     const kmMin = drawProfile[0][0], kmMax = drawProfile[drawProfile.length - 1][0];
-    const { tempKey: tk, dayOffset: off, desiredHigh: dh, desiredLow: dl } = stateRef.current;
-    const desired = tk === "tmax" ? dh : dl;
-    const { forecast: fc } = stateRef.current;
+    const { tempKey: tk, dayOffset: off, forecast: fc } = stateRef.current;
 
     // Compute temperature at each profile point
     const tempValues: (number | null)[] = drawProfile.map(([km, ele]) => {

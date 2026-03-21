@@ -140,8 +140,7 @@ function ElevationSegment({
       PL, PR, PT, PB, cW, cH, H, W,
     };
 
-    const { tempKey: tk, dayOffset: off, desiredHigh: dh, desiredLow: dl } = stateRef.current;
-    const desired = tk === "tmax" ? dh : dl;
+    const { tempKey: tk, dayOffset: off, forecast: fc } = stateRef.current;
 
     const xp = (km: number) => PL + ((km - kmMin) / (kmMax - kmMin)) * cW;
     const yp = (ele: number) => PT + cH - ((ele - eMin) / eRange) * cH;
@@ -253,7 +252,7 @@ function ElevationSegment({
   }, [drawChart]);
 
   function onMouseMove(e: React.MouseEvent<HTMLDivElement>) {
-    const { tempKey: tk, dayOffset: off, desiredHigh: dh, desiredLow: dl } = stateRef.current;
+    const { tempKey: tk, dayOffset: off } = stateRef.current;
     const cs = chartStateRef.current;
     const svg = svgRef.current;
     const tooltip = tooltipRef.current;
@@ -288,7 +287,6 @@ function ElevationSegment({
     const cdot = svg.querySelector(`#${dotId}`);
     if (cdot) { cdot.setAttribute("cx", String(cxFixed)); cdot.setAttribute("cy", String(cy)); cdot.setAttribute("visibility", "visible"); }
 
-    const desired = tk === "tmax" ? dh : dl;
     const { forecast: fc } = stateRef.current;
     const fcTemp = off === 0 && fc ? interpForecastByKey(bestKm, bestEle, tk, fc) : null;
     const temp = fcTemp ?? interpTempAtKm(bestKm, bestEle, allCityData, weatherByCityRef.current, off, tk);
