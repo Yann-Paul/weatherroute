@@ -1484,6 +1484,7 @@ def run_calculation(job_id: str, params: dict):
                         "prcp": round(w[2], 1) if len(w) > 2 and w[2] is not None else None,
                         "wspd": round(w[3], 1) if len(w) > 3 and w[3] is not None else None,
                         "wdir": round(w[4], 0) if len(w) > 4 and w[4] is not None else None,
+                        "wspdResultant": round(w[5], 1) if len(w) > 5 and w[5] is not None else None,
                     }
                 except Exception:
                     pass
@@ -1902,6 +1903,7 @@ def run_direct_osrm_job(job_id: str, params: dict):
                         "prcp": round(w[2], 1) if len(w) > 2 and w[2] is not None else None,
                         "wspd": round(w[3], 1) if len(w) > 3 and w[3] is not None else None,
                         "wdir": round(w[4], 0) if len(w) > 4 and w[4] is not None else None,
+                        "wspdResultant": round(w[5], 1) if len(w) > 5 and w[5] is not None else None,
                     }
                 except Exception:
                     pass

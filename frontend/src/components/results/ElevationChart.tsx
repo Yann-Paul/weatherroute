@@ -4,7 +4,7 @@ import { Slider } from "@/components/ui/slider";
 import { NumberTicker } from "@/components/magicui/number-ticker";
 import { TrendingUp, TrendingDown, Ruler, Sun, Moon } from "lucide-react";
 import { useResultsStore } from "@/stores/resultsStore";
-import { tempToRgb, tempMidColor, dayToShortDE } from "@/utils/tempColor";
+import { dayToShortDE } from "@/utils/tempColor";
 import { useIsDark } from "@/stores/themeStore";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
@@ -156,17 +156,11 @@ function ElevationSegment({
       out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${colAxis}" font-family="sans-serif">${e}m</text>`;
     }
 
-    const { forecast: fc } = stateRef.current;
     for (let i = 0; i < drawProfile.length - 1; i++) {
       const [km0, e0] = drawProfile[i], [km1, e1] = drawProfile[i + 1];
-      const midKm = (km0 + km1) / 2, midEle = (e0 + e1) / 2;
-      const fcTemp = off === 0 && fc ? interpForecastByKey(midKm, midEle, tk, fc) : null;
-      const temp = fcTemp ?? interpTempAtKm(midKm, midEle, allCityData, weatherByCityRef.current, off, tk);
-      const chartIsDark = document.documentElement.classList.contains("dark");
-      const col = temp !== null ? tempToRgb(temp, desired, chartIsDark) : colAxis;
       const x0 = xp(km0).toFixed(1), x1 = xp(km1).toFixed(1);
       const y0 = yp(e0).toFixed(1), y1 = yp(e1).toFixed(1), ay = axY.toFixed(1);
-      out += `<polygon points="${x0},${y0} ${x1},${y1} ${x1},${ay} ${x0},${ay}" fill="${col}" stroke="${col}" stroke-width="0.3"/>`;
+      out += `<polygon points="${x0},${y0} ${x1},${y1} ${x1},${ay} ${x0},${ay}" fill="${colLine}" fill-opacity="0.25" stroke="${colLine}" stroke-width="0.3"/>`;
     }
 
     const pts = drawProfile.map(([km, e]) => `${xp(km).toFixed(1)},${yp(e).toFixed(1)}`).join(" ");
@@ -328,8 +322,7 @@ function ElevationSegment({
     }
     if (temp != null) {
       const icon = fcTemp != null ? (tk === "tmax" ? "☁☀" : "☁☽") : (tk === "tmax" ? "☀" : "☽");
-      const ttIsDark = document.documentElement.classList.contains("dark");
-      ttHtml += `<div style="color:${tempToRgb(temp, desired, ttIsDark)}">${icon} ${temp.toFixed(1)}°C</div>`;
+      ttHtml += `<div style="color:${colFg}">${icon} ${temp.toFixed(1)}°C</div>`;
     }
 
     tooltip.innerHTML = ttHtml;
@@ -398,8 +391,6 @@ export function ElevationChart() {
   const startDay = useResultsStore((s) => s.startDay);
   const desiredHigh = useResultsStore((s) => s.desiredHigh);
   const desiredLow = useResultsStore((s) => s.desiredLow);
-  const isDark = useIsDark();
-
   const forecast = useResultsStore((s) => s.forecast);
   const [tempKey, setTempKey] = useState<"tmax" | "tmin">("tmax");
   const [dayOffset, setDayOffset] = useState(0);
@@ -450,7 +441,6 @@ export function ElevationChart() {
     );
   }
 
-  const desired = tempKey === "tmax" ? desiredHigh : desiredLow;
   const allCityData = elevation.cityData ?? [];
 
   return (
@@ -515,29 +505,6 @@ export function ElevationChart() {
         ))}
       </div>
 
-      {/* Temperature legend */}
-      <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2">
-        <span className="whitespace-nowrap text-[10px] text-muted-foreground">{desired - 15}°C</span>
-        <svg className="flex-1" height="14">
-          <defs>
-            <linearGradient id="ec-tg" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%"    stopColor="rgb(60,0,80)" />
-              <stop offset="16.7%" stopColor="rgb(30,30,160)" />
-              <stop offset="33.3%" stopColor="rgb(100,160,255)" />
-              <stop offset="50%"   stopColor={tempMidColor(isDark)} />
-              <stop offset="66.7%" stopColor="rgb(255,150,100)" />
-              <stop offset="83.3%" stopColor="rgb(200,40,40)" />
-              <stop offset="100%"  stopColor="rgb(160,0,120)" />
-            </linearGradient>
-          </defs>
-          <rect x="0" y="2" width="100%" height="10" fill="url(#ec-tg)" rx="3" />
-        </svg>
-        <span className="whitespace-nowrap text-[10px] font-bold text-foreground">
-          {desired}°C ✓
-        </span>
-        <span className="whitespace-nowrap text-[10px] text-muted-foreground">{desired + 15}°C</span>
-      </div>
-
       {/* Stats card */}
       <Card>
         <CardContent className="flex flex-wrap items-center gap-6 p-4">
@@ -549,14 +516,14 @@ export function ElevationChart() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-good" />
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">{t.elevationChart.ascentLabel}</span>
             <span className="font-medium">
               <NumberTicker value={Math.round(elevation.totalAscent)} /> m
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <TrendingDown className="h-4 w-4 text-bad" />
+            <TrendingDown className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">{t.elevationChart.descentLabel}</span>
             <span className="font-medium">
               <NumberTicker value={Math.round(elevation.totalDescent)} /> m

@@ -12,7 +12,14 @@ import {
   List,
   Zap,
   Navigation,
+  HelpCircle,
 } from "lucide-react";
+import beispielImg from "@/pictures/routenplaner_beispiel.png";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -220,6 +227,26 @@ function StepHeader({
 
 // ─── step 1 — route optimisation intro ───────────────────────────────────────
 
+function FeatureTooltip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Tooltip open={open} onOpenChange={setOpen}>
+      <TooltipTrigger asChild>
+        <button
+          onClick={(e) => { e.preventDefault(); setOpen((o) => !o); }}
+          className="inline-flex text-muted-foreground hover:text-primary transition-colors"
+          aria-label="Mehr erfahren"
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-[240px] text-xs leading-relaxed">
+        <p>{text}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function IntroStep() {
   const t = useT();
   const w = t.wizard;
@@ -229,14 +256,20 @@ function IntroStep() {
       <div className="rounded-xl border bg-card p-4">
         <ul className="space-y-3">
           {w.introPoints.map((point, i) => (
-            <li key={i} className="flex items-start gap-3 text-sm">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                {i + 1}
-              </span>
-              <span>{point}</span>
+            <li key={i} className="flex items-start gap-2 text-sm">
+              <span className="mt-0.5 text-primary shrink-0">•</span>
+              <span className="flex-1">{point}</span>
+              <FeatureTooltip text={w.introTooltips[i]} />
             </li>
           ))}
         </ul>
+      </div>
+      <div className="rounded-xl overflow-hidden border">
+        <img
+          src={beispielImg}
+          alt="Beispiel Routenanzeige mit Wetterdaten und Höhenprofil"
+          className="w-full object-cover"
+        />
       </div>
     </div>
   );

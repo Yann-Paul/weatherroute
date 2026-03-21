@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Sun, Moon } from "lucide-react";
 import { useResultsStore } from "@/stores/resultsStore";
-import { tempToRgb, tempMidColor, dayToShortDE } from "@/utils/tempColor";
+import { dayToShortDE } from "@/utils/tempColor";
 import { useIsDark } from "@/stores/themeStore";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
@@ -104,6 +104,7 @@ function TempSegment({
     const colBg     = hsl("--muted");
     const colGrid   = hsl("--border");
     const colAxis   = hsl("--muted-foreground");
+    const colLine   = hsl("--chart-line");
     const colDot    = hsl("--chart-1");
     const colText   = hsl("--foreground");
     const colCard   = hsl("--card");
@@ -180,16 +181,14 @@ function TempSegment({
       }
     }
 
-    // Colored line segments
+    // Temperature line segments
     for (let i = 0; i < drawProfile.length - 1; i++) {
       const [km0] = drawProfile[i], [km1] = drawProfile[i + 1];
       const t0 = tempValues[i], t1 = tempValues[i + 1];
       if (t0 == null || t1 == null) continue;
-      const chartIsDark = document.documentElement.classList.contains("dark");
-      const col = tempToRgb((t0 + t1) / 2, desired, chartIsDark);
       const x0 = xp(km0).toFixed(1), x1 = xp(km1).toFixed(1);
       const y0 = yp(t0).toFixed(1), y1 = yp(t1).toFixed(1);
-      out += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>`;
+      out += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${colLine}" stroke-width="2.5" stroke-linecap="round"/>`;
     }
 
     // Day markers
@@ -393,8 +392,6 @@ export function TemperatureChart() {
   const desiredHigh = useResultsStore((s) => s.desiredHigh);
   const desiredLow = useResultsStore((s) => s.desiredLow);
   const forecast = useResultsStore((s) => s.forecast);
-  const isDark = useIsDark();
-
   const [tempKey, setTempKey] = useState<"tmax" | "tmin">("tmax");
   const [dayOffset, setDayOffset] = useState(0);
 
@@ -452,7 +449,6 @@ export function TemperatureChart() {
 
   if (!elevation) return null;
 
-  const desired = tempKey === "tmax" ? desiredHigh : desiredLow;
   const allCityData = elevation.cityData ?? [];
 
   return (
@@ -519,28 +515,6 @@ export function TemperatureChart() {
         ))}
       </div>
 
-      {/* Temperature legend */}
-      <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2">
-        <span className="whitespace-nowrap text-[10px] text-muted-foreground">{desired - 15}°C</span>
-        <svg className="flex-1" height="14">
-          <defs>
-            <linearGradient id="tc-tg" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%"    stopColor="rgb(60,0,80)" />
-              <stop offset="16.7%" stopColor="rgb(30,30,160)" />
-              <stop offset="33.3%" stopColor="rgb(100,160,255)" />
-              <stop offset="50%"   stopColor={tempMidColor(isDark)} />
-              <stop offset="66.7%" stopColor="rgb(255,150,100)" />
-              <stop offset="83.3%" stopColor="rgb(200,40,40)" />
-              <stop offset="100%"  stopColor="rgb(160,0,120)" />
-            </linearGradient>
-          </defs>
-          <rect x="0" y="2" width="100%" height="10" fill="url(#tc-tg)" rx="3" />
-        </svg>
-        <span className="whitespace-nowrap text-[10px] font-bold text-foreground">
-          {desired}°C ✓
-        </span>
-        <span className="whitespace-nowrap text-[10px] text-muted-foreground">{desired + 15}°C</span>
-      </div>
     </div>
   );
 }

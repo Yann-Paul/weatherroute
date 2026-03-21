@@ -43,6 +43,18 @@
 }
 
 :root {
+  /* ── Brand Colors ─────────────────────────────────────────────────────────
+   * Edit ONLY these four lines to retheme the entire UI.
+   *   --brand-active  #d67229  →  selected / active buttons & focus rings
+   *   --brand-bg      #e29c69  →  secondary backgrounds & hover states
+   *   --brand-subtle           →  very light tint for muted / table areas
+   *   --brand-border           →  light tint for borders and input frames
+   * ───────────────────────────────────────────────────────────────────────── */
+  --brand-active: 25 68% 50%;   /* #d67229 */
+  --brand-bg:     25 68% 65%;   /* #e29c69 */
+  --brand-subtle: 25 40% 93%;   /* pale tint – muted backgrounds           */
+  --brand-border: 25 30% 88%;   /* light tint – borders and input frames   */
+
   /* Chart-specific tokens (used by imperative SVG rendering in RouteMap) */
   --chart-line: 215 19% 35%;
   --chart-cursor: 215 25% 25%;
@@ -54,19 +66,19 @@
   --card-foreground: 240 10% 3.9%;
   --popover: 0 0% 100%;
   --popover-foreground: 240 10% 3.9%;
-  --primary: 240 10% 12%;
+  --primary: var(--brand-active);
   --primary-foreground: 0 0% 98%;
-  --secondary: 240 5% 92%;
+  --secondary: var(--brand-bg);
   --secondary-foreground: 240 10% 20%;
-  --muted: 240 4.8% 95.9%;
+  --muted: var(--brand-subtle);
   --muted-foreground: 240 3.8% 46.1%;
-  --accent: 240 5% 92%;
-  --accent-foreground: 240 10% 12%;
+  --accent: var(--brand-bg);
+  --accent-foreground: 240 10% 20%;
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 240 5% 40%;
+  --border: var(--brand-border);
+  --input: var(--brand-border);
+  --ring: var(--brand-active);
   --radius: 0.75rem;
   --chart-1: 220 65% 45%;
   --chart-2: 240 5% 55%;

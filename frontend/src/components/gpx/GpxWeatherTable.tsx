@@ -53,6 +53,8 @@ function SourceBadge({ isForecast }: { isForecast: boolean }) {
 }
 
 export function GpxWeatherTable({ weatherPoints }: { weatherPoints: GpxWeatherPoint[] }) {
+  const sorted = [...weatherPoints].sort((a, b) => a.km - b.km);
+
   return (
     <div className="overflow-auto rounded-lg border border-border">
       <table className="min-w-full text-xs">
@@ -62,61 +64,84 @@ export function GpxWeatherTable({ weatherPoints }: { weatherPoints: GpxWeatherPo
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Typ</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Höhe</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Ankunft</th>
-            <th className="px-3 py-2 text-left font-medium text-muted-foreground"><Moon className="inline h-3.5 w-3.5 mr-0.5" />Pause</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Temp</th>
-            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Wetter</th>
+            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Bewölkung</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground"><CloudRain className="inline h-3.5 w-3.5" /> mm/h</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Wind</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Quelle</th>
           </tr>
         </thead>
         <tbody>
-          {weatherPoints.map((wp, i) => {
+          {sorted.map((wp, i) => {
             const arrival = new Date(wp.arrivalTime).toLocaleString(undefined, {
               month: "numeric",
               day: "numeric",
               hour: "2-digit",
               minute: "2-digit",
             });
+            const rowBg = i % 2 === 0 ? "bg-background" : "bg-muted/30";
             return (
-              <tr key={i} className={i % 2 === 0 ? "bg-background" : "bg-muted/30"}>
-                <td className="px-3 py-1.5 tabular-nums">{Math.round(wp.km)}</td>
-                <td className="px-3 py-1.5">
-                  <TypeBadge type={wp.type} />
-                </td>
-                <td className="px-3 py-1.5 tabular-nums">{Math.round(wp.ele)} m</td>
-                <td className="px-3 py-1.5 whitespace-nowrap">{arrival}</td>
-                <td className="px-3 py-1.5 whitespace-nowrap tabular-nums">
-                  {wp.type === "stop" && wp.stopTime && wp.nextStartTime
-                    ? wp.stopTime.slice(11, 16) + "–" + wp.nextStartTime.slice(11, 16)
-                    : "—"}
-                </td>
-                <td
-                  className="px-3 py-1.5 tabular-nums font-semibold"
-                  style={{
-                    color: wp.temp != null ? tempToRgb(wp.temp, 20) : undefined,
-                  }}
-                >
-                  {wp.temp != null ? `${wp.temp.toFixed(1)}°` : "—"}
-                </td>
-                <td className="px-3 py-1.5">
-                  <span><WxSymbol prcp={wp.prcp} cloud={wp.cloud} /></span>
-                  {wp.cloud != null && (
-                    <span className="ml-1 text-muted-foreground">{wp.cloud}%</span>
-                  )}
-                </td>
-                <td className="px-3 py-1.5 tabular-nums">
-                  {wp.prcp != null ? wp.prcp.toFixed(2) : "—"}
-                </td>
-                <td className="px-3 py-1.5 whitespace-nowrap">
-                  {wp.wspd != null
-                    ? `${Math.round(wp.wspd)} km/h${wp.wdir != null ? ` ${windDegreesToDirection(wp.wdir)}` : ""}`
-                    : "—"}
-                </td>
-                <td className="px-3 py-1.5">
-                  <SourceBadge isForecast={wp.isForecast} />
-                </td>
-              </tr>
+              <>
+                <tr key={`wp-${i}`} className={rowBg}>
+                  <td className="px-3 py-1.5 tabular-nums">{Math.round(wp.km)}</td>
+                  <td className="px-3 py-1.5">
+                    <TypeBadge type={wp.type} />
+                  </td>
+                  <td className="px-3 py-1.5 tabular-nums">{Math.round(wp.ele)} m</td>
+                  <td className="px-3 py-1.5 whitespace-nowrap">{arrival}</td>
+                  <td
+                    className="px-3 py-1.5 tabular-nums font-semibold"
+                    style={{ color: wp.temp != null ? tempToRgb(wp.temp, 20) : undefined }}
+                  >
+                    {wp.temp != null ? `${wp.temp.toFixed(1)}°` : "—"}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <span><WxSymbol prcp={wp.prcp} cloud={wp.cloud} /></span>
+                    {wp.cloud != null && (
+                      <span className="ml-1 text-muted-foreground">{wp.cloud}%</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5 tabular-nums">
+                    {wp.prcp != null ? wp.prcp.toFixed(2) : "—"}
+                  </td>
+                  <td className="px-3 py-1.5 whitespace-nowrap">
+                    {wp.wspd != null
+                      ? `${Math.round(wp.wspd)} km/h${wp.wdir != null ? ` ${windDegreesToDirection(wp.wdir)}` : ""}`
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <SourceBadge isForecast={wp.isForecast} />
+                  </td>
+                </tr>
+                {wp.type === "stop" && wp.nightData && wp.nightData.map((h, hi) => (
+                  <tr key={`night-${i}-${hi}`} className="bg-violet-50/50 dark:bg-violet-950/20">
+                    <td className="px-3 py-1 tabular-nums text-muted-foreground pl-6">↳</td>
+                    <td className="px-3 py-1 text-muted-foreground">
+                      <Moon className="inline h-3 w-3 mr-0.5 opacity-50" />
+                    </td>
+                    <td className="px-3 py-1" />
+                    <td className="px-3 py-1 whitespace-nowrap tabular-nums text-muted-foreground">
+                      {h.date.slice(5, 10)} {h.hour}:00
+                    </td>
+                    <td
+                      className="px-3 py-1 tabular-nums font-semibold"
+                      style={{ color: h.temp != null ? tempToRgb(h.temp, 20) : undefined }}
+                    >
+                      {h.temp != null ? `${h.temp.toFixed(1)}°` : "—"}
+                    </td>
+                    <td className="px-3 py-1">
+                      <WxSymbol prcp={h.prcp} cloud={null} />
+                    </td>
+                    <td className="px-3 py-1 tabular-nums">
+                      {h.prcp != null ? h.prcp.toFixed(2) : "—"}
+                    </td>
+                    <td className="px-3 py-1 whitespace-nowrap">
+                      {h.wspd != null ? `${Math.round(h.wspd)} km/h` : "—"}
+                    </td>
+                    <td className="px-3 py-1" />
+                  </tr>
+                ))}
+              </>
             );
           })}
         </tbody>

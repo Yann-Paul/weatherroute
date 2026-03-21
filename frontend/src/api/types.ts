@@ -145,6 +145,7 @@ export interface WeatherOffsetData {
   prcp: number | null;
   wspd: number | null;
   wdir: number | null;
+  wspdResultant: number | null;
 }
 
 export interface WeatherStop {

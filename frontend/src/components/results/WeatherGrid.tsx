@@ -123,18 +123,6 @@ export function WeatherGrid() {
             </Select>
           </div>
 
-          {/* Color legend */}
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-good" /> {t.weatherGrid.legendGood}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-warn" /> {t.weatherGrid.legendOk}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-bad" /> {t.weatherGrid.legendBad}
-            </span>
-          </div>
         </CardContent>
       </Card>
 
@@ -172,17 +160,14 @@ export function WeatherGrid() {
               {rows.map((row) => (
                 <tr
                   key={`${row.stop.cityId}-${row.relDay}`}
-                  className={[
-                    "border-b border-border/50",
-                    row.restDayOffset > 0 ? "bg-warn/5" : "",
-                  ].join(" ")}
+                  className="border-b border-border/50"
                 >
                   <th scope="row" className="sticky left-0 z-10 bg-background px-3 py-1 whitespace-nowrap text-left font-normal">
                     <div className="font-medium leading-tight">{row.stop.cityName}</div>
                     <div className="text-[11px] text-muted-foreground">
                       {t.weatherGrid.dayHeader} {row.relDay}
                       {row.restDayOffset > 0 && (
-                        <Pause className="ml-1 inline h-2.5 w-2.5 text-warn" aria-hidden="true" />
+                        <Pause className="ml-1 inline h-2.5 w-2.5 text-muted-foreground" aria-hidden="true" />
                       )}
                     </div>
                   </th>
@@ -198,8 +183,6 @@ export function WeatherGrid() {
                           isRestDay={row.restDayOffset > 0}
                           restDayOffset={row.restDayOffset > 0 ? row.restDayOffset : undefined}
                           data={data}
-                          desiredHigh={desiredHigh}
-                          desiredLow={desiredLow}
                           bearing={row.bearing}
                         />
                       </td>

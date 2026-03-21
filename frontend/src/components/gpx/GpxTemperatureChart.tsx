@@ -3,7 +3,6 @@ import type { ElevationProfile, GpxWeatherPoint, GpxDayConfig, GpxNightHour } fr
 import { useT } from "@/i18n/useT";
 import { Moon } from "lucide-react";
 import { useIsDark } from "@/stores/themeStore";
-import { tempToRgb, tempMidColor } from "@/utils/tempColor";
 
 function gpxArrivalTime(km: number, dailyConfigs: GpxDayConfig[], startDate: string): Date {
   const base = new Date(startDate + "T00:00:00");
@@ -38,13 +37,8 @@ function getCssColors() {
   };
 }
 
-function markerColor(type: GpxWeatherPoint["type"]): string {
-  if (type === "stop") return "#7c3aed";
-  if (type === "pass") return "#f97316";
-  if (type === "valley") return "#3b82f6";
-  if (type === "start") return "#22c55e";
-  if (type === "end") return "#6b7280";
-  return "#9ca3af";
+function markerColor(_type: GpxWeatherPoint["type"], axisColor: string): string {
+  return axisColor;
 }
 
 /** Linear interpolation of temperature from a sorted {ms, temp}[] array at a given timestamp. */
@@ -202,26 +196,25 @@ function DayTempChart({
       ctx.restore();
     }
 
-    // Colored line segments
+    // Temperature line
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.setLineDash([]);
-    for (let i = 0; i < tempPts.length - 1; i++) {
-      const p0 = tempPts[i], p1 = tempPts[i + 1];
-      const midTemp = (p0.temp + p1.temp) / 2;
-      ctx.beginPath();
-      ctx.strokeStyle = tempToRgb(midTemp, desiredTemp, isDark);
-      ctx.moveTo(toX(p0.km), toY(p0.temp));
-      ctx.lineTo(toX(p1.km), toY(p1.temp));
-      ctx.stroke();
+    ctx.strokeStyle = clr.axis;
+    ctx.beginPath();
+    for (let i = 0; i < tempPts.length; i++) {
+      const { km, temp } = tempPts[i];
+      if (i === 0) ctx.moveTo(toX(km), toY(temp));
+      else ctx.lineTo(toX(km), toY(temp));
     }
+    ctx.stroke();
 
     // Weather point markers (vertical lines at km position)
     for (const wp of weatherPoints) {
       if (wp.km < startKm - 0.1 || wp.km > endKm + 0.1) continue;
       const x = toX(wp.km);
-      const color = markerColor(wp.type);
+      const color = markerColor(wp.type, clr.axis);
 
       ctx.save();
       ctx.strokeStyle = color;
@@ -495,7 +488,7 @@ function GpxCombinedDayTempChart({
 
     // Night background shade
     if (hasNight) {
-      ctx.fillStyle = "rgba(99,102,241,0.07)";
+      ctx.fillStyle = "rgba(128,128,128,0.07)";
       ctx.fillRect(toX(tNightStart), PAD.top, toX(tNightEnd) - toX(tNightStart), ch);
     }
 
@@ -539,28 +532,28 @@ function GpxCombinedDayTempChart({
       ctx.restore();
     }
 
-    // Day: colored temperature line
+    // Day: temperature line
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.setLineDash([]);
-    for (let i = 0; i < dayTempPts.length - 1; i++) {
-      const p0 = dayTempPts[i], p1 = dayTempPts[i + 1];
-      ctx.beginPath();
-      ctx.strokeStyle = tempToRgb((p0.temp + p1.temp) / 2, desiredTemp, isDark);
-      ctx.moveTo(toX(p0.ms), toY(p0.temp));
-      ctx.lineTo(toX(p1.ms), toY(p1.temp));
-      ctx.stroke();
+    ctx.strokeStyle = clr.axis;
+    ctx.beginPath();
+    for (let i = 0; i < dayTempPts.length; i++) {
+      const { ms, temp } = dayTempPts[i];
+      if (i === 0) ctx.moveTo(toX(ms), toY(temp));
+      else ctx.lineTo(toX(ms), toY(temp));
     }
+    ctx.stroke();
 
     // Night separator + night temperature line
     if (hasNight && nightPtsAdj.length > 0) {
       const xSep = toX(tNightStart);
       ctx.save();
-      ctx.strokeStyle = "#7c3aed";
+      ctx.strokeStyle = clr.axis;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 3]);
-      ctx.globalAlpha = 0.7;
+      ctx.globalAlpha = 0.5;
       ctx.beginPath();
       ctx.moveTo(xSep, PAD.top);
       ctx.lineTo(xSep, axY);
@@ -568,7 +561,7 @@ function GpxCombinedDayTempChart({
       ctx.restore();
 
       if (nightPtsAdj.length >= 2) {
-        ctx.strokeStyle = "#6366f1";
+        ctx.strokeStyle = clr.cursor;
         ctx.lineWidth = 2;
         ctx.setLineDash([]);
         ctx.beginPath();
@@ -581,7 +574,7 @@ function GpxCombinedDayTempChart({
       for (const p of nightPtsAdj) {
         ctx.beginPath();
         ctx.arc(toX(p.ms), toY(p.temp), 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = "#6366f1";
+        ctx.fillStyle = clr.cursor;
         ctx.fill();
       }
     }
@@ -693,7 +686,7 @@ export function GpxTemperatureChart({
   const t = useT();
   const isDark = useIsDark();
 
-  // Compute a sensible "desired" temperature from the midpoint of the observed range
+  // desiredTemp drives tempToRgb color mapping (kept for API compatibility)
   const desiredTemp = (() => {
     const temps = weatherPoints.map((wp) => wp.temp).filter((t): t is number => t != null);
     if (temps.length === 0) return 20;
@@ -708,44 +701,19 @@ export function GpxTemperatureChart({
   const boundaries = [0, ...stopPoints.map((sp) => sp.km), totalKm];
   const multiDay = stopPoints.length > 0;
 
-  const legend = (
-    <div className="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground">
-      <span>{desiredTemp - 15}°C</span>
-      <svg className="flex-1" height="10">
-        <defs>
-          <linearGradient id="gtc-grad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%"    stopColor="rgb(60,0,80)" />
-            <stop offset="16.7%" stopColor="rgb(30,30,160)" />
-            <stop offset="33.3%" stopColor="rgb(100,160,255)" />
-            <stop offset="50%"   stopColor={tempMidColor(isDark ?? true)} />
-            <stop offset="66.7%" stopColor="rgb(255,150,100)" />
-            <stop offset="83.3%" stopColor="rgb(200,40,40)" />
-            <stop offset="100%"  stopColor="rgb(160,0,120)" />
-          </linearGradient>
-        </defs>
-        <rect x="0" y="1" width="100%" height="8" fill="url(#gtc-grad)" rx="2" />
-      </svg>
-      <span className="font-bold text-foreground">{desiredTemp}°C ✓</span>
-      <span>{desiredTemp + 15}°C</span>
-    </div>
-  );
-
   if (!multiDay) {
     return (
-      <div>
-        <DayTempChart
-          points={elevation.points}
-          startKm={0}
-          endKm={totalKm}
-          weatherPoints={weatherPoints}
-          desiredTemp={desiredTemp}
-          height={260}
-          isDark={isDark}
-          dailyConfigs={dailyConfigs}
-          startDate={startDate}
-        />
-        {legend}
-      </div>
+      <DayTempChart
+        points={elevation.points}
+        startKm={0}
+        endKm={totalKm}
+        weatherPoints={weatherPoints}
+        desiredTemp={desiredTemp}
+        height={260}
+        isDark={isDark}
+        dailyConfigs={dailyConfigs}
+        startDate={startDate}
+      />
     );
   }
 
@@ -799,7 +767,6 @@ export function GpxTemperatureChart({
           </div>
         );
       })}
-      {legend}
     </div>
   );
 }
