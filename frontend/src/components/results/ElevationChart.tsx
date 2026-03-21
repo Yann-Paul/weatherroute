@@ -140,7 +140,7 @@ function ElevationSegment({
       PL, PR, PT, PB, cW, cH, H, W,
     };
 
-    const { tempKey: tk, dayOffset: off, forecast: fc } = stateRef.current;
+    const { dayOffset: off, forecast: fc } = stateRef.current;
 
     const xp = (km: number) => PL + ((km - kmMin) / (kmMax - kmMin)) * cW;
     const yp = (ele: number) => PT + cH - ((ele - eMin) / eRange) * cH;
