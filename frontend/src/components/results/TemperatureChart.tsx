@@ -197,7 +197,7 @@ function TempSegment({
       const xd = xp(dmKm);
       if (xd - lastDmX < MIN_DM_PX) continue;
       lastDmX = xd;
-      const lbl = stateRef.current.lang === "de" ? `Tag ${dmRelDay}` : `Day ${dmRelDay}`;
+      const lbl = stateRef.current.lang === "de" ? `Tag ${Math.round(dmRelDay)}` : `Day ${Math.round(dmRelDay)}`;
       out += `<line x1="${xd.toFixed(1)}" y1="${PT}" x2="${xd.toFixed(1)}" y2="${axY}" stroke="${colAxis}" stroke-width="0.7" stroke-dasharray="2,3" opacity="0.5"/>`;
       out += `<text x="${(xd + 1.5).toFixed(1)}" y="${(PT + 8).toFixed(1)}" font-size="7" fill="${colAxis}" font-family="sans-serif" opacity="0.7">${lbl}</text>`;
     }
@@ -207,7 +207,7 @@ function TempSegment({
       const xv = xp(cd.km);
       const stop = weatherByCityRef.current.get(cd.cityId);
       const relDay = stop?.relDay ?? 0;
-      const absDay = ((stateRef.current.startDay + relDay + off - 1 + 3650) % 365) + 1;
+      const absDay = ((stateRef.current.startDay + Math.round(relDay) + off - 1 + 3650) % 365) + 1;
       const dateStr = dayToShortDE(absDay, lang);
 
       // Find temperature at city km for dot position

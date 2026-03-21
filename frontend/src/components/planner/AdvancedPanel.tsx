@@ -22,7 +22,6 @@ export function AdvancedPanel() {
   const store = usePlannerStore();
   const t = useT();
   const tc = t.advanced;
-  const locale = t.dateLocale;
   const lang = t.dateLocale === "de-DE" ? "de" : "en";
 
   // Local slider states for smooth dragging (store only updated on commit)
@@ -263,12 +262,7 @@ export function AdvancedPanel() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <Label>
-                {tc.elevation.resolution(elevResolution[0].toLocaleString(locale))}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {tc.elevation.resolutionDesc}
-              </p>
+              <Label>{tc.elevation.resolutionLabel}</Label>
               <Slider
                 min={100}
                 max={3000}
@@ -277,6 +271,20 @@ export function AdvancedPanel() {
                 onValueChange={setElevResolution}
                 onValueCommit={([v]) => store.setElevResolution(v)}
               />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span className="flex flex-col gap-0.5">
+                  <span className="font-medium text-foreground">{tc.elevation.low}</span>
+                  <span>{tc.elevation.lowDesc}</span>
+                </span>
+                <span className="flex flex-col gap-0.5 items-center text-center">
+                  <span className="font-medium text-foreground">{tc.elevation.medium}</span>
+                  <span>{tc.elevation.mediumDesc}</span>
+                </span>
+                <span className="flex flex-col gap-0.5 items-end text-right">
+                  <span className="font-medium text-foreground">{tc.elevation.high}</span>
+                  <span>{tc.elevation.highDesc}</span>
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -5,6 +5,8 @@ import {
   ArrowLeft,
   Settings,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Check,
   Route as RouteIcon,
   Wand2,
@@ -514,6 +516,7 @@ function TemperatureStep() {
   const t = useT();
   const w = t.wizard;
   const tc = t.advanced.temperature;
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const weights = [
     {
@@ -546,10 +549,9 @@ function TemperatureStep() {
     <div className="space-y-5">
       <StepHeader step="temperature" title={w.tempTitle} subtitle={w.tempSubtitle} />
 
-      {/* Temperature preferences */}
-      <div className="rounded-xl border bg-card p-4 space-y-5">
+      {/* Target temperatures — always visible */}
+      <div className="rounded-xl border bg-card p-4 space-y-4">
         <p className="text-sm font-medium">{tc.heading}</p>
-
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>{tc.desiredDay}</Label>
@@ -569,86 +571,108 @@ function TemperatureStep() {
           </div>
         </div>
         <Hint>{tc.targetDesc}</Hint>
-
-        <div className="space-y-1.5">
-          <Label>{tc.dayRange(store.dayTempMin, store.dayTempMax)}</Label>
-          <Hint>{tc.dayRangeDesc}</Hint>
-          <Slider
-            min={-20}
-            max={50}
-            step={1}
-            value={[store.dayTempMin, store.dayTempMax]}
-            onValueChange={([min, max]) => {
-              store.setTemp("dayTempMin", min);
-              store.setTemp("dayTempMax", max);
-            }}
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>{tc.nightRange(store.nightTempMin, store.nightTempMax)}</Label>
-          <Hint>{tc.nightRangeDesc}</Hint>
-          <Slider
-            min={-30}
-            max={40}
-            step={1}
-            value={[store.nightTempMin, store.nightTempMax]}
-            onValueChange={([min, max]) => {
-              store.setTemp("nightTempMin", min);
-              store.setTemp("nightTempMax", max);
-            }}
-          />
-        </div>
-
-        <div className="rounded-lg border border-muted bg-muted/40 p-3">
-          <p className="text-xs text-muted-foreground">{w.tempRangeWarning}</p>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>{tc.warmingFactor(store.warmingFactor.toFixed(1))}</Label>
-          <div className="space-y-0.5 text-xs text-muted-foreground">
-            <p>{tc.warmingFactorDesc1}</p>
-            <p>{tc.warmingFactorDesc2}</p>
-            <p>
-              {tc.warmingFactorDesc3}{" "}
-              <span className="font-medium">{tc.recommended}</span>
-            </p>
-            <p>{tc.warmingFactorDesc4}</p>
-          </div>
-          <Slider
-            min={-1}
-            max={4}
-            step={0.1}
-            value={[store.warmingFactor]}
-            onValueChange={([v]) => store.setWarmingFactor(v)}
-          />
-        </div>
       </div>
 
-      {/* Weights */}
-      <div className="rounded-xl border bg-card p-4 space-y-5">
-        <div className="space-y-0.5">
-          <p className="text-sm font-medium">{w.weightsTitle}</p>
-          <Hint>{w.weightsSubtitle}</Hint>
-        </div>
-        {weights.map(({ label, hints, value, onChange }) => (
-          <div key={label} className="space-y-1.5">
-            <Label>{label}</Label>
-            <div className="space-y-0.5 text-xs text-muted-foreground">
-              {hints.map((h) => (
-                <p key={h}>{h}</p>
-              ))}
+      {/* Advanced weather settings toggle */}
+      <button
+        type="button"
+        onClick={() => setShowAdvanced((v) => !v)}
+        className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/50"
+      >
+        <span className="flex items-center gap-2">
+          <Settings className="h-4 w-4 text-muted-foreground" />
+          {w.advancedWeatherSettings}
+        </span>
+        {showAdvanced
+          ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+
+      {showAdvanced && (
+        <>
+          {/* Temperature ranges + warming factor */}
+          <div className="rounded-xl border bg-card p-4 space-y-5">
+            <div className="space-y-1.5">
+              <Label>{tc.dayRange(store.dayTempMin, store.dayTempMax)}</Label>
+              <Hint>{tc.dayRangeDesc}</Hint>
+              <Slider
+                min={-20}
+                max={50}
+                step={1}
+                value={[store.dayTempMin, store.dayTempMax]}
+                onValueChange={([min, max]) => {
+                  store.setTemp("dayTempMin", min);
+                  store.setTemp("dayTempMax", max);
+                }}
+              />
             </div>
-            <Slider
-              min={0}
-              max={1}
-              step={0.05}
-              value={[value]}
-              onValueChange={([v]) => onChange(v)}
-            />
+
+            <div className="space-y-1.5">
+              <Label>{tc.nightRange(store.nightTempMin, store.nightTempMax)}</Label>
+              <Hint>{tc.nightRangeDesc}</Hint>
+              <Slider
+                min={-30}
+                max={40}
+                step={1}
+                value={[store.nightTempMin, store.nightTempMax]}
+                onValueChange={([min, max]) => {
+                  store.setTemp("nightTempMin", min);
+                  store.setTemp("nightTempMax", max);
+                }}
+              />
+            </div>
+
+            <div className="rounded-lg border border-muted bg-muted/40 p-3">
+              <p className="text-xs text-muted-foreground">{w.tempRangeWarning}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{tc.warmingFactor(store.warmingFactor.toFixed(1))}</Label>
+              <div className="space-y-0.5 text-xs text-muted-foreground">
+                <p>{tc.warmingFactorDesc1}</p>
+                <p>{tc.warmingFactorDesc2}</p>
+                <p>
+                  {tc.warmingFactorDesc3}{" "}
+                  <span className="font-medium">{tc.recommended}</span>
+                </p>
+                <p>{tc.warmingFactorDesc4}</p>
+              </div>
+              <Slider
+                min={-1}
+                max={4}
+                step={0.1}
+                value={[store.warmingFactor]}
+                onValueChange={([v]) => store.setWarmingFactor(v)}
+              />
+            </div>
           </div>
-        ))}
-      </div>
+
+          {/* Weights */}
+          <div className="rounded-xl border bg-card p-4 space-y-5">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">{w.weightsTitle}</p>
+              <Hint>{w.weightsSubtitle}</Hint>
+            </div>
+            {weights.map(({ label, hints, value, onChange }) => (
+              <div key={label} className="space-y-1.5">
+                <Label>{label}</Label>
+                <div className="space-y-0.5 text-xs text-muted-foreground">
+                  {hints.map((h) => (
+                    <p key={h}>{h}</p>
+                  ))}
+                </div>
+                <Slider
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={[value]}
+                  onValueChange={([v]) => onChange(v)}
+                />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -661,8 +685,6 @@ function ApiStep() {
   const w = t.wizard;
   const tp = t.planner;
   const te = t.advanced.elevation;
-  const locale = t.dateLocale;
-
   return (
     <div className="space-y-5">
       <StepHeader step="api" title={w.apiTitle} subtitle={w.apiSubtitle} />
@@ -704,10 +726,7 @@ function ApiStep() {
 
       {/* Elevation resolution */}
       <div className="rounded-xl border bg-card p-4 space-y-2">
-        <SectionLabel
-          title={te.resolution(store.elevResolution.toLocaleString(locale))}
-          hint={te.resolutionDesc}
-        />
+        <SectionLabel title={te.resolutionLabel} />
         <Slider
           min={100}
           max={3000}
@@ -715,6 +734,20 @@ function ApiStep() {
           value={[store.elevResolution]}
           onValueChange={([v]) => store.setElevResolution(v)}
         />
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span className="flex flex-col gap-0.5">
+            <span className="font-medium text-foreground">{te.low}</span>
+            <span>{te.lowDesc}</span>
+          </span>
+          <span className="flex flex-col gap-0.5 items-center text-center">
+            <span className="font-medium text-foreground">{te.medium}</span>
+            <span>{te.mediumDesc}</span>
+          </span>
+          <span className="flex flex-col gap-0.5 items-end text-right">
+            <span className="font-medium text-foreground">{te.high}</span>
+            <span>{te.highDesc}</span>
+          </span>
+        </div>
       </div>
     </div>
   );

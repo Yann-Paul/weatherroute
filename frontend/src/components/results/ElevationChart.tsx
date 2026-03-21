@@ -4,7 +4,7 @@ import { Slider } from "@/components/ui/slider";
 import { NumberTicker } from "@/components/magicui/number-ticker";
 import { TrendingUp, TrendingDown, Ruler, Sun, Moon } from "lucide-react";
 import { useResultsStore } from "@/stores/resultsStore";
-import { dayToShortDE } from "@/utils/tempColor";
+import { dayToShortDE, tempToRgb } from "@/utils/tempColor";
 import { useIsDark } from "@/stores/themeStore";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
@@ -155,13 +155,30 @@ function ElevationSegment({
       out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${colAxis}" font-family="sans-serif">${e}m</text>`;
     }
 
+    // ─── Per-segment temperature coloring ────────────────────────────────────
+    const { tempKey: tk, desiredHigh: dHigh, desiredLow: dLow } = stateRef.current;
+    const desired = tk === "tmax" ? dHigh : dLow;
+
+    out += `<defs><clipPath id="ec-clip-${segIndex}"><rect x="${PL}" y="${PT}" width="${cW}" height="${cH}"/></clipPath></defs>`;
+    out += `<g clip-path="url(#ec-clip-${segIndex})" shape-rendering="crispEdges">`;
+
     for (let i = 0; i < drawProfile.length - 1; i++) {
       const [km0, e0] = drawProfile[i], [km1, e1] = drawProfile[i + 1];
-      const x0 = xp(km0).toFixed(1), x1 = xp(km1).toFixed(1);
-      const y0 = yp(e0).toFixed(1), y1 = yp(e1).toFixed(1), ay = axY.toFixed(1);
-      out += `<polygon points="${x0},${y0} ${x1},${y1} ${x1},${ay} ${x0},${ay}" fill="${colLine}" fill-opacity="0.25" stroke="${colLine}" stroke-width="0.3"/>`;
-    }
+      const mk = (km0 + km1) / 2, me = (e0 + e1) / 2;
 
+      let temp: number | null = null;
+      if (off === 0 && fc) temp = interpForecastByKey(mk, me, tk, fc);
+      if (temp == null) temp = interpTempAtKm(mk, me, allCityData, weatherByCityRef.current, off, tk);
+
+      const col = temp != null ? tempToRgb(temp, desired, isDark) : colBg;
+
+      const x0 = xp(km0).toFixed(1), x1 = xp(km1).toFixed(1);
+      const y0 = yp(e0).toFixed(1), y1 = yp(e1).toFixed(1), ya = axY.toFixed(1);
+      out += `<polygon points="${x0},${y0} ${x1},${y1} ${x1},${ya} ${x0},${ya}" fill="${col}" opacity="0.85"/>`;
+    }
+    out += `</g>`;
+
+    // Outline on top
     const pts = drawProfile.map(([km, e]) => `${xp(km).toFixed(1)},${yp(e).toFixed(1)}`).join(" ");
     out += `<polyline points="${pts}" fill="none" stroke="${colLine}" stroke-width="1.2"/>`;
 
@@ -190,7 +207,7 @@ function ElevationSegment({
       const xd = xp(dmKm);
       if (xd - lastDmX < MIN_DM_PX) continue;
       lastDmX = xd;
-      const lbl = stateRef.current.lang === "de" ? `Tag ${dmRelDay}` : `Day ${dmRelDay}`;
+      const lbl = stateRef.current.lang === "de" ? `Tag ${Math.round(dmRelDay)}` : `Day ${Math.round(dmRelDay)}`;
       out += `<line x1="${xd.toFixed(1)}" y1="${PT}" x2="${xd.toFixed(1)}" y2="${axY}" stroke="${colAxis}" stroke-width="0.7" stroke-dasharray="2,3" opacity="0.5"/>`;
       out += `<text x="${(xd + 1.5).toFixed(1)}" y="${(PT + 8).toFixed(1)}" font-size="7" fill="${colAxis}" font-family="sans-serif" opacity="0.7">${lbl}</text>`;
     }
@@ -208,7 +225,7 @@ function ElevationSegment({
 
       const stop = weatherByCityRef.current.get(cd.cityId);
       const relDay = stop?.relDay ?? 0;
-      const absDay = ((stateRef.current.startDay + relDay + off - 1 + 3650) % 365) + 1;
+      const absDay = ((stateRef.current.startDay + Math.round(relDay) + off - 1 + 3650) % 365) + 1;
       const dateStr = dayToShortDE(absDay, lang);
       const px = xv - 18, py = PT + 2;
       out += `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="36" height="13" rx="3" fill="${colCard}" opacity="0.9" stroke="${colDot}" stroke-width="0.7"/>`;
@@ -243,7 +260,7 @@ function ElevationSegment({
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("height", String(H));
     svg.innerHTML = out;
-  }, [segPoints, segCitiesVisible, segDayMarkersVisible, allCityData, tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang, segIndex, forecast, isDark]);
+  }, [segPoints, segCitiesVisible, segDayMarkersVisible, allCityData, tempKey, dayOffset, desiredHigh, desiredLow, startDay, lang, segIndex, forecast, isDark, weatherByCityRef]);
 
   useEffect(() => {
     drawChart();

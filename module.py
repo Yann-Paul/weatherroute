@@ -150,7 +150,7 @@ def calc_targets_day_estimates(graph, cities, daily_max_km, distance_weight=1.0)
                         distance = edge_data['weight']
                         # adjust for longer route due to weather optimization
                         distance = distance * weather_factor
-                        travel_days += max(1, ceil(distance / daily_max_km))
+                        travel_days += distance / daily_max_km
 
                     targets_day_estimates[from_city +"_"+ to_city] = targets_day_estimates[to_city +"_"+ from_city] = travel_days
                 except:
@@ -377,13 +377,13 @@ def calculate_daily_temperature_scores(from_city, to_city, start_day, travel_day
         interpol_tt += time.time() - start_time
 
     start_time = time.time()
-    for day_offset in range(travel_days):
+    for day_offset in range(max(1, ceil(travel_days))):
 
         if None in from_temps or None in to_temps:
             return float('inf'), 0, 0, True, interpol_tt, spatial_i_tt
 
         # Spatially interpolate between cities based on progress
-        progress = (day_offset + 1) / travel_days
+        progress = min(1.0, (day_offset + 1) / travel_days)
         current_low = from_temps[0] + (to_temps[0] - from_temps[0]) * progress
         current_high = from_temps[1] + (to_temps[1] - from_temps[1]) * progress
 
@@ -505,7 +505,7 @@ def optimized_travel_planner(G, source, target, current_day, temperatures,
         for neighbor in G.neighbors(current_node):
             edge_data = G.get_edge_data(current_node, neighbor)
             distance = edge_data['weight']
-            edge_days = ceil(distance / daily_max_km)
+            edge_days = distance / daily_max_km
             new_acc_days = acc_days + edge_days
 
             (temp_score, _w, _r, violated, interpol_tt, spatial_i_tt) = \
@@ -606,7 +606,7 @@ def calculate_path_score(G, route, connections_dict, start_day, temperatures, de
         else:
             edge_data = G.get_edge_data(from_city, to_city)
             distance = edge_data['weight']
-            edge_days = ceil(distance / daily_max_km)
+            edge_days = distance / daily_max_km
 
         from_c = city_coords.get(from_city) if city_coords else None
         to_c = city_coords.get(to_city) if city_coords else None
@@ -692,8 +692,6 @@ def calculate_route_score(route, current_day, targets_day_estimates, temperature
                 travel_days += local_cluster_info.get(from_rep, {}).get('additional_days', 0) / 2
                 travel_days += local_cluster_info.get(to_rep, {}).get('additional_days', 0) / 2
                 prev_cluster = to_rep
-
-        travel_days = ceil(travel_days)
 
         from_c = city_coords.get(from_city) if city_coords else None
         to_c = city_coords.get(to_city) if city_coords else None
@@ -1554,7 +1552,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                         coord_from = (graph.nodes[from_city]['lat'], graph.nodes[from_city]['lon'])
                         coord_to   = (graph.nodes[to_city]['lat'],   graph.nodes[to_city]['lon'])
                         dist_km    = haversine(coord_from, coord_to)
-                        expected_travel_days = max(1, ceil(dist_km / daily_max_km))
+                        expected_travel_days = dist_km / daily_max_km
                     else:
                         expected_travel_days = targets_day_estimates[from_city + "_" + to_city]
 
@@ -1581,7 +1579,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
 
                 edge_data = graph.get_edge_data(current, next_city)
                 distance = edge_data['weight']
-                seg_days = max(1, ceil(distance / daily_max_km))
+                seg_days = distance / daily_max_km
                 arrival_day = current_day + seg_days
 
                 city_name = graph.nodes[next_city].get('name')

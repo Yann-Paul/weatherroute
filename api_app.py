@@ -1436,11 +1436,13 @@ def run_calculation(job_id: str, params: dict):
             _cid = all_temps_data[_i][0]
             _sd = osrm_distances[_i] if _i < len(osrm_distances) else 0.0
             _rest = rest_days_map.get(_cid, 0)
-            _nd = max(1, all_temps_data[_i + 1][1] - all_temps_data[_i][1] - _rest)
+            _nd = max(0.001, all_temps_data[_i + 1][1] - all_temps_data[_i][1] - _rest)
             _kpd = _sd / _nd if _nd > 0 else 0.0
             _dep_rel = all_temps_data[_i][1] - start_day_val + _rest
-            for _j in range(1, _nd):
-                day_markers.append((round(_cum_km_seg + _j * _kpd, 2), _dep_rel + _j))
+            _first_int = math.ceil(_dep_rel + 1e-9)
+            _last_int = math.floor(_dep_rel + _nd - 1e-9)
+            for _d in range(_first_int, _last_int + 1):
+                day_markers.append((round(_cum_km_seg + (_d - _dep_rel) * _kpd, 2), _d))
             _cum_km_seg += _sd
 
         cum_dist = 0.0
@@ -1820,12 +1822,14 @@ def run_direct_osrm_job(job_id: str, params: dict):
         for _i in range(n_segments):
             _cid = valid_city_ids[_i]
             _sd = osrm_distances[_i] if _i < len(osrm_distances) else 0.0
-            _nd = travel_days[_i] if _i < len(travel_days) else 1
+            _nd = max(0.001, travel_days[_i] if _i < len(travel_days) else 1)
             _kpd = _sd / _nd if _nd > 0 else 0.0
             _rest = rest_days_map.get(_cid, 0)
             _dep_rel = route[_i][1] - start_day_val + _rest
-            for _j in range(1, _nd):
-                day_markers.append((round(_cum_km_seg + _j * _kpd, 2), _dep_rel + _j))
+            _first_int = math.ceil(_dep_rel + 1e-9)
+            _last_int = math.floor(_dep_rel + _nd - 1e-9)
+            for _d in range(_first_int, _last_int + 1):
+                day_markers.append((round(_cum_km_seg + (_d - _dep_rel) * _kpd, 2), _d))
             _cum_km_seg += _sd
 
         def _in_forecast(day):

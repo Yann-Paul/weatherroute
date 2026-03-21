@@ -163,7 +163,7 @@ export function WeatherGrid() {
                   <th scope="row" className="sticky left-0 z-10 bg-background px-3 py-1 whitespace-nowrap text-left font-normal">
                     <div className="font-medium leading-tight">{row.stop.cityName}</div>
                     <div className="text-[11px] text-muted-foreground">
-                      {t.weatherGrid.dayHeader} {row.relDay}
+                      {t.weatherGrid.dayHeader} {Math.round(row.relDay)}
                       {row.restDayOffset > 0 && (
                         <Pause className="ml-1 inline h-2.5 w-2.5 text-muted-foreground" aria-hidden="true" />
                       )}
@@ -172,7 +172,7 @@ export function WeatherGrid() {
                   {columns.map((col) => {
                     const lookupOffset = col.colOffset + row.restDayOffset;
                     const data = row.stop.byOffset[String(lookupOffset)] ?? null;
-                    const calDay = ((startDay + col.colOffset + row.relDay - 1 + 3650) % 365) + 1;
+                    const calDay = ((startDay + col.colOffset + Math.round(row.relDay) - 1 + 3650) % 365) + 1;
                     const dateStr = dayOfYearToDate(calDay, currentYear, t.dateLocale);
                     return (
                       <td key={col.colOffset} className="px-1 py-1">

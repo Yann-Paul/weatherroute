@@ -111,6 +111,7 @@ interface ClimatePoint {
   km: number;
   lat: number;
   lon: number;
+  ele: number;
   tmin: number;
   tmax: number;
   prcp: number;
@@ -130,6 +131,51 @@ function climateInterp(km: number, key: "tmin" | "tmax" | "prcp" | "wspd", cps: 
     }
   }
   return cps[cps.length - 1][key];
+}
+
+/** Interpolate elevation from miniElev at a given km position. */
+function eleAtKm(km: number, miniElev: [number, number, number, number][]): number {
+  if (!miniElev.length) return 0;
+  if (km <= miniElev[0][0]) return miniElev[0][3];
+  for (let i = 1; i < miniElev.length; i++) {
+    if (miniElev[i][0] >= km) {
+      const span = miniElev[i][0] - miniElev[i - 1][0];
+      const tv = span > 0 ? (km - miniElev[i - 1][0]) / span : 0;
+      return miniElev[i - 1][3] + tv * (miniElev[i][3] - miniElev[i - 1][3]);
+    }
+  }
+  return miniElev[miniElev.length - 1][3];
+}
+
+/**
+ * Interpolate a temperature key from climate points, then apply lapse rate
+ * correction for the actual elevation vs the reference elevation at that km.
+ */
+function climateInterpTemp(km: number, ele: number, key: "tmin" | "tmax", cps: ClimatePoint[]): number | null {
+  if (!cps.length) return null;
+  let baseTemp: number;
+  let refEle: number;
+  let refPrcp: number;
+  if (km <= cps[0].km) {
+    baseTemp = cps[0][key]; refEle = cps[0].ele; refPrcp = cps[0].prcp;
+  } else if (km >= cps[cps.length - 1].km) {
+    baseTemp = cps[cps.length - 1][key]; refEle = cps[cps.length - 1].ele; refPrcp = cps[cps.length - 1].prcp;
+  } else {
+    for (let i = 1; i < cps.length; i++) {
+      if (cps[i].km >= km) {
+        const span = cps[i].km - cps[i - 1].km;
+        const tv = span > 0 ? (km - cps[i - 1].km) / span : 0;
+        baseTemp = cps[i - 1][key] + tv * (cps[i][key] - cps[i - 1][key]);
+        refEle   = cps[i - 1].ele  + tv * (cps[i].ele  - cps[i - 1].ele);
+        refPrcp  = cps[i - 1].prcp + tv * (cps[i].prcp - cps[i - 1].prcp);
+        const lapse = (1 - 0.4 * Math.min(1, refPrcp / 5)) / 100;
+        return baseTemp - (ele - refEle) * lapse;
+      }
+    }
+    baseTemp = cps[cps.length - 1][key]; refEle = cps[cps.length - 1].ele; refPrcp = cps[cps.length - 1].prcp;
+  }
+  const lapse = (1 - 0.4 * Math.min(1, refPrcp / 5)) / 100;
+  return baseTemp - (ele - refEle) * lapse;
 }
 
 function climateWdirAt(km: number, cps: ClimatePoint[]): number {
@@ -152,9 +198,10 @@ interface ClimateMarkersProps {
   dailyMode: boolean;
   desiredHigh: number;
   desiredLow: number;
+  buildPopupContent: (cp: ClimatePoint) => string;
 }
 
-function ClimateMarkers({ points, miniElev, currentHour, dailyMode, desiredHigh, desiredLow }: ClimateMarkersProps) {
+function ClimateMarkers({ points, miniElev, currentHour, dailyMode, desiredHigh, desiredLow, buildPopupContent }: ClimateMarkersProps) {
   const { map, isLoaded } = useMap();
   const [zoom, setZoom] = useState(5);
   const isDark = useIsDark();
@@ -233,6 +280,9 @@ function ClimateMarkers({ points, miniElev, currentHour, dailyMode, desiredHigh,
                 )}
               </div>
             </MarkerContent>
+            <MarkerPopup>
+              <div dangerouslySetInnerHTML={{ __html: buildPopupContent(cp) }} />
+            </MarkerPopup>
           </MapMarker>
         );
       })}
@@ -475,6 +525,20 @@ function MapBoundsForecastTracker({ miniElev }: { miniElev: [number, number, num
   return null;
 }
 
+// ─── Zoom tracker (must live inside MapView) ──────────────────────────────────
+
+function ZoomTracker({ onZoom }: { onZoom: (z: number) => void }) {
+  const { map, isLoaded } = useMap();
+  useEffect(() => {
+    if (!map || !isLoaded) return;
+    const update = () => onZoom(map.getZoom());
+    map.on("zoom", update);
+    update();
+    return () => { map.off("zoom", update); };
+  }, [map, isLoaded, onZoom]);
+  return null;
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function ForecastMap() {
@@ -489,6 +553,8 @@ const lang = useLangStore((s) => s.lang);
   const [hourIdx, setHourIdx] = useState(2);
   const [dailyMode, setDailyMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mapZoom, setMapZoom] = useState(5);
+  const handleZoom = useCallback((z: number) => setMapZoom(z), []);
   const [elevExpanded, setElevExpanded] = useState(true);
   const [showTempProfile, setShowTempProfile] = useState(false);
   const isDark = useIsDark();
@@ -502,7 +568,7 @@ const lang = useLangStore((s) => s.lang);
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartStateRef = useRef<any>(null);
-  const stateRef = useRef({ hourIdx, dailyMode, forecast, lang, climatePoints: [] as ClimatePoint[], showTempProfile: false });
+  const stateRef = useRef({ hourIdx, dailyMode, forecast, lang, climatePoints: [] as ClimatePoint[], showTempProfile: false, markerStops: [] as { km: number; relDay: number }[], startDay: 1 as number });
   // stateRef.current is updated after climatePoints is defined below
 
   useEffect(() => {
@@ -559,22 +625,65 @@ const lang = useLangStore((s) => s.lang);
   const routeStops = forecast?.routeStops ?? [];
   const storeDesiredHigh = useResultsStore((s) => s.desiredHigh);
   const storeDesiredLow  = useResultsStore((s) => s.desiredLow);
+  const startDay = useResultsStore((s) => s.startDay);
   const desiredHigh = forecast?.desiredHigh ?? storeDesiredHigh;
   const desiredLow  = forecast?.desiredLow  ?? storeDesiredLow;
   const desiredAvg  = (desiredHigh + desiredLow) / 2;
   const currentHour = HOUR_STEPS[hourIdx];
 
-  // Build climate points from city markers + elevation km positions
+  // Build climate points from city markers + elevation km positions.
+  // Falls back to forecast.routeStops when elevation.cityData isn't loaded yet,
+  // so the elevation profile is immediately colored even before elevation data arrives.
   const climatePoints = useMemo<ClimatePoint[]>(() => {
+    if (markers.length === 0) return [];
+
+    // Primary: precise km positions from elevation.cityData
+    if (elevation?.cityData?.length) {
+      const kmByCity = new Map(elevation.cityData.map((cd) => [cd.cityId, cd.km]));
+      const eleByCity = new Map(elevation.cityData.map((cd) => [cd.cityId, cd.ele]));
+      const me = forecast?.miniElev ?? [];
+      const pts = markers
+        .map((m) => {
+          const km = kmByCity.get(m.id);
+          if (km == null) return null;
+          const ele = eleByCity.get(m.id) ?? eleAtKm(km, me);
+          return { km, lat: m.lat, lon: m.lon, ele, tmin: m.tmin, tmax: m.tmax, prcp: m.prcp, wspd: m.wspd, wdir: m.wdir };
+        })
+        .filter((p): p is ClimatePoint => p != null)
+        .sort((a, b) => a.km - b.km);
+      if (pts.length > 0) return pts;
+    }
+
+    // Fallback: km positions from forecast.routeStops, temperature from nearest marker
+    if (forecast?.routeStops.length) {
+      const me = forecast.miniElev ?? [];
+      return forecast.routeStops
+        .map((rs) => {
+          let best = markers[0], bestDist = Infinity;
+          for (const m of markers) {
+            const d = (m.lat - rs.lat) ** 2 + (m.lon - rs.lon) ** 2;
+            if (d < bestDist) { bestDist = d; best = m; }
+          }
+          const ele = eleAtKm(rs.km, me);
+          return { km: rs.km, lat: rs.lat, lon: rs.lon, ele, tmin: best.tmin, tmax: best.tmax, prcp: best.prcp, wspd: best.wspd, wdir: best.wdir };
+        })
+        .sort((a, b) => a.km - b.km);
+    }
+
+    return [];
+  }, [elevation, markers, forecast]);
+
+  // Stops with km + relDay derived from markers (used for day transitions when no forecast)
+  const markerStops = useMemo<{ km: number; relDay: number }[]>(() => {
     if (!elevation?.cityData || !markers.length) return [];
     const kmByCity = new Map(elevation.cityData.map((cd) => [cd.cityId, cd.km]));
     return markers
       .map((m) => {
         const km = kmByCity.get(m.id);
         if (km == null) return null;
-        return { km, lat: m.lat, lon: m.lon, tmin: m.tmin, tmax: m.tmax, prcp: m.prcp, wspd: m.wspd, wdir: m.wdir };
+        return { km, relDay: m.relDay };
       })
-      .filter((p): p is ClimatePoint => p != null)
+      .filter((p): p is { km: number; relDay: number } => p != null)
       .sort((a, b) => a.km - b.km);
   }, [elevation, markers]);
 
@@ -593,12 +702,13 @@ const lang = useLangStore((s) => s.lang);
       // skip km range covered by forecast
       if (clampedKm >= forecastKmMin - 5 && clampedKm <= forecastKmMax + 5) continue;
       const [lat, lon] = kmToLatLon(clampedKm, miniElev);
-      const tmin = climateInterp(clampedKm, "tmin", climatePoints) ?? 0;
-      const tmax = climateInterp(clampedKm, "tmax", climatePoints) ?? 0;
+      const ele  = eleAtKm(clampedKm, miniElev);
+      const tmin = climateInterpTemp(clampedKm, ele, "tmin", climatePoints) ?? 0;
+      const tmax = climateInterpTemp(clampedKm, ele, "tmax", climatePoints) ?? 0;
       const prcp = climateInterp(clampedKm, "prcp", climatePoints) ?? 0;
       const wspd = climateInterp(clampedKm, "wspd", climatePoints) ?? 0;
       const wdir = climateWdirAt(clampedKm, climatePoints);
-      result.push({ km: clampedKm, lat, lon, tmin, tmax, prcp, wspd, wdir });
+      result.push({ km: clampedKm, lat, lon, ele, tmin, tmax, prcp, wspd, wdir });
     }
     return result;
   }, [climatePoints, miniElev, forecastKmMin, forecastKmMax]);
@@ -614,7 +724,7 @@ const lang = useLangStore((s) => s.lang);
   }, [points, data]);
 
   // Keep stateRef current (used in event handlers)
-  stateRef.current = { hourIdx, dailyMode, forecast, lang, climatePoints, showTempProfile };
+  stateRef.current = { hourIdx, dailyMode, forecast, lang, climatePoints, showTempProfile, markerStops, startDay };
 
   const hourLabels = HOUR_STEPS.map((h) => t.forecastMap.hourLabel(h));
 
@@ -624,20 +734,30 @@ const lang = useLangStore((s) => s.lang);
   );
 
   const dayTransitions = useMemo(() => {
+    const stops: { km: number; relDay: number }[] =
+      routeStops.length > 0 ? routeStops : markerStops;
+    if (stops.length < 2) return [];
     const result: { lat: number; lon: number; relDay: number }[] = [];
-    for (let i = 0; i < routeStops.length - 1; i++) {
-      const s0 = routeStops[i], s1 = routeStops[i + 1];
-      const diff = s1.relDay - s0.relDay;
-      if (diff <= 1) continue;
-      for (let d = 1; d < diff; d++) {
-        const tv = d / diff;
+    for (let i = 0; i < stops.length - 1; i++) {
+      const s0 = stops[i], s1 = stops[i + 1];
+      if (s1.relDay <= s0.relDay) continue;
+      const firstDay = Math.ceil(s0.relDay + 1e-9);
+      const lastDay = Math.floor(s1.relDay - 1e-9);
+      for (let day = firstDay; day <= lastDay; day++) {
+        const tv = (day - s0.relDay) / (s1.relDay - s0.relDay);
         const km = s0.km + tv * (s1.km - s0.km);
         const [lat, lon] = kmToLatLon(km, miniElev);
-        result.push({ lat, lon, relDay: s0.relDay + d });
+        result.push({ lat, lon, relDay: day });
       }
     }
     return result;
-  }, [routeStops, miniElev]);
+  }, [routeStops, climatePoints, miniElev]);
+
+  const dayStep = mapZoom < 4 ? 10 : mapZoom < 5 ? 5 : mapZoom < 6 ? 3 : mapZoom < 7 ? 2 : 1;
+  const visibleDayTransitions = useMemo(
+    () => dayStep <= 1 ? dayTransitions : dayTransitions.filter(dt => dt.relDay % dayStep === 0),
+    [dayTransitions, dayStep]
+  );
 
   const drawChart = useCallback(() => {
     const svg = svgRef.current;
@@ -705,7 +825,7 @@ const lang = useLangStore((s) => s.lang);
       }
       // Fall back to historical climate data for km outside forecast range
       const refKey = (currentHour === 0 || currentHour === 6 || currentHour === 24) ? "tmin" : "tmax";
-      return climateInterp(km, refKey, climatePoints);
+      return climateInterpTemp(km, ele, refKey, climatePoints);
     }
 
     function interpTempByKey(km: number, ele: number, key: "tmax" | "tmin"): number | null {
@@ -725,7 +845,7 @@ const lang = useLangStore((s) => s.lang);
         }
       }
       // Fall back to historical climate data
-      return climateInterp(km, key, climatePoints);
+      return climateInterpTemp(km, ele, key, climatePoints);
     }
 
     // ─── Temperature profile mode ─────────────────────────────────────────────
@@ -789,14 +909,14 @@ const lang = useLangStore((s) => s.lang);
         const safe = cd.name.replace(/&/g, "&amp;").replace(/</g, "&lt;");
         out2 += `<text font-size="9.5" fill="${colText}" font-weight="600" text-anchor="end" font-family="sans-serif" transform="rotate(-38,${xv.toFixed(1)},${(axY2 + 14).toFixed(1)}) translate(${xv.toFixed(1)},${(axY2 + 14).toFixed(1)})">${safe}</text>`;
       }
-      // Day markers
+      // Day markers from elevation.dayMarkers
       { let lastDmX2 = -Infinity;
-        for (const s of routeStops) {
-          if (s.km < kmMin - 1 || s.km > kmMax + 1) continue;
-          const xd = xp(s.km);
+        for (const [dmKm, dmDay] of (elevation?.dayMarkers ?? [])) {
+          if (dmKm < kmMin - 1 || dmKm > kmMax + 1) continue;
+          const xd = xp(dmKm);
           if (xd - lastDmX2 < 28) continue;
           lastDmX2 = xd;
-          const lbl = lang === "de" ? `Tag ${s.relDay}` : `Day ${s.relDay}`;
+          const lbl = lang === "de" ? `Tag ${dmDay}` : `Day ${dmDay}`;
           out2 += `<line x1="${xd.toFixed(1)}" y1="${PT}" x2="${xd.toFixed(1)}" y2="${axY2}" stroke="${colAxis}" stroke-width="0.6" stroke-dasharray="2,3" opacity="0.45"/>`;
           out2 += `<text x="${(xd + 1).toFixed(1)}" y="${(PT + 7).toFixed(1)}" font-size="6.5" fill="${colAxis}" font-family="sans-serif" opacity="0.6">${lbl}</text>`;
         }
@@ -810,7 +930,7 @@ const lang = useLangStore((s) => s.lang);
       out2 += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${axY2}" stroke="${colAxis}" stroke-width="1"/>`;
       out2 += `<line x1="${PL}" y1="${axY2}" x2="${PL + cW}" y2="${axY2}" stroke="${colAxis}" stroke-width="1"/>`;
       out2 += `<line id="fc-cursor" x1="0" y1="${PT}" x2="0" y2="${axY2}" stroke="${colCursor}" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>`;
-      out2 += `<circle id="fc-cursor-dot" cx="0" cy="0" r="3.5" fill="${colWarn}" stroke="${colCard}" stroke-width="1.5" opacity="0.9" visibility="hidden"/>`;
+      out2 += `<circle id="fc-cursor-dot" cx="0" cy="0" r="3.5" fill="${colCursor}" stroke="${colCard}" stroke-width="1.5" opacity="0.9" visibility="hidden"/>`;
       svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
       svg.setAttribute("height", String(H));
       svg.innerHTML = out2;
@@ -832,7 +952,7 @@ const lang = useLangStore((s) => s.lang);
       out += `<text x="${(PL - 4).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${colAxis}" font-family="sans-serif">${e}m</text>`;
     }
 
-    out += `<g clip-path="url(#fc-clip)">`;
+    out += `<g clip-path="url(#fc-clip)" shape-rendering="crispEdges">`;
     if (dailyMode) {
       for (let i = 0; i < miniElev.length - 1; i++) {
         const [km0,,, e0] = miniElev[i], [km1,,, e1] = miniElev[i + 1];
@@ -881,15 +1001,15 @@ const lang = useLangStore((s) => s.lang);
       out += `<text font-size="9.5" fill="${colText}" font-weight="600" text-anchor="end" font-family="sans-serif" transform="rotate(-38,${xv.toFixed(1)},${(axY + 14).toFixed(1)}) translate(${xv.toFixed(1)},${(axY + 14).toFixed(1)})">${safe}</text>`;
     }
 
-    // Day markers from routeStops
+    // Day markers from elevation.dayMarkers
     const MIN_DM_PX = 28;
     let lastDmX = -Infinity;
-    for (const s of routeStops) {
-      if (s.km < kmMin - 1 || s.km > kmMax + 1) continue;
-      const xd = xp(s.km);
+    for (const [dmKm, dmDay] of (elevation?.dayMarkers ?? [])) {
+      if (dmKm < kmMin - 1 || dmKm > kmMax + 1) continue;
+      const xd = xp(dmKm);
       if (xd - lastDmX < MIN_DM_PX) continue;
       lastDmX = xd;
-      const lbl = lang === "de" ? `Tag ${s.relDay}` : `Day ${s.relDay}`;
+      const lbl = lang === "de" ? `Tag ${dmDay}` : `Day ${dmDay}`;
       out += `<line x1="${xd.toFixed(1)}" y1="${PT}" x2="${xd.toFixed(1)}" y2="${axY}" stroke="${colAxis}" stroke-width="0.6" stroke-dasharray="2,3" opacity="0.45"/>`;
       out += `<text x="${(xd + 1).toFixed(1)}" y="${(PT + 7).toFixed(1)}" font-size="6.5" fill="${colAxis}" font-family="sans-serif" opacity="0.6">${lbl}</text>`;
     }
@@ -907,12 +1027,12 @@ const lang = useLangStore((s) => s.lang);
     out += `<line x1="${PL}" y1="${axY}" x2="${PL + cW}" y2="${axY}" stroke="${colAxis}" stroke-width="1"/>`;
 
     out += `<line id="fc-cursor" x1="0" y1="${PT}" x2="0" y2="${axY}" stroke="${colCursor}" stroke-width="1" stroke-dasharray="3,2" visibility="hidden"/>`;
-    out += `<circle id="fc-cursor-dot" cx="0" cy="0" r="3.5" fill="${colWarn}" stroke="${colCard}" stroke-width="1.5" opacity="0.9" visibility="hidden"/>`;
+    out += `<circle id="fc-cursor-dot" cx="0" cy="0" r="3.5" fill="${colCursor}" stroke="${colCard}" stroke-width="1.5" opacity="0.9" visibility="hidden"/>`;
 
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("height", String(H));
     svg.innerHTML = out;
-  }, [miniElev, dailyMode, currentHour, points, data, desiredHigh, desiredLow, visibleKmRange, climatePoints, elevation, forecastEndKm, routeStops, lang, showTempProfile, isDark]);
+  }, [miniElev, dailyMode, currentHour, points, data, desiredHigh, desiredLow, visibleKmRange, climatePoints, elevation, forecastEndKm, lang, showTempProfile, isDark]);
 
   useEffect(() => {
     drawChart();
@@ -958,7 +1078,7 @@ const lang = useLangStore((s) => s.lang);
         }
       }
       const refKey = (hour === 0 || hour === 6 || hour === 24) ? "tmin" : "tmax";
-      return climateInterp(km, refKey, cps);
+      return climateInterpTemp(km, ele, refKey, cps);
     }
 
     function interpByKey(km: number, ele: number, key: "tmax" | "tmin"): number | null {
@@ -976,7 +1096,7 @@ const lang = useLangStore((s) => s.lang);
           }
         }
       }
-      return climateInterp(km, key, cps);
+      return climateInterpTemp(km, ele, key, cps);
     }
 
     const rect = svg.getBoundingClientRect();
@@ -1016,9 +1136,9 @@ const lang = useLangStore((s) => s.lang);
     const colFg = cs?.colTextResolved ? `hsl(${cs.colTextResolved})` : "hsl(var(--foreground))";
     let ttHtml = `<div style="color:${colMuted};font-size:9px;margin-bottom:2px">km ${Math.round(km)}</div>`;
     ttHtml += `<div style="color:${colFg}">⛰ ${Math.round(ele)} m</div>`;
-    // Date at hovered km — use forecast points' day_offset (avoids rest-day gaps)
+    // Date at hovered km — forecast area uses day_offset, historical area uses markerStops
     {
-      const { forecast: fc, lang: lg } = stateRef.current;
+      const { forecast: fc, lang: lg, markerStops: ms, startDay: sd } = stateRef.current;
       const pts = fc?.points ?? [];
       if (pts.length > 0 && km >= pts[0].km) {
         let pi = pts.findIndex((p) => p.km >= km);
@@ -1031,6 +1151,15 @@ const lang = useLangStore((s) => s.lang);
         target.setDate(target.getDate() + offset);
         const jan0 = new Date(target.getFullYear(), 0, 0);
         const absDay = Math.floor((target.getTime() - jan0.getTime()) / 86400000);
+        ttHtml += `<div style="color:${colMuted};font-size:9px">${dayToShortDE(absDay, lg)}</div>`;
+      } else if (ms && ms.length >= 2) {
+        let mi = ms.findIndex((s: { km: number; relDay: number }) => s.km >= km);
+        if (mi < 0) mi = ms.length - 1;
+        if (mi === 0) mi = 1;
+        const s0 = ms[mi - 1], s1 = ms[mi];
+        const tv = s1.km > s0.km ? Math.max(0, Math.min(1, (km - s0.km) / (s1.km - s0.km))) : 0;
+        const relDay = s0.relDay + tv * (s1.relDay - s0.relDay);
+        const absDay = ((sd + Math.round(relDay) - 1 + 3650) % 365) + 1;
         ttHtml += `<div style="color:${colMuted};font-size:9px">${dayToShortDE(absDay, lg)}</div>`;
       }
     }
@@ -1109,6 +1238,30 @@ const lang = useLangStore((s) => s.lang);
     return lines.join("");
   }
 
+  function buildClimatePopupContent(cp: ClimatePoint): string {
+    const lbl = (color: string, text: string) =>
+      `<span style="color:${color};font-weight:600">${text}</span>`;
+    const val = (text: string) => `<b style="color:#1e293b">${text}</b>`;
+    const rb = routeBearingAt(cp.km, miniElev);
+    const climateLabel = lang === "de" ? "Klimadaten 1991–2020" : "Climate data 1991–2020";
+    const rainLabel = lang === "de" ? "Regen:" : "Rain:";
+    const lines = [`<div style="font-family:sans-serif;min-width:150px;font-size:12px;color:#475569">`];
+    lines.push(`<b style="color:#1e293b">km ${Math.round(cp.km)}</b>`);
+    lines.push(`<br><span style="color:#94a3b8">${climateLabel}</span>`);
+    lines.push(`<hr style="margin:6px 0;border-color:#e2e8f0">`);
+    lines.push(`${lbl("#f97316","☀ Tmax:")} ${val(cp.tmax.toFixed(1)+"°C")}<br>`);
+    lines.push(`${lbl("#3b82f6","☽ Tmin:")} ${val(cp.tmin.toFixed(1)+"°C")}<br>`);
+    if (cp.prcp > 0.05) lines.push(`${lbl("#60a5fa","☂ "+rainLabel)} ${val(cp.prcp.toFixed(1)+" mm")}<br>`);
+    if (cp.wspd > 0) {
+      const dirStr = rb != null
+        ? ` <span style="color:${windArrowColor(cp.wdir, rb)};font-weight:700">${compassDir16(cp.wdir)}</span>`
+        : ` ${compassDir16(cp.wdir)}`;
+      lines.push(`${lbl("#6b7280","☴ Wind:")} ${val(cp.wspd.toFixed(1)+" km/h")}${dirStr}<br>`);
+    }
+    lines.push("</div>");
+    return lines.join("");
+  }
+
   // No forecast AND no elevation data to build a fallback map → show info/error
   if (!forecast && miniElev.length < 2) {
     const msg = forecastError ?? t.forecastMap.noForecast;
@@ -1176,9 +1329,10 @@ const lang = useLangStore((s) => s.lang);
       {/* Map */}
       <MapView theme="light" center={[10, 48]} zoom={5} className="h-[450px] w-full rounded-xl lg:h-[550px]">
         <FitBounds coordinates={routeCoords} />
+        <ZoomTracker onZoom={handleZoom} />
         <MapRoute id="forecast-route" coordinates={routeCoords} color="rgba(220,60,40,0.7)" width={3} opacity={0.85} />
 
-        {dayTransitions.map((dt, i) => (
+        {visibleDayTransitions.map((dt, i) => (
           <MapMarker key={`dt-${i}`} longitude={dt.lon} latitude={dt.lat}>
             <MarkerContent>
               <div className="rounded border border-border bg-card/90 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground shadow-sm whitespace-nowrap backdrop-blur-sm">
@@ -1195,12 +1349,12 @@ const lang = useLangStore((s) => s.lang);
                 className="flex size-7 cursor-pointer items-center justify-center rounded-full border-2 text-[9px] font-bold shadow-md"
                 style={{ background: "hsl(var(--primary))", borderColor: "hsl(var(--chart-1))", color: "hsl(var(--primary-foreground))" }}
               >
-                {s.relDay}
+                {Math.round(s.relDay)}
               </div>
             </MarkerContent>
             <MarkerPopup>
               <p className="font-medium">{s.name}</p>
-              <p className="text-xs text-muted-foreground">{t.forecastMap.dayMarker(s.relDay)}</p>
+              <p className="text-xs text-muted-foreground">{t.forecastMap.dayMarker(Math.round(s.relDay))}</p>
             </MarkerPopup>
           </MapMarker>
         ))}
@@ -1223,6 +1377,7 @@ const lang = useLangStore((s) => s.lang);
           dailyMode={dailyMode}
           desiredHigh={desiredHigh}
           desiredLow={desiredLow}
+          buildPopupContent={buildClimatePopupContent}
         />
 
         {forecastEndKm != null && (() => {

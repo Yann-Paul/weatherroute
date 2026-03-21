@@ -41,7 +41,8 @@
       "WebFetch(domain:routing.openstreetmap.de)",
       "WebFetch(domain:project-osrm.org)",
       "Bash(cd:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(cd frontend:*)"
     ]
   }
 }
