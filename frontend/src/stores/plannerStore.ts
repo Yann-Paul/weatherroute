@@ -15,13 +15,18 @@ interface PlannerState {
   nightTempMin: number;
   nightTempMax: number;
   warmingFactor: number;
+  distanceWeight: number;
   tempWeight: number;
+  windWeight: number;
+  rainWeight: number;
   maxDailyKm: number;
   maxTravelDays: number;
   elevResolution: number;
   blockedCountries: string[];
   sortedInput: boolean;
   directOsrm: boolean;
+  routingMode: string;
+  brouterProfile: string;
 
   addCity: (city: CityEntry) => void;
   removeCity: (index: number) => void;
@@ -34,7 +39,10 @@ interface PlannerState {
   removeConnection: (index: number) => void;
   setTemp: (field: string, value: number) => void;
   setWarmingFactor: (value: number) => void;
+  setDistanceWeight: (value: number) => void;
   setTempWeight: (value: number) => void;
+  setWindWeight: (value: number) => void;
+  setRainWeight: (value: number) => void;
   setMaxDailyKm: (value: number) => void;
   setMaxTravelDays: (value: number) => void;
   setElevResolution: (value: number) => void;
@@ -42,6 +50,8 @@ interface PlannerState {
   setBlockedCountries: (codes: string[]) => void;
   setSortedInput: (value: boolean) => void;
   setDirectOsrm: (value: boolean) => void;
+  setRoutingMode: (value: string) => void;
+  setBrouterProfile: (value: string) => void;
   loadFromResults: (data: { startDay: number }) => void;
   restoreSettings: (settings: PlannerSettings) => void;
   reset: () => void;
@@ -60,13 +70,18 @@ const initialState = {
   nightTempMin: -30,
   nightTempMax: 40,
   warmingFactor: 0.6,
-  tempWeight: 0.5,
+  distanceWeight: 0.5,
+  tempWeight: 1.0,
+  windWeight: 0.0,
+  rainWeight: 0.0,
   maxDailyKm: 80,
   maxTravelDays: 365,
   elevResolution: 1000,
   blockedCountries: [] as string[],
   sortedInput: false,
   directOsrm: false,
+  routingMode: "car",
+  brouterProfile: "trekking",
 };
 
 export const usePlannerStore = create<PlannerState>()(
@@ -107,7 +122,10 @@ export const usePlannerStore = create<PlannerState>()(
 
       setTemp: (field, value) => set({ [field]: value }),
       setWarmingFactor: (warmingFactor) => set({ warmingFactor }),
+      setDistanceWeight: (distanceWeight) => set({ distanceWeight }),
       setTempWeight: (tempWeight) => set({ tempWeight }),
+      setWindWeight: (windWeight) => set({ windWeight }),
+      setRainWeight: (rainWeight) => set({ rainWeight }),
       setMaxDailyKm: (maxDailyKm) => set({ maxDailyKm }),
       setMaxTravelDays: (maxTravelDays) => set({ maxTravelDays }),
       setElevResolution: (elevResolution) => set({ elevResolution }),
@@ -122,6 +140,8 @@ export const usePlannerStore = create<PlannerState>()(
       setBlockedCountries: (blockedCountries) => set({ blockedCountries }),
       setSortedInput: (sortedInput) => set({ sortedInput }),
       setDirectOsrm: (directOsrm) => set({ directOsrm }),
+      setRoutingMode: (routingMode) => set({ routingMode }),
+      setBrouterProfile: (brouterProfile) => set({ brouterProfile }),
 
       // Restores only the computed start day — all other settings (cities, temps, etc.)
       // remain as the user originally configured them in the planner.
@@ -146,13 +166,18 @@ export const usePlannerStore = create<PlannerState>()(
           nightTempMin: s.nightTempMin,
           nightTempMax: s.nightTempMax,
           warmingFactor: s.warmingFactor,
+          distanceWeight: s.distanceWeight ?? 0.5,
           tempWeight: s.tempWeight,
+          windWeight: s.windWeight ?? 0,
+          rainWeight: s.rainWeight ?? 0,
           maxDailyKm: s.maxDailyKm,
           maxTravelDays: s.maxTravelDays,
           elevResolution: s.elevResolution,
           blockedCountries: s.blockedCountries,
           sortedInput: s.sortedInput,
           directOsrm: s.directOsrm ?? false,
+          routingMode: s.routingMode ?? "car",
+          brouterProfile: s.brouterProfile ?? "trekking",
         }),
 
       reset: () => set(initialState),

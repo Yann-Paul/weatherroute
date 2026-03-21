@@ -11,15 +11,18 @@ import {
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { ConnectionList } from "./ConnectionList";
+import { CountryCombobox } from "./CountryCombobox";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { useT } from "@/i18n/useT";
 import { PRESET_BLOCKED_COUNTRIES } from "@/utils/constants";
+import { getCountryName } from "@/utils/countries";
 
 export function AdvancedPanel() {
   const store = usePlannerStore();
   const t = useT();
   const tc = t.advanced;
   const locale = t.dateLocale;
+  const lang = t.dateLocale === "de-DE" ? "de" : "en";
 
   return (
     <Collapsible>
@@ -131,10 +134,26 @@ export function AdvancedPanel() {
             </div>
 
             <div className="space-y-2">
+              <Label>{tc.temperature.distanceWeight(store.distanceWeight.toFixed(2))}</Label>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>{tc.temperature.distanceWeightDesc1}</p>
+                <p>{tc.temperature.distanceWeightDesc2}{" "}<span className="font-medium">{tc.temperature.recommended}</span></p>
+                <p>{tc.temperature.distanceWeightDesc3}</p>
+              </div>
+              <Slider
+                min={0}
+                max={1}
+                step={0.05}
+                value={[store.distanceWeight]}
+                onValueChange={([v]) => store.setDistanceWeight(v)}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label>{tc.temperature.tempWeight(store.tempWeight.toFixed(2))}</Label>
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>{tc.temperature.tempWeightDesc1}</p>
-                <p>{tc.temperature.tempWeightDesc2}{" "}<span className="font-medium">{tc.temperature.recommended}</span></p>
+                <p>{tc.temperature.tempWeightDesc2}</p>
                 <p>{tc.temperature.tempWeightDesc3}</p>
               </div>
               <Slider
@@ -143,6 +162,38 @@ export function AdvancedPanel() {
                 step={0.05}
                 value={[store.tempWeight]}
                 onValueChange={([v]) => store.setTempWeight(v)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{tc.temperature.windWeight(store.windWeight.toFixed(2))}</Label>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>{tc.temperature.windWeightDesc1}</p>
+                <p>{tc.temperature.windWeightDesc2}</p>
+                <p>{tc.temperature.windWeightDesc3}</p>
+              </div>
+              <Slider
+                min={0}
+                max={1}
+                step={0.05}
+                value={[store.windWeight]}
+                onValueChange={([v]) => store.setWindWeight(v)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{tc.temperature.rainWeight(store.rainWeight.toFixed(2))}</Label>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>{tc.temperature.rainWeightDesc1}</p>
+                <p>{tc.temperature.rainWeightDesc2}</p>
+                <p>{tc.temperature.rainWeightDesc3}</p>
+              </div>
+              <Slider
+                min={0}
+                max={1}
+                step={0.05}
+                value={[store.rainWeight]}
+                onValueChange={([v]) => store.setRainWeight(v)}
               />
             </div>
           </CardContent>
@@ -255,7 +306,22 @@ export function AdvancedPanel() {
                   {tc.blockedCountries.names[country.code] ?? country.name}
                 </label>
               ))}
+              {store.blockedCountries
+                .filter((code) => !PRESET_BLOCKED_COUNTRIES.some((c) => c.code === code))
+                .map((code) => (
+                  <label key={code} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked
+                      onCheckedChange={() => store.toggleBlockedCountry(code)}
+                    />
+                    {tc.blockedCountries.names[code] ?? getCountryName(code, lang)}
+                  </label>
+                ))}
             </div>
+            <CountryCombobox
+              blockedCodes={store.blockedCountries}
+              onToggle={store.toggleBlockedCountry}
+            />
           </CardContent>
         </Card>
       </CollapsibleContent>

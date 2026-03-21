@@ -24,7 +24,22 @@
       "Bash(find /c/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute/frontend/src -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.jsx\" -o -name \"*.js\" \\\\\\) 2>/dev/null | head -30)",
       "Bash(find \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute/frontend/src\" -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.jsx\" -o -name \"*.js\" \\\\\\) 2>/dev/null | grep -v node_modules)",
       "Bash(ls:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(ls -la /c/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute/ | grep -E \"\\\\.py$|\\\\.tsx$|src|frontend\")",
+      "WebSearch",
+      "WebFetch(domain:brouter.de)",
+      "WebFetch(domain:openrouteservice.org)",
+      "WebFetch(domain:valhalla.github.io)",
+      "WebFetch(domain:docs.graphhopper.com)",
+      "WebFetch(domain:www.cyclestreets.net)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.graphhopper.com)",
+      "WebFetch(domain:zod.github.io)",
+      "WebFetch(domain:wiki.openstreetmap.org)",
+      "WebFetch(domain:account.heigit.org)",
+      "WebFetch(domain:www.naviki.org)",
+      "WebFetch(domain:routing.openstreetmap.de)",
+      "WebFetch(domain:project-osrm.org)"
     ]
   }
 }

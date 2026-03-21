@@ -38,13 +38,18 @@ export interface PlannerFormData {
   nightTempMin: number;
   nightTempMax: number;
   warmingFactor: number;
+  distanceWeight: number;
   tempWeight: number;
+  windWeight: number;
+  rainWeight: number;
   maxDailyKm: number;
   maxTravelDays: number;
   elevResolution: number;
   blockedCountries: string[];
   sortedInput: boolean;
   directOsrm?: boolean;
+  routingMode?: string;
+  brouterProfile?: string;
 }
 
 export type JobStatus = "pending" | "running" | "done" | "preview" | "error";

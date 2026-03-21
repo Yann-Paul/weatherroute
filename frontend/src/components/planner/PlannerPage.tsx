@@ -86,6 +86,8 @@ export function PlannerPage() {
         startDay: computedStartDay,
         cities: store.cities.filter((c) => c.id),
         connections: store.connections.filter((c) => c.fromId && c.toId),
+        routingMode: store.routingMode,
+        brouterProfile: store.brouterProfile,
       });
       setJobId(jobId);
       navigate(`/progress/${jobId}`);
@@ -133,6 +135,40 @@ export function PlannerPage() {
             <Label htmlFor="sorted-input">{t.advanced.travel.sortedInput}</Label>
           </div>
 
+          {/* Routing API selector */}
+          <div className="space-y-3 rounded-xl border bg-card px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">{t.planner.routingMode}</p>
+              <p className="text-xs text-muted-foreground">{t.planner.routingModeDesc}</p>
+            </div>
+            <Select value={store.routingMode} onValueChange={store.setRoutingMode}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="car">{t.planner.routingModes.car}</SelectItem>
+                <SelectItem value="brouter">{t.planner.routingModes.brouter}</SelectItem>
+              </SelectContent>
+            </Select>
+            {store.routingMode === "brouter" && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">{t.planner.brouterProfile}</p>
+                <Select value={store.brouterProfile} onValueChange={store.setBrouterProfile}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="trekking">{t.planner.brouterProfiles.trekking}</SelectItem>
+                    <SelectItem value="fastbike">{t.planner.brouterProfiles.fastbike}</SelectItem>
+                    <SelectItem value="mtb">{t.planner.brouterProfiles.mtb}</SelectItem>
+                    <SelectItem value="safety">{t.planner.brouterProfiles.safety}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          {/* Direct route toggle */}
           <div className="flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3">
             <div>
               <p className="text-sm font-medium" id="direct-osrm-label">{t.planner.directOsrm}</p>

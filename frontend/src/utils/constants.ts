@@ -7,14 +7,16 @@ export const PRESET_BLOCKED_COUNTRIES = [
   { code: "RU", name: "Russia" },
   { code: "UA", name: "Ukraine" },
   { code: "BY", name: "Belarus" },
-  { code: "MD", name: "Moldova" },
-  { code: "TR", name: "Turkey" },
-  { code: "GE", name: "Georgia" },
-  { code: "AM", name: "Armenia" },
   { code: "AZ", name: "Azerbaijan" },
   { code: "SY", name: "Syria" },
   { code: "IQ", name: "Iraq" },
   { code: "IR", name: "Iran" },
+  { code: "LB", name: "Lebanon" },
+  { code: "YE", name: "Yemen" },
+  { code: "AF", name: "Afghanistan" },
+  { code: "LY", name: "Libya" },
+  { code: "SD", name: "Sudan" },
+  { code: "MM", name: "Myanmar" },
 ];
 
 export const WIND_DIRECTIONS = [

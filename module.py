@@ -21,6 +21,12 @@ VALHALLA_BASE  = "https://valhalla1.openstreetmap.de"
 OPEN_ELEV_SRTM = "https://api.open-elevation.com/api/v1/lookup"   # SRTM: 56°S–60°N
 OPEN_ELEV_ASTER= "https://api.opentopodata.org/v1/aster30m"       # ASTER: global to 83°N
 
+# Wind / rain scoring constants
+# These relate weather units to temperature-equivalent units so that
+# temp_weight, wind_weight and rain_weight produce comparable score magnitudes.
+WIND_SCALE = 6.0   # 6 km/h effective headwind  ≈ 1 °C temperature deviation
+RAIN_SCALE = 2.0   # 2 mm/day precipitation      ≈ 1 °C temperature deviation
+
 def _elev_api(latlons):
     """Return (url, batch_size, payload_fn) for the appropriate elevation API.
     Uses ASTER (opentopodata) for routes above 59°N or below 56°S; SRTM otherwise.
@@ -69,6 +75,14 @@ def load_city_ids_by_country(file_path='city_ids_by_country.json'):
         city_ids_by_country = json.load(f)
     return city_ids_by_country
 
+def calculate_bearing(lat1, lon1, lat2, lon2):
+    """Return initial bearing (0-360°) from point 1 to point 2."""
+    lat1, lat2 = radians(lat1), radians(lat2)
+    dlon = radians(lon2 - lon1)
+    x = sin(dlon) * cos(lat2)
+    y = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlon)
+    return (math.degrees(atan2(x, y)) + 360) % 360
+
 def remove_nodes_for_blocked_countries(graph, blocked_countries, city_ids_by_country):
     # Collect all city IDs to block
     cities_to_block = set()
@@ -116,8 +130,9 @@ def haversine(coord1, coord2):
          cos(radians(lat2)) * sin(dlon/2)**2)
     return R * 2 * atan2(sqrt(a), sqrt(1 - a))
 
-def calc_targets_day_estimates(graph,cities,daily_max_km,temp_weight = 0):
+def calc_targets_day_estimates(graph, cities, daily_max_km, distance_weight=1.0):
     targets_day_estimates = {}
+    weather_factor = 1 + 0.3 * (1 - distance_weight)  # more slack when weather matters
     for i, from_city in enumerate(cities):
         for j, to_city in enumerate(cities):
             if i < j:
@@ -126,17 +141,17 @@ def calc_targets_day_estimates(graph,cities,daily_max_km,temp_weight = 0):
                     # Get detailed path through graph edges
                     path_segment = nx.shortest_path(graph, from_city, to_city, weight='weight')
                     for k in range(len(path_segment)-1):
-                        
+
                         current = path_segment[k]
                         next_city = path_segment[k+1]
-                        
+
                         # Get edge data and calculate travel days
                         edge_data = graph.get_edge_data(current, next_city)
                         distance = edge_data['weight']
-                        # adjust for longer routh due to temperature optimization
-                        distance = distance * (1 + 0.3 * temp_weight)
+                        # adjust for longer route due to weather optimization
+                        distance = distance * weather_factor
                         travel_days += max(1, ceil(distance / daily_max_km))
-    
+
                     targets_day_estimates[from_city +"_"+ to_city] = targets_day_estimates[to_city +"_"+ from_city] = travel_days
                 except:
                     print("Error couldn't calculate travel day estimate for ",graph.nodes[from_city]['name'],graph.nodes[to_city]['name'])
@@ -331,60 +346,117 @@ def calculate_daily_temperature_scores(from_city, to_city, start_day, travel_day
                                     desired_low_temp=None, desired_high_temp=None,
                                     min_low_temp=float('-inf'), max_low_temp=float('inf'),
                                     min_high_temp=float('-inf'), max_high_temp=float('inf'),
-                                    interpol_tt=None, spatial_i_tt=None, warming_factor=0.0):
+                                    interpol_tt=None, spatial_i_tt=None, warming_factor=0.0,
+                                    from_coords=None, to_coords=None,
+                                    wind_weight=0.0, rain_weight=0.0):
     """
-    Calculate temperature scores for each day of travel between cities.
+    Calculate temperature, wind and rain scores for each day of travel between cities.
     Uses both temporal (between months) and spatial (between cities) interpolation.
-    Returns (average_score, violated_constraints)
+    Returns (avg_temp_score, avg_wind_score, avg_rain_score, violated_constraints,
+             interpol_tt, spatial_i_tt)
     """
     daily_scores = []
+    daily_wind_scores = []
+    daily_rain_scores = []
     violations = 0
-    
+
+    need_weather = (wind_weight > 0 or rain_weight > 0) and from_coords and to_coords
+
     # Get interpolated temperatures for both cities for start and end day
     start_time = time.time()
     from_temps = get_interpolated_temperature(from_city, start_day, temperatures, warming_factor)
     to_temps = get_interpolated_temperature(to_city, start_day+travel_days, temperatures, warming_factor)
+
+    if need_weather:
+        from_weather = get_interpolated_weather(from_city, start_day, temperatures, warming_factor)
+        to_weather = get_interpolated_weather(to_city, start_day+travel_days, temperatures, warming_factor)
+        bearing = calculate_bearing(from_coords[0], from_coords[1],
+                                    to_coords[0], to_coords[1])
+
     if interpol_tt is not None:
-        interpol_tt += time.time() - start_time   
-    
+        interpol_tt += time.time() - start_time
+
     start_time = time.time()
     for day_offset in range(travel_days):
-        
+
         if None in from_temps or None in to_temps:
-            return float('inf'), True, interpol_tt, spatial_i_tt
-        
+            return float('inf'), 0, 0, True, interpol_tt, spatial_i_tt
+
         # Spatially interpolate between cities based on progress
         progress = (day_offset + 1) / travel_days
         current_low = from_temps[0] + (to_temps[0] - from_temps[0]) * progress
         current_high = from_temps[1] + (to_temps[1] - from_temps[1]) * progress
-        
+
         # Check temperature constraints
         if not (min_low_temp <= current_low <= max_low_temp) or \
            not (min_high_temp <= current_high <= max_high_temp):
             violations += 1
             continue
-        
+
         # Calculate temperature preference scores
         daily_score = 0
         num_scores = 0
-        
+
         if desired_low_temp is not None:
             daily_score += abs(current_low - desired_low_temp) ** exp
             num_scores += 1
-        
+
         if desired_high_temp is not None:
             daily_score += abs(current_high - desired_high_temp) ** exp
             num_scores += 1
-        
+
         if num_scores > 0:
             daily_scores.append(daily_score / num_scores)
+
+        # --- Wind score ---
+        if need_weather and wind_weight > 0:
+            # Indices: 4=wdir (vector-averaged), 5=wspd_resultant (vector-averaged magnitude)
+            fw_wdir = from_weather[4] if len(from_weather) > 4 else None
+            fw_wspd = from_weather[5] if len(from_weather) > 5 else None
+            tw_wdir = to_weather[4] if len(to_weather) > 4 else None
+            tw_wspd = to_weather[5] if len(to_weather) > 5 else None
+
+            if fw_wspd is not None and fw_wdir is not None and tw_wspd is not None and tw_wdir is not None:
+                # Spatially interpolate wind (vector average)
+                fw_rad = radians(fw_wdir)
+                tw_rad = radians(tw_wdir)
+                wx = fw_wspd * cos(fw_rad) * (1 - progress) + tw_wspd * cos(tw_rad) * progress
+                wy = fw_wspd * sin(fw_rad) * (1 - progress) + tw_wspd * sin(tw_rad) * progress
+                wspd_interp = sqrt(wx**2 + wy**2)
+                wdir_interp = math.degrees(atan2(wy, wx)) % 360
+
+                # Direction wind blows TO = wdir + 180
+                angle_diff = radians((wdir_interp + 180) - bearing)
+                effective_wind = wspd_interp * cos(angle_diff)
+
+                # Score: headwind (negative effective) → positive score (bad)
+                wind_equiv = -effective_wind / WIND_SCALE
+                wind_day_score = math.copysign(abs(wind_equiv) ** exp, wind_equiv)
+                daily_wind_scores.append(wind_day_score)
+            # else: skip day (no penalty)
+
+        # --- Rain score ---
+        if need_weather and rain_weight > 0:
+            fp = from_weather[2] if len(from_weather) > 2 else None
+            tp = to_weather[2] if len(to_weather) > 2 else None
+
+            if fp is not None and tp is not None:
+                prcp_interp = fp * (1 - progress) + tp * progress
+                rain_equiv = prcp_interp / RAIN_SCALE
+                daily_rain_scores.append(rain_equiv ** exp)
+            # else: skip day (excluded from average)
+
     if spatial_i_tt is not None:
-        spatial_i_tt += time.time() - start_time  
-        
+        spatial_i_tt += time.time() - start_time
+
     if not daily_scores:
-        return float('inf'), violations > 0, interpol_tt, spatial_i_tt
-    
-    return sum(daily_scores) / len(daily_scores), violations > 0, interpol_tt, spatial_i_tt
+        return float('inf'), 0, 0, violations > 0, interpol_tt, spatial_i_tt
+
+    avg_temp = sum(daily_scores) / len(daily_scores)
+    avg_wind = sum(daily_wind_scores) / len(daily_wind_scores) if daily_wind_scores else 0
+    avg_rain = sum(daily_rain_scores) / len(daily_rain_scores) if daily_rain_scores else 0
+
+    return avg_temp, avg_wind, avg_rain, violations > 0, interpol_tt, spatial_i_tt
 
 # The rest of the custom_shortest_path_with_averaging function remains the same
 
@@ -392,7 +464,7 @@ def optimized_travel_planner(G, source, target, current_day, temperatures,
                             daily_max_km, expected_travel_days,
                             desired_low_temp, desired_high_temp,
                             min_low_temp, max_low_temp, min_high_temp, max_high_temp,
-                            temp_weight=0.5, exp=2, time_penalty_weight=0.3,
+                            temp_weight=0.5, exp=2, time_penalty_weight=0.3, distance_weight=0.5,
                             heuristic_weight=2,
                             interpol_tt=None, spatial_i_tt=None,
                             warming_factor=0.0):
@@ -436,7 +508,7 @@ def optimized_travel_planner(G, source, target, current_day, temperatures,
             edge_days = ceil(distance / daily_max_km)
             new_acc_days = acc_days + edge_days
 
-            (temp_score, violated, interpol_tt, spatial_i_tt) = \
+            (temp_score, _w, _r, violated, interpol_tt, spatial_i_tt) = \
                 calculate_daily_temperature_scores(
                     current_node, neighbor, current_day + acc_days, edge_days,
                     temperatures, exp, desired_low_temp, desired_high_temp,
@@ -450,8 +522,8 @@ def optimized_travel_planner(G, source, target, current_day, temperatures,
             new_temp_sum = temp_sum + temp_score * edge_days
             avg_temp = new_temp_sum / new_acc_days if new_acc_days > 0 else 0
 
-            temp_component = temp_weight * avg_temp
-            time_component = (1 - temp_weight) * new_acc_days
+            temp_component = (1 - distance_weight) * avg_temp
+            time_component = distance_weight * new_acc_days
             new_g_score = time_component + temp_component
 
             # Heuristic calculation: estimate the remaining days by comparing the remaining dist with total dist and 
@@ -510,19 +582,22 @@ def optimized_travel_planner(G, source, target, current_day, temperatures,
 
     return path, best_score, interpol_tt, spatial_i_tt
 
-def calculate_path_score(G,route, connections_dict, start_day, temperatures, desired_low_temp, desired_high_temp,
+def calculate_path_score(G, route, connections_dict, start_day, temperatures, desired_low_temp, desired_high_temp,
            min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, daily_max_km, max_days, exp=2,
-           interpol_tt=None, spatial_i_tt=None, warming_factor=0.0):
+           interpol_tt=None, spatial_i_tt=None, warming_factor=0.0,
+           wind_weight=0.0, rain_weight=0.0, city_coords=None, distance_weight=0.5):
     """
     Cluster-compatible score calculation.
     """
     temp_sum = 0
-    total_score = 0
+    wind_sum = 0
+    rain_sum = 0
     total_days = 0
     violations = 0
     current_day = start_day
-    
-    
+    wind_days = 0
+    rain_days = 0
+
     for i in range(len(route) - 1):
         from_city, to_city = route[i], route[i + 1]
         if connections_dict.get(from_city) == to_city:
@@ -533,96 +608,121 @@ def calculate_path_score(G,route, connections_dict, start_day, temperatures, des
             distance = edge_data['weight']
             edge_days = ceil(distance / daily_max_km)
 
-        if temp_weight > 0 or max_high_temp < float('inf') or max_low_temp < float('inf') or min_high_temp > float('-inf') or min_low_temp > float('-inf'):
-            (temp_score, violated, interpol_tt, spatial_i_tt) = \
+        from_c = city_coords.get(from_city) if city_coords else None
+        to_c = city_coords.get(to_city) if city_coords else None
+
+        if temp_weight > 0 or wind_weight > 0 or rain_weight > 0 or max_high_temp < float('inf') or max_low_temp < float('inf') or min_high_temp > float('-inf') or min_low_temp > float('-inf'):
+            (temp_score, w_score, r_score, violated, interpol_tt, spatial_i_tt) = \
                 calculate_daily_temperature_scores(
                     from_city, to_city, current_day + total_days, edge_days,
                     temperatures, exp, desired_low_temp, desired_high_temp,
                     min_low_temp, max_low_temp, min_high_temp, max_high_temp,
-                    interpol_tt, spatial_i_tt, warming_factor
+                    interpol_tt, spatial_i_tt, warming_factor,
+                    from_coords=from_c, to_coords=to_c,
+                    wind_weight=wind_weight, rain_weight=rain_weight
                 )
 
             if violated:
                 violations += 1
 
             temp_sum += temp_score * edge_days
+            if w_score != 0:
+                wind_sum += w_score * edge_days
+                wind_days += edge_days
+            if r_score != 0:
+                rain_sum += r_score * edge_days
+                rain_days += edge_days
 
-            
         total_days += edge_days
-        
+
         if total_days > max_days:
             return float('inf'), float('inf'), interpol_tt, spatial_i_tt
-        
-    
+
     temp_score = temp_sum / total_days if total_days > 0 else 0
-    end_score = 3 * temp_score* temp_weight + (1 - temp_weight) * total_days + 100 * violations
+    wind_score = wind_sum / wind_days if wind_days > 0 else 0
+    rain_score = rain_sum / rain_days if rain_days > 0 else 0
+    weather_score = temp_score * temp_weight + wind_score * wind_weight + rain_score * rain_weight
+    end_score = 3 * (1 - distance_weight) * weather_score + distance_weight * total_days + 100 * violations
     if math.isnan(end_score):
         print("score is nan")
     return end_score, total_days, interpol_tt, spatial_i_tt
 
 # ---------------------- Modified Route Calculation ----------------------
 def calculate_route_score(route, current_day, targets_day_estimates, temperatures, desired_low_temp, desired_high_temp,
-           min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp=2,
+           min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, rain_weight, wind_weight, max_days, exp=2,
            interpol_tt=None, spatial_i_tt=None,
-           city_to_cluster=None, cluster_info=None, warming_factor=0.0):
+           city_to_cluster=None, cluster_info=None, warming_factor=0.0, city_coords=None, distance_weight=0.5):
     """
     Cluster-compatible score calculation.
     """
-    total_score = 0
+    total_temp_score = 0
+    total_wind_score = 0
+    total_rain_score = 0
     total_days = 0
     violations = 0
     prev_cluster = None
     days_track = []
-    
-    
+
+
     # Create default cluster mapping if not provided
     local_cluster_map = city_to_cluster or {city: city for city in route}
     local_cluster_info = cluster_info or {}
-    
+
     for i in range(len(route) - 1):
         from_city, to_city = route[i], route[i + 1]
         try:
             base_days = targets_day_estimates[from_city + "_" + to_city]
         except KeyError:
             #print(f"Error: No travel estimate found for {from_city} -> {to_city}")
-            total_score += 1000
+            total_temp_score += 1000
             days_track.append(1)
             total_days += 1
             continue
         travel_days = base_days
-        
+
         # Apply cluster transition days if cluster info exists
         if city_to_cluster is not None:
             from_rep = local_cluster_map.get(from_city, from_city)
             to_rep = local_cluster_map.get(to_city, to_city)
-            
+
             if from_rep != to_rep:
                 if prev_cluster and prev_cluster != from_rep:
                     travel_days += local_cluster_info.get(prev_cluster, {}).get('additional_days', 0) / 2
-                
+
                 travel_days += local_cluster_info.get(from_rep, {}).get('additional_days', 0) / 2
                 travel_days += local_cluster_info.get(to_rep, {}).get('additional_days', 0) / 2
                 prev_cluster = to_rep
 
         travel_days = ceil(travel_days)
-        if temp_weight > 0 or max_high_temp < float('inf') or max_low_temp < float('inf') or min_high_temp > float('-inf') or min_low_temp > float('-inf'):
-            temp_score, violated, interpol_tt, spatial_i_tt = calculate_daily_temperature_scores(
+
+        from_c = city_coords.get(from_city) if city_coords else None
+        to_c = city_coords.get(to_city) if city_coords else None
+
+        if temp_weight > 0 or wind_weight > 0 or rain_weight > 0 or max_high_temp < float('inf') or max_low_temp < float('inf') or min_high_temp > float('-inf') or min_low_temp > float('-inf'):
+            temp_score, w_score, r_score, violated, interpol_tt, spatial_i_tt = calculate_daily_temperature_scores(
                 from_city, to_city, current_day + total_days, travel_days, temperatures, exp, desired_low_temp, desired_high_temp,
-                min_low_temp, max_low_temp, min_high_temp, max_high_temp, interpol_tt, spatial_i_tt, warming_factor
+                min_low_temp, max_low_temp, min_high_temp, max_high_temp, interpol_tt, spatial_i_tt, warming_factor,
+                from_coords=from_c, to_coords=to_c,
+                wind_weight=wind_weight, rain_weight=rain_weight
             )
 
-            if temp_weight >0:
-                total_score += temp_score * temp_weight
+            if temp_weight > 0:
+                total_temp_score += temp_score * temp_weight
+            if wind_weight > 0:
+                total_wind_score += w_score * wind_weight
+            if rain_weight > 0:
+                total_rain_score += r_score * rain_weight
             if violated:
                 violations += 1
-            
+
         total_days += travel_days
         days_track.append(travel_days)
-        
+
         if total_days > max_days:
             return float('inf'), float('inf'), days_track, interpol_tt, spatial_i_tt
-    
-    end_score = 3*total_score/(len(route)-1) + (1 - temp_weight) * total_days + 100 * violations
+
+    total_weather = (total_temp_score + total_wind_score + total_rain_score) / (len(route)-1)
+    end_score = 3 * (1 - distance_weight) * total_weather + distance_weight * total_days + 100 * violations
     if math.isnan(end_score):
         print("score is nan")
     return end_score, total_days, days_track, interpol_tt, spatial_i_tt
@@ -630,9 +730,10 @@ def calculate_route_score(route, current_day, targets_day_estimates, temperature
 # ---------------------- Modified Nearest Neighbor ----------------------
 def nearest_neighbor_with_random(start, target_cities, connections_dict, targets_day_estimates, city_names, max_days, start_day, temperatures,
                                 desired_low_temp, desired_high_temp, min_low_temp, max_low_temp, min_high_temp,
-                                max_high_temp, temp_weight, sun_weight, wind_weight, randomization=0, exp=2,
+                                max_high_temp, temp_weight, rain_weight, wind_weight, randomization=0, exp=2,
                                 interpol_tt=None, spatial_i_tt=None,
-                                city_to_cluster=None, cluster_info=None, warming_factor=0.0):
+                                city_to_cluster=None, cluster_info=None, warming_factor=0.0, city_coords=None,
+                                distance_weight=0.5):
     """
     Cluster-compatible version of nearest neighbor algorithm.
     """
@@ -682,8 +783,9 @@ def nearest_neighbor_with_random(start, target_cities, connections_dict, targets
                     score, _, _, interpol_tt, spatial_i_tt = calculate_route_score(
                         [current, next_city], start_day + current_days, targets_day_estimates, temperatures,
                         desired_low_temp, desired_high_temp, min_low_temp, max_low_temp, min_high_temp,
-                        max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp, interpol_tt,
-                        spatial_i_tt, city_to_cluster, cluster_info, warming_factor
+                        max_high_temp, temp_weight, rain_weight, wind_weight, max_days, exp, interpol_tt,
+                        spatial_i_tt, city_to_cluster, cluster_info, warming_factor, city_coords,
+                        distance_weight
                     )
                     neighbor_scores.append((score, next_city, effective_days))
             
@@ -713,30 +815,32 @@ def nearest_neighbor_with_random(start, target_cities, connections_dict, targets
 
 def improve_route(route, connections_dict, current_day, targets_day_estimates, temperatures,
                  desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
-                 min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp=2, interpol_tt=None, spatial_i_tt=None,
-                 city_to_cluster=None, cluster_info=None, warming_factor=0.0):
+                 min_high_temp, max_high_temp, temp_weight, rain_weight, wind_weight, max_days, exp=2, interpol_tt=None, spatial_i_tt=None,
+                 city_to_cluster=None, cluster_info=None, warming_factor=0.0, city_coords=None,
+                 distance_weight=0.5):
    """
    Optimizes route using 2-opt local search:
    1. Try swapping all possible pairs of route segments
    2. If swap improves score, keep the change
    3. Repeat until no improvements found
-   
+
    Returns:
    - Optimized route and its score
    - Updated interpolation trackers
    """
    if not route:
        return None, float('inf'), interpol_tt, spatial_i_tt
-       
+
    improved = True
    best_score, _, days_track, interpol_tt, spatial_i_tt = calculate_route_score(
        route, current_day, targets_day_estimates, temperatures, desired_low_temp,
-       desired_high_temp, min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp,
-       interpol_tt, spatial_i_tt, city_to_cluster, cluster_info, warming_factor
+       desired_high_temp, min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, rain_weight, wind_weight, max_days, exp,
+       interpol_tt, spatial_i_tt, city_to_cluster, cluster_info, warming_factor, city_coords,
+       distance_weight
        )
    best_route = route
    best_days_track = days_track
-   
+
    while improved:
        improved = False
        for i in range(1, len(route) - 1):
@@ -750,8 +854,9 @@ def improve_route(route, connections_dict, current_day, targets_day_estimates, t
                     new_route = route[:i] + list(reversed(route[i:j + 1])) + route[j + 1:]
                     new_score, _, days_track, interpol_tt, spatial_i_tt = calculate_route_score(
                         new_route, current_day, targets_day_estimates, temperatures, desired_low_temp, desired_high_temp,
-                        min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp, interpol_tt, spatial_i_tt,
-                        city_to_cluster, cluster_info, warming_factor
+                        min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, rain_weight, wind_weight, max_days, exp, interpol_tt, spatial_i_tt,
+                        city_to_cluster, cluster_info, warming_factor, city_coords,
+                        distance_weight
                         )
 
                     if  new_score < best_score:
@@ -771,18 +876,19 @@ def improve_route(route, connections_dict, current_day, targets_day_estimates, t
                     new_route = route[:i] + route[j:j+1] + route[i:j] +  route[j + 1:]
                     new_score, _, days_track, interpol_tt, spatial_i_tt = calculate_route_score(
                         new_route, current_day, targets_day_estimates, temperatures, desired_low_temp, desired_high_temp,
-                        min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight, max_days, exp, interpol_tt, spatial_i_tt,
-                        city_to_cluster, cluster_info, warming_factor
+                        min_low_temp, max_low_temp, min_high_temp, max_high_temp, temp_weight, rain_weight, wind_weight, max_days, exp, interpol_tt, spatial_i_tt,
+                        city_to_cluster, cluster_info, warming_factor, city_coords,
+                        distance_weight
                         )
-                    
+
                     if  new_score < best_score:
                         best_score = new_score
                         best_route = new_route
                         best_days_track = days_track
                         improved = True
                         route = new_route  # Update the route for the next iteration
-                    
-   
+
+
    return best_route, best_score, best_days_track, interpol_tt, spatial_i_tt
 
 
@@ -845,7 +951,7 @@ def solve_cluster_tsp(entry_city = None, exit_city = None, cluster_cities = None
                      interpol_tt = None, spatial_i_tt = None, warming_factor=0.0):
     """
     Solves TSP for cluster cities with optional entry/exit constraints.
-    Uses your existing algorithm with temp_weight=0 sun_weight=0 and wind_weight=0.
+    Uses your existing algorithm with temp_weight=0 rain_weight=0 and wind_weight=0.
     """
     # Handle edge cases
     if len(cluster_cities) == 0:
@@ -885,7 +991,7 @@ def solve_cluster_tsp(entry_city = None, exit_city = None, cluster_cities = None
                 min_high_temp=min_high_temp,
                 max_high_temp=max_high_temp,
                 temp_weight=0,  # Force distance-only optimization
-                sun_weight=0,
+                rain_weight=0,
                 wind_weight=0,
                 randomization=0.1,
                 exp=exp,
@@ -926,8 +1032,8 @@ def solve_cluster_tsp(entry_city = None, exit_city = None, cluster_cities = None
     else:
         return [], float('inf')
 
-def dynamic_cluster_cities(cities, city_coords, temperatures, targets_day_estimates, 
-                            current_day, desired_low_temp, desired_high_temp, temp_weight,
+def dynamic_cluster_cities(cities, city_coords, temperatures, targets_day_estimates,
+                            current_day, desired_low_temp, desired_high_temp, distance_weight,
                             auto_threshold_percentile=25):
     """
     Dynamically cluster cities using adaptive threshold based on:
@@ -943,7 +1049,7 @@ def dynamic_cluster_cities(cities, city_coords, temperatures, targets_day_estima
     # 1. Calculate normalized combined distance matrix
     combined_dist = create_combined_distance_matrix(
         cities, city_coords, temperatures, targets_day_estimates, current_day,
-        desired_low_temp, desired_high_temp, temp_weight
+        desired_low_temp, desired_high_temp, distance_weight
     )
     
     # 2. Calculate automatic distance threshold
@@ -968,12 +1074,12 @@ def dynamic_cluster_cities(cities, city_coords, temperatures, targets_day_estima
 
 
 def create_combined_distance_matrix(cities, city_coords, temperatures, targets_day_estimates, current_day,
-                                   desired_low_temp, desired_high_temp, temp_weight):
+                                   desired_low_temp, desired_high_temp, distance_weight):
     """
     Enhanced distance matrix with automatic normalization:
     - Geographic distances normalized to [0,1]
     - Temperature distances normalized to [0,1]
-    - Weighted combination based on temp_weight
+    - Weighted combination based on distance_weight
     """
     num_cities = len(cities)
     day_dist = np.zeros((num_cities, num_cities))
@@ -1012,10 +1118,9 @@ def create_combined_distance_matrix(cities, city_coords, temperatures, targets_d
                 if i < j:
                     temp_dist[i,j] = temp_dist[j,i] = abs(temp_scores[city1] - temp_scores[city2]) / max_temp_diff
                 
-    #return temp_weight * temp_dist + (1 - temp_weight) * 
-    # Combine distances based on temp_weight 
-    # but we always double count the day_dist since the days travelled will also account for temperature differences
-    return temp_weight * temp_dist + 2 * day_dist
+    # Combine distances: lower distance_weight → more weather influence on clustering
+    weather_influence = 1 - distance_weight
+    return weather_influence * temp_dist + 2 * day_dist
 
 def calculate_cluster_metrics(graph, cluster_cities, city_names, city_coords, daily_max_km):
     """Calculate representative city and additional days for a cluster"""
@@ -1037,7 +1142,7 @@ def calculate_cluster_metrics(graph, cluster_cities, city_names, city_coords, da
     
     # 2. Calculate additional days
     # Step 1: TSP days with temp_weight=0
-    targets_day_estimates = calc_targets_day_estimates(graph,cluster_cities,daily_max_km,temp_weight = 0)
+    targets_day_estimates = calc_targets_day_estimates(graph, cluster_cities, daily_max_km, distance_weight=1.0)
     intra_cluster_route, cluster_days = solve_cluster_tsp(cluster_cities = cluster_cities, targets_day_estimates = targets_day_estimates,
                                             city_names = city_names, max_days = float('inf'), exp = 0)
     
@@ -1052,14 +1157,14 @@ def calculate_cluster_metrics(graph, cluster_cities, city_names, city_coords, da
     return representative, additional_days
 
 def preprocess_clusters(graph, target_cities, city_coords, temperatures, targets_day_estimates, city_names,
-                        daily_max_km, current_day, desired_low_temp, desired_high_temp, 
-                        temp_weight, auto_threshold_percentile
+                        daily_max_km, current_day, desired_low_temp, desired_high_temp,
+                        distance_weight, auto_threshold_percentile
                         ):
     """Cluster cities and calculate cluster metrics"""
     # Use previous dynamic clustering implementation
-    clusters = dynamic_cluster_cities(target_cities, city_coords, temperatures, targets_day_estimates, 
-                                      current_day, desired_low_temp, desired_high_temp, 
-                                      temp_weight, auto_threshold_percentile)
+    clusters = dynamic_cluster_cities(target_cities, city_coords, temperatures, targets_day_estimates,
+                                      current_day, desired_low_temp, desired_high_temp,
+                                      distance_weight, auto_threshold_percentile)
     
     cluster_info = {}
     city_to_cluster = {}
@@ -1147,7 +1252,8 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                       high_temp_range=(float('-inf'), float('inf')), daily_max_km=100,
                       max_days=30, candidate_limit=8,
                       desired_low_temp=15, desired_high_temp=25,
-                      temp_weight=0.5, sun_weight=0.5, wind_weight=0.5, auto_threshold_percentile=20, exp=2,
+                      temp_weight=0.5, rain_weight=0.0, wind_weight=0.0, distance_weight=0.5,
+                      auto_threshold_percentile=20, exp=2,
                       sorted_input=False, city_rest_days=None, warming_factor=0.0):
     """
     Find optimal route considering both distance and temperature preferences.
@@ -1174,7 +1280,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
     start_day_provided = start_day is not None
     if start_day is None:
         start_day = 111
-        if temp_weight > 0:
+        if temp_weight > 0 or wind_weight > 0 or rain_weight > 0:
             start_day_list = [20, 111, 202, 293]
         else:
             start_day_list = [start_day]
@@ -1199,6 +1305,9 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
             reason = (f'Stadt (ID {city}) ist nicht im Graphen – '
                       f'möglicherweise in einem gesperrten Land.')
             return None, None, reason
+
+    # Build city_coords for all graph nodes (needed for wind/rain scoring)
+    city_coords = {cid: (graph.nodes[cid]['lat'], graph.nodes[cid]['lon']) for cid in graph.nodes()}
 
     connections_dict = {}
     if connections:
@@ -1245,7 +1354,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
     # NORMAL MODE: clustering + optimization
     # ══════════════════════════════════════════════════════════════════
     else:
-        targets_day_estimates = calc_targets_day_estimates(graph, target_cities, daily_max_km, temp_weight)
+        targets_day_estimates = calc_targets_day_estimates(graph, target_cities, daily_max_km, distance_weight)
 
         start_time = time.time()
 
@@ -1269,7 +1378,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
         cluster_info, city_to_cluster = preprocess_clusters(
             graph, cluster_cities, coords, temperatures,
             targets_day_estimates, city_names, daily_max_km, start_day,
-            desired_low_temp, desired_high_temp, temp_weight, auto_threshold_percentile
+            desired_low_temp, desired_high_temp, distance_weight, auto_threshold_percentile
         )
 
         for city in add_cities_to_cluster:
@@ -1295,17 +1404,19 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                         start, cluster_info, connections_dict, targets_day_estimates, city_names,
                         max_days, sd, temperatures, desired_low_temp, desired_high_temp,
                         min_low_temp, max_low_temp, min_high_temp, max_high_temp,
-                        temp_weight, sun_weight, wind_weight, randomization=0.2, exp=exp,
+                        temp_weight, rain_weight, wind_weight, randomization=0.2, exp=exp,
                         interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
                         city_to_cluster=city_to_cluster, cluster_info=cluster_info,
-                        warming_factor=warming_factor
+                        warming_factor=warming_factor, city_coords=city_coords,
+                        distance_weight=distance_weight
                     )
                     score, _, _, interpol_tt, spatial_i_tt = calculate_route_score(
                         initial_route, sd, targets_day_estimates, temperatures,
                         desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
-                        min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight,
+                        min_high_temp, max_high_temp, temp_weight, rain_weight, wind_weight,
                         max_days, exp, interpol_tt, spatial_i_tt,
-                        warming_factor=warming_factor
+                        warming_factor=warming_factor, city_coords=city_coords,
+                        distance_weight=distance_weight
                     )
                     print("initial route:", [city_names[city] for city in initial_route], score)
 
@@ -1313,10 +1424,11 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                         improved_route, score, days_track, interpol_tt, spatial_i_tt = improve_route(
                             initial_route, connections_dict, sd, targets_day_estimates, temperatures,
                             desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
-                            min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight,
+                            min_high_temp, max_high_temp, temp_weight, rain_weight, wind_weight,
                             max_days, exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
                             city_to_cluster=city_to_cluster, cluster_info=cluster_info,
-                            warming_factor=warming_factor
+                            warming_factor=warming_factor, city_coords=city_coords,
+                            distance_weight=distance_weight
                         )
                         heapq.heappush(solutions, (score, improved_route, days_track, sd))
                         print("improved route:", [city_names[city] for city in improved_route], score)
@@ -1345,9 +1457,10 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
             optimized_score, _, _, interpol_tt, spatial_i_tt = calculate_route_score(
                 optimized_route, sd, targets_day_estimates, temperatures,
                 desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
-                min_high_temp, max_high_temp, temp_weight, sun_weight, wind_weight,
+                min_high_temp, max_high_temp, temp_weight, rain_weight, wind_weight,
                 max_days, exp, interpol_tt, spatial_i_tt,
-                warming_factor=warming_factor
+                warming_factor=warming_factor, city_coords=city_coords,
+                distance_weight=distance_weight
             )
             heapq.heappush(final_solutions, (optimized_score, optimized_route, sd))
 
@@ -1450,7 +1563,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                         daily_max_km, expected_travel_days, desired_low_temp, desired_high_temp,
                         min_low_temp, max_low_temp, min_high_temp, max_high_temp,
                         temp_weight, exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
-                        warming_factor=warming_factor
+                        warming_factor=warming_factor, distance_weight=distance_weight
                     )
                     total_shortest_path_time += time.time() - t0
                 except Exception as error:
@@ -1524,7 +1637,9 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                 desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
                 min_high_temp, max_high_temp, temp_weight, daily_max_km, max_days,
                 exp=exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
-                warming_factor=warming_factor
+                warming_factor=warming_factor,
+                wind_weight=wind_weight, rain_weight=rain_weight, city_coords=city_coords,
+                distance_weight=distance_weight
             )
             all_evaluated_routes.append((full_score, current_route, route_start_day, full_route))
             print(f"Valid route found with score: {full_score:.2f}, start day: {route_start_day}")
@@ -1566,7 +1681,9 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                         desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
                         min_high_temp, max_high_temp, temp_weight, daily_max_km, max_days,
                         exp=exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
-                        warming_factor=warming_factor
+                        warming_factor=warming_factor,
+                        wind_weight=wind_weight, rain_weight=rain_weight, city_coords=city_coords,
+                        distance_weight=distance_weight
                     )
                     print(f"  Day {earlier_day} (−{interval}): score {score_earlier:.2f}")
                     if score_earlier < best_score:
@@ -1581,7 +1698,9 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
                         desired_low_temp, desired_high_temp, min_low_temp, max_low_temp,
                         min_high_temp, max_high_temp, temp_weight, daily_max_km, max_days,
                         exp=exp, interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt,
-                        warming_factor=warming_factor
+                        warming_factor=warming_factor,
+                        wind_weight=wind_weight, rain_weight=rain_weight, city_coords=city_coords,
+                        distance_weight=distance_weight
                     )
                     print(f"  Day {later_day} (+{interval}): score {score_later:.2f}")
                     if score_later < best_score:
@@ -1657,9 +1776,13 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
 def get_osrm_route(route_locations, skip_segments=None, routing_mode='car', progress_callback=None, chunk_callback=None):
     """
     Fetch road geometry for each city-to-city segment.
-    routing_mode: 'car'            – OSRM driving (default)
-                  'bicycle'        – OSRM cycling
-                  'car_no_highway' – Valhalla auto with use_highways=0
+    routing_mode: 'car'              – OSRM driving (default)
+                  'bicycle'          – OSRM cycling
+                  'car_no_highway'   – Valhalla auto with use_highways=0
+                  'brouter_trekking' – BRouter trekking bike
+                  'brouter_fastbike' – BRouter road/fast bike
+                  'brouter_mtb'      – BRouter mountain bike
+                  'brouter_safety'   – BRouter safety-first routing
     skip_segments: set of int indices i where segment (i → i+1) should be skipped.
     Returns: list of road-geometry chunks [ [(lat,lon), ...], ... ]
     """
@@ -1669,9 +1792,22 @@ def get_osrm_route(route_locations, skip_segments=None, routing_mode='car', prog
     # Valhalla costing options for car_no_highway
     _valhalla_opts = {"auto": {"use_highways": 0.0, "use_tolls": 0.5}}
 
+    # BRouter profile name mapping (store key → BRouter API name)
+    _brouter_profiles = {
+        'trekking': 'trekking',
+        'fastbike': 'fastbike',
+        'mtb': 'MTB',
+        'safety': 'safety',
+    }
+
     n_segs = sum(1 for i in range(len(route_locations) - 1) if i not in skip_segments)
-    mode_label = {'car': 'OSRM Auto', 'bicycle': 'OSRM Fahrrad',
-                  'car_no_highway': 'Valhalla (ohne Autobahn)'}.get(routing_mode, routing_mode)
+    _mode_labels = {
+        'car': 'OSRM Auto', 'bicycle': 'OSRM Fahrrad',
+        'car_no_highway': 'Valhalla (ohne Autobahn)',
+        'brouter_trekking': 'BRouter Trekking', 'brouter_fastbike': 'BRouter Fastbike',
+        'brouter_mtb': 'BRouter MTB', 'brouter_safety': 'BRouter Safety',
+    }
+    mode_label = _mode_labels.get(routing_mode, routing_mode)
     print(f"[Routing] {mode_label} — {n_segs} Segment(e)", flush=True)
     seg_done = 0
 
@@ -1702,6 +1838,32 @@ def get_osrm_route(route_locations, skip_segments=None, routing_mode='car', prog
                 shape = data["trip"]["legs"][0]["shape"]
                 # Valhalla encodes with polyline6 (precision=6)
                 decoded = polyline_codec.decode(shape, 6)
+            elif routing_mode.startswith('brouter_'):
+                # ── BRouter ──────────────────────────────────────────────────
+                profile_key = routing_mode[len('brouter_'):]
+                profile = _brouter_profiles.get(profile_key, 'trekking')
+                lonlats = f"{start[1]},{start[0]}|{end[1]},{end[0]}"
+                resp = requests.get(
+                    "https://brouter.de/brouter",
+                    params={
+                        "lonlats": lonlats,
+                        "profile": profile,
+                        "alternativeidx": "0",
+                        "format": "geojson",
+                    },
+                    timeout=45,
+                    headers={"User-Agent": "WeatherRoute/1.0"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                features = data.get("features", [])
+                if not features:
+                    print(f"  BRouter: keine Route für Segment {i}", flush=True)
+                    road_chunks.append([start, end])
+                    continue
+                coords = features[0]["geometry"]["coordinates"]
+                # BRouter returns [lon, lat] — convert to (lat, lon)
+                decoded = [(c[1], c[0]) for c in coords]
             else:
                 # ── OSRM ─────────────────────────────────────────────────────
                 profile  = "cycling" if routing_mode == 'bicycle' else "driving"

@@ -483,13 +483,18 @@ class JobSubmission(BaseModel):
     nightTempMin: float = -30
     nightTempMax: float = 40
     warmingFactor: float = 1.5
-    tempWeight: float = 0.5
+    tempWeight: float = 1.0
+    windWeight: float = 0.0
+    rainWeight: float = 0.0
+    distanceWeight: float = 0.5
     maxDailyKm: float = 120
     maxTravelDays: int = 365
     elevResolution: int = 1000
     blockedCountries: List[str] = []
     sortedInput: bool = False
     directOsrm: bool = False
+    routingMode: Optional[str] = "car"
+    brouterProfile: Optional[str] = "trekking"
 
 
 # ---------------------------------------------------------------------------
@@ -666,8 +671,15 @@ def submit_job(data: JobSubmission):
         max_days=data.maxTravelDays,
         elev_points_per_1000km=data.elevResolution,
         temp_weight=data.tempWeight,
+        wind_weight=data.windWeight,
+        rain_weight=data.rainWeight,
+        distance_weight=data.distanceWeight,
         warming_factor=data.warmingFactor,
-        routing_mode="car",
+        routing_mode=(
+            f"brouter_{data.brouterProfile or 'trekking'}"
+            if (data.routingMode or "car") == "brouter"
+            else (data.routingMode or "car")
+        ),
         sorted_input=data.sortedInput,
         blocked_countries=data.blockedCountries,
     )
@@ -1187,6 +1199,9 @@ def run_calculation(job_id: str, params: dict):
             desired_low_temp=params["low_temp"],
             desired_high_temp=params["high_temp"],
             temp_weight=params["temp_weight"],
+            wind_weight=params["wind_weight"],
+            rain_weight=params["rain_weight"],
+            distance_weight=params["distance_weight"],
             auto_threshold_percentile=10,
             exp=2,
             low_temp_range=(params["low_temp_min"], params["low_temp_max"]),
