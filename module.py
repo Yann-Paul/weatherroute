@@ -18,7 +18,7 @@ import numpy as np
 # No API keys needed — both services are free and open
 OSRM_BASE      = "https://router.project-osrm.org"
 VALHALLA_BASE  = "https://valhalla1.openstreetmap.de"
-OPEN_ELEV_SRTM = "https://api.open-elevation.com/api/v1/lookup"   # SRTM: 56°S–60°N
+OPEN_ELEV_SRTM = "https://api.opentopodata.org/v1/srtm30m"        # SRTM: 60°S–60°N
 OPEN_ELEV_ASTER= "https://api.opentopodata.org/v1/aster30m"       # ASTER: global to 83°N
 
 # Wind / rain scoring constants
@@ -34,8 +34,8 @@ def _elev_api(latlons):
     if any(lat > 59.0 or lat < -56.0 for lat, lon in latlons):
         return (OPEN_ELEV_ASTER, 100,
                 lambda b: {"locations": "|".join(f"{round(lat,4)},{round(lon,4)}" for lat, lon in b)})
-    return (OPEN_ELEV_SRTM, 512,
-            lambda b: {"locations": [{"latitude": round(lat,4), "longitude": round(lon,4)} for lat, lon in b]})
+    return (OPEN_ELEV_SRTM, 100,
+            lambda b: {"locations": "|".join(f"{round(lat,4)},{round(lon,4)}" for lat, lon in b)})
 
 def day_to_month(day):
     """Convert day-of-year (1-366) to month (1-12)."""

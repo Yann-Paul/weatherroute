@@ -45,7 +45,7 @@ from module import (
     fetch_open_meteo_forecast,
 )
 
-OPEN_ELEV_SRTM = "https://api.open-elevation.com/api/v1/lookup"   # SRTM: 56°S–60°N
+OPEN_ELEV_SRTM = "https://api.opentopodata.org/v1/srtm30m"        # SRTM: 60°S–60°N
 OPEN_ELEV_ASTER= "https://api.opentopodata.org/v1/aster30m"       # ASTER: global to 83°N
 
 def _elev_api(latlons):
@@ -54,8 +54,8 @@ def _elev_api(latlons):
     if any(lat > 59.0 or lat < -56.0 for lat, lon in latlons):
         return (OPEN_ELEV_ASTER, 100,
                 lambda b: {"locations": "|".join(f"{lat},{lon}" for lat, lon in b)})
-    return (OPEN_ELEV_SRTM, 512,
-            lambda b: {"locations": [{"latitude": lat, "longitude": lon} for lat, lon in b]})
+    return (OPEN_ELEV_SRTM, 100,
+            lambda b: {"locations": "|".join(f"{lat},{lon}" for lat, lon in b)})
 
 SAVED_ROUTES_DIR = Path("data/saved_routes")
 SAVED_ROUTES_DIR.mkdir(parents=True, exist_ok=True)
@@ -967,9 +967,9 @@ def _run_elevation_worker(seg_queue, points_per_km, job, result_holder, use_aste
             "locations": "|".join(f"{round(lat, 4)},{round(lon, 4)}" for lat, lon in latlons)
         }
     else:
-        _elev_url, _BATCH_SIZE, _BATCH_DELAY = OPEN_ELEV_SRTM, 512, 0.0
+        _elev_url, _BATCH_SIZE, _BATCH_DELAY = OPEN_ELEV_SRTM, 100, 1.1
         _mk_payload = lambda latlons: {
-            "locations": [{"latitude": round(lat, 4), "longitude": round(lon, 4)} for lat, lon in latlons]
+            "locations": "|".join(f"{round(lat, 4)},{round(lon, 4)}" for lat, lon in latlons)
         }
 
     _MAX_RETRIES = 4
