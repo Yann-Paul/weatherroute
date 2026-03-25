@@ -551,7 +551,8 @@ export function ForecastMap() {
   const segments = useResultsStore((s) => s.segments);
 const lang = useLangStore((s) => s.lang);
   const [hourIdx, setHourIdx] = useState(2);
-  const [dailyMode, setDailyMode] = useState(false);
+  const [dailyMode, setDailyMode] = useState(() => !!forecast);
+  useEffect(() => { if (forecast) setDailyMode(true); }, [forecast]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mapZoom, setMapZoom] = useState(5);
   const handleZoom = useCallback((z: number) => setMapZoom(z), []);
@@ -1213,7 +1214,7 @@ const lang = useLangStore((s) => s.lang);
       const d = (fd.daily ?? {}) as ForecastDailyData;
       if (d.tmax != null) lines.push(`${lbl("#f97316","☀ Tmax:")} ${val(d.tmax.toFixed(1)+"°C")}<br>`);
       if (d.tmin != null) lines.push(`${lbl("#3b82f6","☽ Tmin:")} ${val(d.tmin.toFixed(1)+"°C")}<br>`);
-      if (d.prcp != null) lines.push(`${lbl("#60a5fa","☂ Regen:")} ${val(d.prcp.toFixed(1)+" mm")}<br>`);
+      if (d.prcp != null) lines.push(`${lbl("#60a5fa","☂ Regen:")} ${val(d.prcp.toFixed(1)+" mm/Tag")}<br>`);
       if (d.wspd != null) lines.push(`${lbl("#6b7280","☴ Windmax:")} ${val(d.wspd.toFixed(1)+" km/h")}<br>`);
       if (d.sun  != null) lines.push(`${lbl("#f59e0b","☀ Sonne:")} ${val(d.sun.toFixed(1)+" h")}<br>`);
     } else {
@@ -1223,7 +1224,7 @@ const lang = useLangStore((s) => s.lang);
         const tColor = tempToRgb(h.temp, desiredAvg, document.documentElement.classList.contains("dark"));
         lines.push(`${lbl("#64748b","Temp:")} <b style="color:${tColor}">${h.temp.toFixed(1)}°C</b><br>`);
       }
-      if (h.prcp  != null) lines.push(`${lbl("#60a5fa","☂:")} ${val(h.prcp.toFixed(1)+" mm")}<br>`);
+      if (h.prcp  != null) lines.push(`${lbl("#60a5fa","☂:")} ${val(h.prcp.toFixed(1)+" mm/h")}<br>`);
       if (h.wspd  != null) {
         const rb = routeBearingAt(pt.km, miniElev);
         const dirStr = h.wdir != null && rb != null
@@ -1251,7 +1252,7 @@ const lang = useLangStore((s) => s.lang);
     lines.push(`<hr style="margin:6px 0;border-color:#e2e8f0">`);
     lines.push(`${lbl("#f97316","☀ Tmax:")} ${val(cp.tmax.toFixed(1)+"°C")}<br>`);
     lines.push(`${lbl("#3b82f6","☽ Tmin:")} ${val(cp.tmin.toFixed(1)+"°C")}<br>`);
-    if (cp.prcp > 0.05) lines.push(`${lbl("#60a5fa","☂ "+rainLabel)} ${val(cp.prcp.toFixed(1)+" mm")}<br>`);
+    if (cp.prcp > 0.05) lines.push(`${lbl("#60a5fa","☂ "+rainLabel)} ${val(cp.prcp.toFixed(1)+" mm/Tag")}<br>`);
     if (cp.wspd > 0) {
       const dirStr = rb != null
         ? ` <span style="color:${windArrowColor(cp.wdir, rb)};font-weight:700">${compassDir16(cp.wdir)}</span>`
@@ -1401,13 +1402,42 @@ const lang = useLangStore((s) => s.lang);
         {isFullscreen && (
           <div className="absolute bottom-0 left-0 right-0 z-10">
             <div
-              className="flex cursor-pointer items-center justify-between border-t border-border bg-card/90 px-3 py-1 backdrop-blur-sm"
+              className="flex cursor-pointer items-center justify-between gap-3 border-t border-border bg-card/90 px-3 py-1 backdrop-blur-sm"
               onClick={() => setElevExpanded((v) => !v)}
             >
-              <span className="text-xs font-medium text-muted-foreground">{t.routeMap.elevTitle}</span>
+              <span className="text-xs font-medium text-muted-foreground shrink-0">{t.routeMap.elevTitle}</span>
+              <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <div className="flex overflow-hidden rounded-md border border-border">
+                  {HOUR_STEPS.map((h, i) => (
+                    <button
+                      key={h}
+                      onClick={() => { setHourIdx(i); setDailyMode(false); }}
+                      className={[
+                        "border-r border-border px-2 py-0.5 text-[11px] font-medium last:border-r-0 transition-colors",
+                        !dailyMode && hourIdx === i
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-card text-muted-foreground hover:bg-muted",
+                      ].join(" ")}
+                    >
+                      {hourLabels[i]}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setDailyMode((d) => !d)}
+                  className={[
+                    "rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                    dailyMode
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted",
+                  ].join(" ")}
+                >
+                  {t.forecastMap.dailyOverview}
+                </button>
+              </div>
               {elevExpanded
-                ? <ChevronDown className="size-4 text-muted-foreground" />
-                : <ChevronUp className="size-4 text-muted-foreground" />}
+                ? <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+                : <ChevronUp className="size-4 text-muted-foreground shrink-0" />}
             </div>
             {elevExpanded && (
               <div className="bg-card/95 p-2">
