@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -225,12 +226,12 @@ export function AdvancedPanel() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{tc.travel.maxDailyKm}</Label>
-                <Input
-                  type="number"
+                <NumericInput
                   min={10}
                   max={500}
                   value={store.maxDailyKm}
-                  onChange={(e) => store.setMaxDailyKm(Number(e.target.value))}
+                  fallback={10}
+                  onChange={(v) => store.setMaxDailyKm(v)}
                 />
                 <p className="text-xs text-muted-foreground">
                   {tc.travel.maxDailyKmDesc}
@@ -238,14 +239,12 @@ export function AdvancedPanel() {
               </div>
               <div className="space-y-2">
                 <Label>{tc.travel.maxTravelDays}</Label>
-                <Input
-                  type="number"
+                <NumericInput
                   min={1}
                   max={730}
                   value={store.maxTravelDays}
-                  onChange={(e) =>
-                    store.setMaxTravelDays(Number(e.target.value))
-                  }
+                  fallback={1}
+                  onChange={(v) => store.setMaxTravelDays(v)}
                 />
                 <p className="text-xs text-muted-foreground">
                   {tc.travel.maxTravelDaysDesc}

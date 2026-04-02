@@ -17,6 +17,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, X, Plus, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { CityCombobox } from "./CityCombobox";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { useT } from "@/i18n/useT";
@@ -72,14 +73,12 @@ function SortableCityRow({ index }: { index: number }) {
       />
 
       <div className="flex flex-col items-center gap-0.5" title={t.cityList.pauseTitle}>
-        <Input
-          type="number"
+        <NumericInput
           min={0}
           max={30}
           value={city.restDays}
-          onChange={(e) =>
-            updateCity(index, { restDays: parseInt(e.target.value) || 0 })
-          }
+          fallback={0}
+          onChange={(v) => updateCity(index, { restDays: v })}
           className="w-16 text-center"
           aria-label={t.cityList.pauseLabel}
         />

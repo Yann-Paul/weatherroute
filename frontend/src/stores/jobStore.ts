@@ -7,6 +7,7 @@ interface JobState {
   step: string;
   message: string;
   jobType: string;
+  algorithm: string;
   osrmDone: number;
   osrmTotal: number;
   roughMap: RoughMapData | null;
@@ -30,6 +31,7 @@ const initialState = {
   step: "",
   message: "",
   jobType: "route",
+  algorithm: "beam_search",
   osrmDone: 0,
   osrmTotal: 0,
   roughMap: null as RoughMapData | null,

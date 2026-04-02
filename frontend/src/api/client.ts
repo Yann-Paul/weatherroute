@@ -8,6 +8,8 @@ import type {
   GpxJobResults,
   GpxDayConfig,
   SavedRouteSummary,
+  DestinationFinderFormData,
+  DestinationJobResults,
 } from "./types";
 
 const BASE = "/api";
@@ -91,4 +93,42 @@ export async function deleteSavedRoute(id: string): Promise<void> {
 
 export async function restoreSavedRoute(id: string): Promise<{ jobId: string; plannerSettings: PlannerSettings | null }> {
   return request(`/saved-routes/${id}/restore`, { method: "POST" });
+}
+
+export async function submitDestinationJob(data: DestinationFinderFormData): Promise<{ jobId: string }> {
+  return request("/destination-jobs", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getDestinationResults(jobId: string): Promise<DestinationJobResults> {
+  return request(`/jobs/${jobId}/results`);
+}
+
+export async function submitDestinationDetailJob(data: {
+  cityIds: string[];
+  startDay: number;
+  desiredDayTemp: number;
+  desiredNightTemp: number;
+  dayTempMin: number;
+  dayTempMax: number;
+  nightTempMin: number;
+  nightTempMax: number;
+  warmingFactor: number;
+  tempWeight: number;
+  windWeight: number;
+  rainWeight: number;
+  distanceWeight: number;
+  maxDailyKm: number;
+  maxTravelDays: number;
+  elevResolution: number;
+  blockedCountries: string[];
+  routingMode?: string;
+  brouterProfile?: string;
+}): Promise<{ jobId: string }> {
+  return request("/destination-detail-jobs", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }

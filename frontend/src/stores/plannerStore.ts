@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { CityEntry, Connection, PlannerSettings } from "@/api/types";
 
 interface PlannerState {
+  mode: "route" | "destination";
   cities: CityEntry[];
   startCity: string;
   startDay: number | null;
@@ -27,6 +28,7 @@ interface PlannerState {
   directOsrm: boolean;
   routingMode: string;
   brouterProfile: string;
+  destinationAlgorithm: string;
 
   addCity: (city: CityEntry) => void;
   removeCity: (index: number) => void;
@@ -52,12 +54,15 @@ interface PlannerState {
   setDirectOsrm: (value: boolean) => void;
   setRoutingMode: (value: string) => void;
   setBrouterProfile: (value: string) => void;
+  setDestinationAlgorithm: (value: string) => void;
+  setMode: (mode: "route" | "destination") => void;
   loadFromResults: (data: { startDay: number }) => void;
   restoreSettings: (settings: PlannerSettings) => void;
   reset: () => void;
 }
 
 const initialState = {
+  mode: "route" as "route" | "destination",
   cities: [] as CityEntry[],
   startCity: "",
   startDay: null as number | null,
@@ -82,6 +87,7 @@ const initialState = {
   directOsrm: false,
   routingMode: "car",
   brouterProfile: "trekking",
+  destinationAlgorithm: "beam_search",
 };
 
 export const usePlannerStore = create<PlannerState>()(
@@ -142,6 +148,8 @@ export const usePlannerStore = create<PlannerState>()(
       setDirectOsrm: (directOsrm) => set({ directOsrm }),
       setRoutingMode: (routingMode) => set({ routingMode }),
       setBrouterProfile: (brouterProfile) => set({ brouterProfile }),
+      setDestinationAlgorithm: (destinationAlgorithm) => set({ destinationAlgorithm }),
+      setMode: (mode) => set({ mode }),
 
       // Restores only the computed start day — all other settings (cities, temps, etc.)
       // remain as the user originally configured them in the planner.

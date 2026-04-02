@@ -59,6 +59,7 @@ export interface JobStatusResponse {
   step: string;
   message: string;
   jobType?: string;
+  algorithm?: string;
   osrmDone: number;
   osrmTotal: number;
   roughMap: RoughMapData | null;
@@ -70,6 +71,8 @@ export interface JobStatusResponse {
   registeringDone: number;
   registeringTotal: number;
   warnings: string[];
+  destinationRoutesDone?: number;
+  destinationRoutesTotal?: number;
 }
 
 export interface RoughMapData {
@@ -266,6 +269,76 @@ export interface SavedRouteSummary {
 
 /** Planner settings snapshot stored alongside a saved route. */
 export type PlannerSettings = PlannerFormData;
+
+export interface DestinationFinderFormData {
+  startCity: string;
+  startDay: number;
+  desiredDayTemp: number;
+  desiredNightTemp: number;
+  dayTempMin: number;
+  dayTempMax: number;
+  nightTempMin: number;
+  nightTempMax: number;
+  warmingFactor: number;
+  tempWeight: number;
+  windWeight: number;
+  rainWeight: number;
+  maxDailyKm: number;
+  maxTravelDays: number;
+  elevResolution: number;
+  blockedCountries: string[];
+  routingMode?: string;
+  brouterProfile?: string;
+  algorithm?: string;
+}
+
+export interface DestinationCity {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  score: number;
+  distance: number;
+  tmin: number | null;
+  tmax: number | null;
+}
+
+export interface DestinationRouteCity {
+  cityId: string;
+  cityName: string;
+  lat: number;
+  lon: number;
+  dayNumber: number;
+  tmin: number | null;
+  tmax: number | null;
+  prcp: number | null;
+  wspd: number | null;
+}
+
+export interface DestinationRouteSegment {
+  coordinates: [number, number][];
+  color: string;
+}
+
+export interface DestinationRoute {
+  routeIndex: number;
+  score: number;
+  segments: DestinationRouteSegment[];
+  markers: MarkerData[];
+  cities: DestinationRouteCity[];
+  totalAirKm: number;
+  totalDays: number;
+  startDay: number;
+}
+
+export interface DestinationJobResults {
+  type: "destination";
+  destinations: DestinationCity[];
+  routes: DestinationRoute[];
+  startDay: number;
+  desiredHigh: number;
+  desiredLow: number;
+}
 
 export interface JobResults {
   segments: RouteSegment[];

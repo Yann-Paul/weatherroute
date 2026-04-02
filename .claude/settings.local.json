@@ -42,7 +42,9 @@
       "WebFetch(domain:project-osrm.org)",
       "Bash(cd:*)",
       "Bash(grep:*)",
-      "Bash(cd frontend:*)"
+      "Bash(cd frontend:*)",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3:*)"
     ]
   }
 }

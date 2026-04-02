@@ -6,9 +6,15 @@ Wetter-optimierter Reiseroutenplaner für Europa. Die Anwendung berechnet die be
 
 ## Funktionen
 
-### Routenplanung (`/`)
+### Routenplanung & Zielsuche (`/`)
 
-Der Kern der Anwendung. Der Nutzer gibt Städte ein, die er besuchen möchte, und das System findet die optimale Reihenfolge sowie den besten Weg dazwischen.
+Die Hauptseite bietet zwei Modi, umschaltbar über einen Tab-Schalter oben:
+
+---
+
+#### Modus 1: Route planen
+
+Der klassische Modus. Der Nutzer gibt Städte ein, die er besuchen möchte, und das System findet die optimale Reihenfolge sowie den besten Weg dazwischen.
 
 **Städteauswahl**
 - Autovervollständigung mit Suche im europäischen Städtegraph (15.000+ Städte)
@@ -40,6 +46,69 @@ Der Kern der Anwendung. Der Nutzer gibt Städte ein, die er besuchen möchte, un
 
 ---
 
+#### Modus 2: Ziel finden (`/destination/results/:jobId`)
+
+Wenn noch kein Reiseziel feststeht, findet dieser Modus automatisch die besten Zielregionen und plant wetter-optimierte Routen dorthin. Der Nutzer gibt nur an:
+
+- **Startstadt** und **Startdatum**
+- **Reisetage** und **maximale km/Tag** (bestimmen den erreichbaren Radius)
+- Wettereinstellungen (Wunschtemperaturen, Gewichtungen)
+
+Der Algorithmus läuft in zwei Phasen:
+
+**Phase 1 — Zielstädte ermitteln**
+
+```
+Luftdistanz-Radius = Reisetage × km/Tag ÷ 0,7
+    │
+    ▼
+Alle Städte im Radius auswerten
+(historische Klimanormale für den Ankunftstag)
+    │
+    ▼
+Score = Temperaturabweichung² + Wind- und Regengewichtung
+    │
+    ▼
+Top 10 Zielstädte mit Mindestabstand (Radius ÷ 5) zueinander
+(greedy Auswahl: beste Stadt → nächstbeste außerhalb der Sperrzone → ...)
+```
+
+**Phase 2 — Beam-Search Routensuche**
+
+```
+Start: 20 parallele Routen ab der Startstadt
+    │
+    ▼  (pro Tag)
+Kandidaten = direkte Nachbarstädte (1-Hop)
+           + Nachbarn der Nachbarn (2-Hop, zählt als 2 Tage)
+    │
+    ▼
+Score pro Kandidat (3 Komponenten):
+  1. Wetter-Score
+     temp_weight × |T − Twunsch|² + wind_weight × (wspd/2)² + rain_weight × (prcp/2)²
+
+  2. Zielrichtungs-Penalty (quadratisch)
+     Wenn Distanz zur nächsten Zielstadt > 0,7 × verbleibende Luftdistanz:
+     Penalty = (Distanz / (0,7 × Restdistanz) − 1)²
+
+  3. Richtungskontinuität-Penalty (quadratisch)
+     Abweichung vom mittleren Bearing der letzten 3 Städte:
+     Penalty = (Winkelabweichung / 180°)²
+
+  Bei 2-Hop: bessere Richtung (via Zwischenstadt oder direkt zum Ziel) zählt
+    │
+    ▼
+Beam-Pruning: 20 → 5 Beams (graduell, ~1 Beam alle 3 Schritte)
+Deduplizierung: kein doppeltes Endstadtpaar
+    │
+    ▼
+5 beste Routen → OSRM-Straßenrouting + Wetterdaten
+```
+
+> Die Zielstädte sind nur eine **Orientierung** — die Route muss keinen Zielort exakt treffen.
+
+---
+
 ### Fortschrittsanzeige (`/progress/:jobId`)
 
 Da die Routenberechnung mehrere Minuten dauern kann, läuft sie asynchron im Hintergrund. Die Fortschrittsseite zeigt in Echtzeit:
@@ -49,6 +118,8 @@ Da die Routenberechnung mehrere Minuten dauern kann, läuft sie asynchron im Hin
 - Fortschrittsbalken für Höhendatenabruf (Batches)
 - Fortschrittsbalken für Wetterprognose
 - Vorschaukarte mit dem ungefähren Routenverlauf (sobald verfügbar)
+
+Für **Zielsuche-Jobs** werden statt der üblichen Schritte angezeigt: „Zielstädte suchen" → „Beam-Search" → „Straßenrouting".
 
 ---
 
@@ -96,6 +167,8 @@ Für bereits geplante Routen (z. B. aus Wanderungs- oder Radfahrplanern):
 
 ## Berechnungsablauf
 
+### Modus: Route planen
+
 ```
 Städteeingabe
     │
@@ -104,7 +177,7 @@ Graphsuche + Temperaturbewertung
 (NetworkX, Klimanormale 1991–2020)
     │
     ▼
-Straßenrouting via OSRM
+Straßenrouting via OSRM/Valhalla/BRouter
 (reale Fahrstrecken zwischen Städten)
     │
     ▼
@@ -117,6 +190,460 @@ Wetterinterpolation
     │
     ▼
 Ergebnis mit Karte, Diagrammen & Wettertabelle
+```
+
+### Modus: Ziel finden
+
+```
+Startstadt + Startdatum + Reisetage + km/Tag
+    │
+    ▼
+Phase 1: Zielstädte ermitteln
+  Luftdistanzradius = Reisetage × km/Tag ÷ 0,7
+  → Alle Städte im Radius nach Wetter am Ankunftstag bewerten
+  → Top 10 mit Mindestabstand zueinander auswählen
+    │
+    ▼
+Phase 2: Beam-Search (20 → 5 parallele Routen)
+  Pro Tag, pro Beam:
+    1-Hop und 2-Hop Nachbarn bewerten:
+    Score = Wetter-Score
+          + Zielrichtungs-Penalty (quadratisch bei Abweichung)
+          + Richtungskontinuität-Penalty (letzten 3 Städte)
+  Beste Route nach gradueller Beam-Reduzierung
+    │
+    ▼
+Top 5 Routen → OSRM-Straßenrouting
+    │
+    ▼
+Ergebnis: Zielstädte-Übersicht + 5 vergleichbare Routen
+```
+
+---
+
+## Algorithmen im Detail
+
+### Gemeinsame Grundlagen
+
+#### Wetter-Interpolation (`get_interpolated_weather`)
+
+Wetterdaten liegen als **Monatsmittelwerte** vor (Klimanormale 1991–2020). Für einen konkreten Tag `d` wird zwischen den Mittelpunkten des aktuellen und des Nachbarmonats **linear interpoliert**:
+
+```
+weight = Abstand von d zum Mittelpunkt des Nachbarmonats
+         ─────────────────────────────────────────────────
+         Abstand zwischen den beiden Monatsmittelpunkten
+
+interpolierter Wert = aktueller_Monat × weight + Nachbarmonat × (1 − weight)
+```
+
+Wind wird **vektoriell** interpoliert (Richtung via sin/cos, dann zurück in Grad), nicht arithmetisch.
+
+Rückgabeformat: `[T_nacht, T_tag, prcp_mm_d, wspd_km_h, wdir_deg, wspd_resultant]`
+
+Der `warming_factor` wird nach der Interpolation auf T_nacht und T_tag addiert.
+
+#### Normierte Wetter-Score-Berechnung
+
+Alle drei Algorithmen verwenden dieselbe normierte Formel:
+
+```
+temp_score = (|T_nacht − T_nacht_wunsch|² + |T_tag − T_tag_wunsch|²) / 2
+             (nur wenn desired_low_temp / desired_high_temp gesetzt)
+
+w_score = temp_weight  × (temp_score          / TEMP_SCORE_REF)
+        + wind_weight  × ((wspd / WIND_SCALE)² / WIND_SCORE_REF)
+        + rain_weight  × ((prcp / RAIN_SCALE)² / RAIN_SCORE_REF)
+```
+
+**Normierungskonstanten** (Werte oberhalb = Ausreißer, Score > 1,0; kein Capping):
+
+| Konstante | Wert | Bedeutung |
+|---|---|---|
+| `TEMP_SCORE_REF` | 100,0 | 10 °C Abweichung ergibt Score = 1,0 |
+| `WIND_SCALE` | 2,0 km/h | 2 km/h Gegenwind ≈ 1 °C Äquivalent |
+| `WIND_SCORE_REF` | 56,25 | 15 km/h Gegenwind ergibt Score = 1,0 |
+| `RAIN_SCALE` | 2,0 mm/d | 2 mm/d Regen ≈ 1 °C Äquivalent |
+| `RAIN_SCORE_REF` | 100,0 | 20 mm/d Regen ergibt Score = 1,0 |
+
+Niedrigerer Score = besseres Wetter. Wenn Temperaturgrenzwerte (`min/max_low/high_temp`) verletzt werden, gibt die Funktion `float('inf')` zurück → Stadt wird ausgeschlossen.
+
+---
+
+### Phase 1 — Zielstädte ermitteln (`find_destination_cities`)
+
+**Parameter**
+
+| Parameter | Standardwert | Bedeutung |
+|---|---|---|
+| `start_city` | — | Startstadt (Graph-ID) |
+| `start_day` | — | Starttag (1–365) |
+| `max_days` | — | Maximale Reisetage |
+| `daily_km` | — | km pro Tag |
+| `desired_low_temp` | `None` | Wunsch-Nachttemperatur (°C) |
+| `desired_high_temp` | `None` | Wunsch-Tagtemperatur (°C) |
+| `min/max_low/high_temp` | `±∞` | Harte Temperaturgrenzwerte |
+| `temp_weight` | 1,0 | Gewicht Temperatur |
+| `wind_weight` | 0,0 | Gewicht Wind |
+| `rain_weight` | 0,0 | Gewicht Regen |
+| `count` | 10 | Anzahl zurückgegebener Zielstädte |
+
+**Schritt 1 — Radius und Ankunftstag bestimmen**
+
+```
+max_air_distance = max_days × daily_km × 0,7
+  (Faktor 0,7: Straßenstrecke ≈ 40% länger als Luftlinie)
+
+min_spacing  = max_air_distance / 5
+  (Minimalabstand zwischen Zielstädten)
+
+target_day = ((start_day + max_days − 1) % 365) + 1
+  (Kalender-Tag des geschätzten Ankunftstages)
+```
+
+**Schritt 2 — Alle Städte im Radius bewerten**
+
+```
+Für jede Stadt C im Graphen (außer start_city):
+  dist = Haversine(start_pos, C_pos)           [km]
+  wenn dist > max_air_distance → überspringen
+
+  Wetter interpolieren für target_day
+  Temperaturgrenzwerte prüfen → bei Verletzung überspringen
+
+  score(C) = w_score(C, target_day)  [normierte Formel, s.o.]
+             (hier noch ohne Normierung durch TEMP_SCORE_REF / WIND_SCORE_REF / RAIN_SCORE_REF,
+              da diese Funktion die ältere Score-Variante verwendet)
+```
+
+**Schritt 3 — Greedy-Auswahl mit Mindestabstand**
+
+```
+Kandidaten sortieren nach score (aufsteigend = besser)
+selected = []
+
+Für jeden Kandidaten C (bester zuerst):
+  wenn Abstand(C, jede bereits gewählte Stadt) ≥ min_spacing:
+    selected.append(C)
+  wenn len(selected) == count:
+    break
+
+Rückgabe: [(city_id, score, luftdistanz), ...]
+```
+
+---
+
+### Phase 2a — Beam Search (`beam_search_route`)
+
+**Parameter**
+
+| Parameter | Standardwert | Bedeutung |
+|---|---|---|
+| `initial_beam_width` | 20 | Parallele Routen zu Beginn |
+| `final_beam_width` | 5 | Parallele Routen am Ende |
+| `direction_weight` | 0,3 | Gewicht der Zielrichtungs-Penalty |
+| `continuity_weight` | 2,0 | Gewicht der Richtungskontinuität-Penalty |
+| `max_days` | — | Max. Reisetage (Abbruchbedingung und Schleifenlimit) |
+| `daily_km` | — | km/Tag (für Tagesberechnung aus Kantenlängen) |
+
+**Datenstruktur eines Beams**
+
+```python
+{
+  'cities':      [city_id, ...],   # besuchte Städte (chronologisch)
+  'days':        [float, ...],     # Ankunftstag je Stadt (fraktional, z.B. 3.5)
+  'scores':      [float, ...],     # Kandidaten-Score je Stadt
+  'total_score': float             # Durchschnitt aller scores
+}
+```
+
+**Initialisierung**
+
+```
+20 identische Beams, alle starten in start_city am start_day:
+  beam = { cities: [start_city], days: [start_day], scores: [], total_score: 0.0 }
+```
+
+**Hauptschleife: bis zu max_days Iterationen**
+
+Pro Iteration `step` (0 bis max_days−1):
+
+```
+1. Beam-Breite für diesen Schritt berechnen:
+   progress           = step / max(1, max_days − 1)
+   current_beam_width = max(final_beam_width,
+                            int(initial_beam_width
+                                − progress × (initial_beam_width − final_beam_width)))
+
+2. Für jeden aktiven Beam:
+
+   a. Aktuellen Stand lesen:
+      current_city = beam['cities'][-1]
+      current_day  = beam['days'][-1]    ← echter fraktionaler Tag (km-basiert)
+
+   b. Abbruchprüfung für diesen Beam:
+      wenn (current_day − start_day) ≥ max_days:
+        Beam unverändert in all_expansions aufnehmen → nächster Beam
+
+   c. Besuchssperre: visited = die letzten 5 Städte im Beam
+
+   d. Kandidaten generieren und bewerten:
+
+      1-Hop: Für jeden direkten Nachbarn N von current_city
+             (nicht in visited):
+             score = score_candidate(N, current_day, beam)
+
+      2-Hop: Für jeden Nachbarn N1 von current_city
+             (nicht in visited),
+             für jeden Nachbarn N2 von N1
+             (nicht in visited, ≠ current_city):
+             score = score_candidate(N2, current_day, beam,
+                                     is_2hop=True, via_id=N1)
+
+   e. Kandidaten sortieren (aufsteigend nach score)
+      → beste 3 für diesen Beam weiterverfolgen
+
+   f. Für jeden der 3 besten Kandidaten neuen Beam bauen:
+
+      1-Hop (current_city → cand_city):
+        dist     = edge_weight(current_city, cand_city)   [km]
+        day_cand = current_day + dist / daily_km
+        Beam erweitern: cities += [cand_city],
+                        days   += [day_cand],
+                        scores += [score]
+
+      2-Hop (current_city → via_city → cand_city):
+        dist_1   = edge_weight(current_city, via_city)    [km]
+        dist_2   = edge_weight(via_city, cand_city)       [km]
+        day_via  = current_day + dist_1 / daily_km
+        day_cand = current_day + (dist_1 + dist_2) / daily_km
+
+        via_score = score_candidate(via_city, current_day, beam)
+                    [1-Hop Score für die Zwischenstadt]
+
+        Beam erweitern: cities += [via_city, cand_city],
+                        days   += [day_via,  day_cand],
+                        scores += [via_score, score]
+
+   g. total_score neu berechnen:
+      total_score = sum(scores) / len(scores)   [Durchschnitt aller Stadtscores]
+
+3. Alle Expansionen sortieren (aufsteigend nach total_score)
+
+4. Deduplizierung: pro Endstadt (cities[-1]) nur den besten Beam behalten
+
+5. Die besten current_beam_width Beams behalten → nächste Iteration
+
+6. Schleife bricht auch ab wenn keine Expansionen erzeugt wurden
+```
+
+**Score eines Kandidaten (`score_candidate`)**
+
+```
+score = w_score + direction_weight × dir_penalty + continuity_weight × cont_penalty
+```
+
+*Wetter-Score `w_score`*
+
+1-Hop (current_city → candidate), Ankunftstag `t = current_day + dist/daily_km`:
+```
+w_score = w_score_normiert(candidate, t)
+        = temp_weight  × (temp_score(candidate, t) / TEMP_SCORE_REF)
+        + wind_weight  × ((wspd(candidate, t) / 2,0)² / 56,25)
+        + rain_weight  × ((prcp(candidate, t) / 2,0)² / 100,0)
+```
+
+2-Hop (current_city → via → candidate), distanzgewichtet:
+```
+w1 = dist_1 / (dist_1 + dist_2)              [Anteil 1. Segment]
+w2 = dist_2 / (dist_1 + dist_2)              [Anteil 2. Segment]
+t_via  = current_day + dist_1 / daily_km
+t_cand = current_day + (dist_1 + dist_2) / daily_km
+
+w_score = w1 × w_score_normiert(via, t_via)
+        + w2 × w_score_normiert(candidate, t_cand)
+```
+
+Beispiel: A→B (200 km) + B→C (400 km) → w1=1/3, w2=2/3
+
+*Zielrichtungs-Penalty `dir_penalty`*
+
+Bewertet ob der Kandidat noch erreichbar weit von einer Zielstadt entfernt liegt:
+```
+arrival_day   = tatsächlicher Ankunftstag beim Kandidaten
+remaining_days = max_days − (arrival_day − start_day)
+remaining_air  = remaining_days × daily_km × 0,7   [erreichbare Luftdistanz]
+min_dest_dist  = kleinste Haversine-Distanz zu einer der Zielstädte
+
+wenn min_dest_dist > remaining_air  UND  remaining_air > 0:
+    dir_penalty = (min_dest_dist / remaining_air)²
+    [quadratisch — je weiter weg, desto stärker bestraft]
+sonst:
+    dir_penalty = 0
+```
+
+*Richtungskontinuität-Penalty `cont_penalty`*
+
+Bestraft Richtungswechsel gegenüber der bisherigen Fahrtrichtung:
+```
+Positionen der letzten 3 besuchten Städte: p1, p2, p3
+
+Bearings berechnen:
+  b1 = Bearing(p1 → p2)
+  b2 = Bearing(p2 → p3)
+
+Gewichteter Kreismittelwert (vermeidet 0°/360°-Sprung):
+  sin_avg = sin(b2) × 0,7 + sin(b1) × 0,3
+  cos_avg = cos(b2) × 0,7 + cos(b1) × 0,3
+  avg_bearing = atan2(sin_avg, cos_avg) [in Grad]
+
+bearing_to_candidate = Bearing(p3 → candidate_pos)
+deviation = |avg_bearing − bearing_to_candidate|  (0°–180°)
+
+cont_penalty = (deviation / 180°)^1,5
+  [0° Abweichung → 0; 180° Kehrtwendung → 1]
+```
+
+Bei 2-Hop:
+```
+cont_penalty = min(penalty_direkt_zu_candidate,
+                   penalty_über_via_zu_candidate)
+```
+
+Bei < 3 bekannten Städten: keine Penalty (0).
+
+**Rückgabe**
+
+```
+Nach der letzten Iteration:
+  Beams sortieren nach total_score
+  Rückgabe der besten final_beam_width Beams als:
+  [{ 'cities': [(city_id, day), ...], 'score': total_score }, ...]
+```
+
+---
+
+### Phase 2b — Hierarchische Wegpunktsuche (`hierarchical_waypoint_route`)
+
+**Parameter**
+
+| Parameter | Standardwert | Bedeutung |
+|---|---|---|
+| `min_segment_days` | 10 | Segmente mit weniger Tagen werden nicht weiter unterteilt |
+| `top_k` | 10 | Beste Kombinationen die pro Iteration behalten werden |
+
+**Datenstruktur einer Kombination**
+
+```python
+[(city_id, day), (city_id, day), ...]
+# geordnete Liste von Wegpunkten mit zugewiesenem Reisetag
+# day ist fraktional (z.B. 12.7 = Tag 12 + 0,7 Tage)
+```
+
+**Schritt 1 — Initialisierung**
+
+```
+Für jede Zielstadt D (aus Phase 1) mit Luftdistanz dist:
+  realistic_days = dist / (0,7 × daily_km)
+    [Schätzung: Straßenroute ≈ 40% länger als Luftlinie]
+  travel_days    = min(max_days, realistic_days)
+  end_day        = start_day + travel_days
+
+  Kombination = [(start_city, start_day), (D, end_day)]
+```
+
+**Schritt 2 — Iterative Verfeinerung**
+
+```
+Solange mindestens ein Segment (to_day − from_day) ≥ min_segment_days:
+
+  Für jede Kombination:
+    Für jedes Segment (A, from_day) → (B, to_day):
+
+      wenn (to_day − from_day) < min_segment_days:
+        keine Unterteilung → Segment bleibt unverändert
+
+      sonst:
+        [_find_waypoint_cities aufrufen:]
+
+        segment_dist = Haversine(A, B)             [km, Luftlinie]
+        mid_day      = (from_day + to_day) / 2,0   [arithmetischer Mitteltag]
+        target_day   = ((int(mid_day) − 1) % 365) + 1  [Kalender-Tag]
+
+        Alle Graphstädte C prüfen:
+          dist_from = Haversine(A, C)
+          Bedingung: 0,5 × segment_dist ≤ dist_from ≤ 0,7 × segment_dist
+            [Kandidat muss zwischen 50% und 70% der Luftlinie liegen]
+          Wetter interpolieren für target_day
+          Grenzwerte prüfen → bei Verletzung überspringen
+          score = w_score_normiert(C, target_day)
+
+        Kandidaten sortieren nach score
+        Geografische Auswahl (Mindestabstand = segment_dist / 5):
+          greedy: besten Kandidaten wählen, nächsten nur wenn
+          Abstand zu allen bereits gewählten ≥ min_spacing
+          → maximal 2 Kandidaten pro Segment
+
+        Ankunftstag der Mittelpunktstadt berechnen:
+          dist_ratio = Haversine(A, C) / segment_dist
+          mid_day_C  = from_day + dist_ratio × (to_day − from_day)
+            [proportional zur Luftdistanz innerhalb des Segments]
+
+    Kartesisches Produkt aller Segment-Optionen:
+      Segment 1: [opt_A, opt_B]  (2 Kandidaten)
+      Segment 2: [opt_C]         (1 Kandidat)
+      → Kombinationen: [opt_A+opt_C, opt_B+opt_C]
+
+  Deduplizierung (nach Stadtsequenz)
+  Alle Kombinationen mit _score_waypoint_combo bewerten
+  Beste top_k behalten
+```
+
+**Score einer Kombination (`_score_waypoint_combo`)**
+
+Summiert die normierten Wetter-Scores aller Wegpunkte (ohne Startstadt):
+```
+combo_score = Σ w_score_normiert(city_i, day_i)
+              für alle (city_i, day_i) in combo[1:]
+
+  target_day_i = ((int(day_i) − 1) % 365) + 1
+  w_score_normiert(city, day) wie oben (temp + wind + rain normiert)
+```
+
+**Schritt 3 — Pfadbau mit Hybrid A* (`optimized_travel_planner`)**
+
+```
+Für jede der top_k Kombinationen:
+  full_path = []
+  current_day = start_day
+
+  Für jedes Segment (A, from_day) → (B, to_day):
+    expected_days = max(1.0, to_day − from_day)
+    Pfad A→B via optimized_travel_planner(
+      graph, A, B, current_day, temperatures,
+      daily_km, expected_days, ..., distance_weight=0.85
+    )
+    full_path += Graphpfad (Zwischenstädte eingeschlossen)
+    current_day += expected_days
+```
+
+**Schritt 4 — Tagesberechnung in der Endroute**
+
+```
+day = start_day
+Für jede Kante (city_j → city_{j+1}) im fertigen full_path:
+  day_{j+1} = day_j + edge_weight(city_j, city_{j+1}) / daily_km
+    [Kantenlänge in km ÷ km/Tag = Tage für diese Etappe]
+```
+
+**Finaler Score und Rückgabe**
+
+```
+route_score = _score_waypoint_combo(route_cities) / (len(route_cities) − 1)
+            = normierter Durchschnitts-Wetterscore pro Stadt (ohne Start)
+
+Routen sortieren nach route_score (aufsteigend = besser)
+Rückgabe: beste 5 Routen als [{ 'cities': [(city_id, day), ...], 'score': float }]
 ```
 
 ---
@@ -167,7 +694,8 @@ weatherroute/
 │       │   │   ├── PreviewMap.tsx      # Vorschaukarte
 │       │   │   └── StepIndicator.tsx   # Schrittanzeige
 │       │   ├── results/
-│       │   │   ├── ResultsPage.tsx     # Ergebnisseite
+│       │   │   ├── ResultsPage.tsx              # Ergebnisseite (Route planen)
+│       │   │   ├── DestinationResultsPage.tsx   # Ergebnisseite (Ziel finden)
 │       │   │   ├── ForecastMap.tsx     # Interaktive Karte
 │       │   │   ├── TemperatureChart.tsx # Temperaturdiagramm
 │       │   │   ├── ElevationChart.tsx  # Höhenprofil
@@ -212,6 +740,7 @@ weatherroute/
 | `POST` | `/api/jobs` | Routenberechnung starten |
 | `GET` | `/api/jobs/{id}/status` | Berechnungsfortschritt abfragen |
 | `GET` | `/api/jobs/{id}/results` | Fertige Ergebnisse abrufen |
+| `POST` | `/api/destination-jobs` | Zielsuche starten |
 | `POST` | `/api/gpx/jobs` | GPX-Analyse starten |
 | `GET` | `/api/saved-routes` | Gespeicherte Routen auflisten |
 | `POST` | `/api/saved-routes` | Route speichern |

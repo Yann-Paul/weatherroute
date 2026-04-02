@@ -9,7 +9,7 @@ import requests
 import polyline as polyline_codec
 from math import radians, sin, cos, sqrt, atan2, ceil
 from datetime import datetime, timedelta
-from itertools import permutations
+from itertools import permutations, product as itertools_product
 import time
 import random
 from sklearn.cluster import AgglomerativeClustering
@@ -26,6 +26,14 @@ OPEN_ELEV_ASTER= "https://api.opentopodata.org/v1/aster30m"       # ASTER: globa
 # temp_weight, wind_weight and rain_weight produce comparable score magnitudes.
 WIND_SCALE = 2.0   # 2 km/h effective headwind  ≈ 1 °C temperature deviation
 RAIN_SCALE = 2.0   # 2 mm/day precipitation      ≈ 1 °C temperature deviation
+
+# Normalisation references for beam-search w_score.
+# Values above these thresholds are considered "clearly bad" (score > 1).
+# Outliers are NOT capped — they may exceed 1.0 freely so they are naturally
+# deprioritised, but they do not distort the scale for well-behaved candidates.
+TEMP_SCORE_REF = 10.0 ** 2          # 10 °C average deviation from desired
+WIND_SCORE_REF = (15.0 / WIND_SCALE) ** 2  # 15 km/h headwind
+RAIN_SCORE_REF = (20.0 / RAIN_SCALE) ** 2  # 20 mm/day precipitation
 
 def _elev_api(latlons):
     """Return (url, batch_size, payload_fn) for the appropriate elevation API.
@@ -2700,3 +2708,741 @@ def fetch_open_meteo_forecast(points, on_progress=None):
             result[i] = data
     return result
 
+
+# ---------------------------------------------------------------------------
+# Destination Finder — find best destination regions & beam-search routes
+# ---------------------------------------------------------------------------
+
+def find_destination_cities(graph, temperatures, start_city, start_day, max_days, daily_km,
+                            desired_low_temp=None, desired_high_temp=None,
+                            min_low_temp=float('-inf'), max_low_temp=float('inf'),
+                            min_high_temp=float('-inf'), max_high_temp=float('inf'),
+                            warming_factor=0.0, temp_weight=1.0, wind_weight=0.0, rain_weight=0.0,
+                            count=10):
+    """
+    Find the best destination cities reachable from start_city in max_days.
+    Returns list of (city_id, score, distance) sorted by score (best first).
+    Cities are spaced at least max_air_distance/5 apart.
+    """
+    max_air_distance = max_days * daily_km *0.7
+    min_spacing = max_air_distance / 5
+    target_day = ((start_day + max_days - 1) % 365) + 1
+
+    start_node = graph.nodes[start_city]
+    start_pos = (float(start_node['lat']), float(start_node['lon']))
+
+    # Score all cities within radius
+    candidates = []
+    for cid in graph.nodes():
+        if cid == start_city:
+            continue
+        if cid not in temperatures:
+            continue
+        nd = graph.nodes[cid]
+        pos = (float(nd['lat']), float(nd['lon']))
+        dist = haversine(start_pos, pos)
+        if dist > max_air_distance:
+            continue
+
+        weather = get_interpolated_weather(cid, target_day, temperatures, warming_factor)
+        temp_score, violated = calculate_temperature_score(
+            weather, 2, desired_low_temp, desired_high_temp,
+            min_low_temp, max_low_temp, min_high_temp, max_high_temp
+        )
+        if violated:
+            continue
+
+        # Composite score including wind/rain
+        score = temp_weight * temp_score
+        if wind_weight > 0 and len(weather) > 3 and weather[3] is not None:
+            wind_score = (weather[3] / WIND_SCALE) ** 2
+            score += wind_weight * wind_score
+        if rain_weight > 0 and len(weather) > 2 and weather[2] is not None:
+            rain_score = (weather[2] / RAIN_SCALE) ** 2
+            score += rain_weight * rain_score
+
+        candidates.append((cid, score, dist, pos))
+
+    # Sort by score (lower = better)
+    candidates.sort(key=lambda x: x[1])
+
+    # Select top cities with minimum spacing
+    selected = []
+    for cid, score, dist, pos in candidates:
+        too_close = False
+        for _, _, _, sel_pos in selected:
+            if haversine(pos, sel_pos) < min_spacing:
+                too_close = True
+                break
+        if not too_close:
+            selected.append((cid, score, dist, pos))
+            if len(selected) >= count:
+                break
+
+    return [(cid, score, dist) for cid, score, dist, _ in selected]
+
+
+def _bearing_continuity_penalty(route_cities, candidate_pos, graph):
+    """
+    Calculate penalty for deviating from the travel direction of the last 3 cities.
+    Returns value 0..1 (0 = same direction, 1 = reverse).
+    """
+    if len(route_cities) < 2:
+        return 0.0
+
+    # Get positions of last few cities
+    positions = []
+    for cid in route_cities[-3:]:
+        nd = graph.nodes[cid]
+        positions.append((float(nd['lat']), float(nd['lon'])))
+
+    # Average bearing from recent travel
+    bearings = []
+    for i in range(len(positions) - 1):
+        b = calculate_bearing(positions[i][0], positions[i][1],
+                              positions[i + 1][0], positions[i + 1][1])
+        bearings.append(b)
+
+    # Circular weighted mean (handles 0°/360° wraparound correctly)
+    from math import sin, cos, atan2, degrees, radians
+    if len(bearings) == 1:
+        avg_bearing = bearings[0]
+    else:
+        w1, w2 = 0.7, 0.3
+        sin_val = sin(radians(bearings[-1])) * w1 + sin(radians(bearings[-2])) * w2
+        cos_val = cos(radians(bearings[-1])) * w1 + cos(radians(bearings[-2])) * w2
+        avg_bearing = degrees(atan2(sin_val, cos_val)) % 360
+
+    # Bearing to candidate
+    last_pos = positions[-1]
+    new_bearing = calculate_bearing(last_pos[0], last_pos[1],
+                                     candidate_pos[0], candidate_pos[1])
+
+    deviation = angle_difference(avg_bearing, new_bearing)
+    return (deviation / 180.0) ** 1.5
+
+
+def beam_search_route(graph, temperatures, start_city, start_day, max_days, daily_km,
+                      destination_cities, desired_low_temp=None, desired_high_temp=None,
+                      min_low_temp=float('-inf'), max_low_temp=float('inf'),
+                      min_high_temp=float('-inf'), max_high_temp=float('inf'),
+                      warming_factor=0.0, temp_weight=1.0, wind_weight=0.0, rain_weight=0.0,
+                      direction_weight=0.3, continuity_weight=2,
+                      initial_beam_width=20, final_beam_width=5,
+                      on_progress=None):
+    """
+    Beam-search route from start_city guided by destination_cities.
+    Returns list of top routes, each: {'cities': [(city_id, day)], 'score': float}
+    """
+    # Precompute destination positions
+    dest_positions = []
+    for cid, _score, _dist in destination_cities:
+        nd = graph.nodes[cid]
+        dest_positions.append((cid, float(nd['lat']), float(nd['lon'])))
+
+    # Each beam: {'cities': [city_id, ...], 'days': [day, ...], 'scores': [score, ...]}
+    beams = [{
+        'cities': [start_city],
+        'days': [start_day],
+        'scores': [],
+        'total_score': 0.0,
+    }]
+
+    # Duplicate initial beam
+    beams = [dict(b) for b in beams] * initial_beam_width
+    # Make independent copies
+    beams = [{'cities': list(b['cities']), 'days': list(b['days']),
+              'scores': list(b['scores']), 'total_score': 0.0} for b in beams]
+
+    city_coords_cache = {}
+    def get_coords(cid):
+        if cid not in city_coords_cache:
+            nd = graph.nodes[cid]
+            city_coords_cache[cid] = (float(nd['lat']), float(nd['lon']))
+        return city_coords_cache[cid]
+
+    def _weather_score(city_id, arrival_day):
+        """Compute normalised weather score for a city at a given (fractional) day."""
+        doy = (int(arrival_day) % 365) + 1
+        weather = get_interpolated_weather(city_id, doy, temperatures, warming_factor)
+        temp_score, violated = calculate_temperature_score(
+            weather, 2, desired_low_temp, desired_high_temp,
+            min_low_temp, max_low_temp, min_high_temp, max_high_temp
+        )
+        if violated:
+            return float('inf'), True
+        w = temp_weight * (temp_score / TEMP_SCORE_REF)
+        if wind_weight > 0 and len(weather) > 3 and weather[3] is not None:
+            w += wind_weight * ((weather[3] / WIND_SCALE) ** 2 / WIND_SCORE_REF)
+        if rain_weight > 0 and len(weather) > 2 and weather[2] is not None:
+            w += rain_weight * ((weather[2] / RAIN_SCALE) ** 2 / RAIN_SCORE_REF)
+        return w, False
+
+    def score_candidate(candidate_id, current_day, beam, is_2hop=False, via_id=None):
+        """Score a candidate city. Returns (score, via_city_or_None).
+
+        current_day is the actual (fractional) day when leaving the current city.
+        Edge distances are used to compute arrival days and to weight the weather
+        scores of intermediate and final cities proportionally to segment length.
+        """
+        if candidate_id not in temperatures:
+            return float('inf'), None
+
+        current_city = beam['cities'][-1]
+
+        if is_2hop and via_id:
+            if via_id not in temperatures:
+                return float('inf'), None
+            edge_1 = graph.get_edge_data(current_city, via_id)
+            edge_2 = graph.get_edge_data(via_id, candidate_id)
+            if edge_1 is None or edge_2 is None:
+                return float('inf'), None
+            dist_1 = edge_1['weight']
+            dist_2 = edge_2['weight']
+            total_dist = dist_1 + dist_2
+            w1 = dist_1 / total_dist if total_dist > 0 else 0.5
+            w2 = dist_2 / total_dist if total_dist > 0 else 0.5
+
+            day_via  = current_day + dist_1 / daily_km
+            day_cand = current_day + total_dist / daily_km
+
+            ws_via,  v1 = _weather_score(via_id,       day_via)
+            ws_cand, v2 = _weather_score(candidate_id, day_cand)
+            if v1 or v2:
+                return float('inf'), None
+
+            w_score     = w1 * ws_via + w2 * ws_cand
+            arrival_day = day_cand
+        else:
+            edge = graph.get_edge_data(current_city, candidate_id)
+            dist = edge['weight'] if edge else 0
+            arrival_day = current_day + dist / daily_km
+
+            w_score, violated = _weather_score(candidate_id, arrival_day)
+            if violated:
+                return float('inf'), None
+
+        # Direction penalty — distance to nearest destination
+        cand_pos = get_coords(candidate_id)
+        remaining_days = max_days - (arrival_day - start_day)
+        if remaining_days > 0:
+            remaining_air = remaining_days * daily_km * 0.7
+            min_dest_dist = float('inf')
+            for _, dlat, dlon in dest_positions:
+                d = haversine(cand_pos, (dlat, dlon))
+                if d < min_dest_dist:
+                    min_dest_dist = d
+            if min_dest_dist > remaining_air and remaining_air > 0:
+                overshoot = min_dest_dist / remaining_air
+                dir_penalty = overshoot ** 2
+            else:
+                dir_penalty = 0.0
+        else:
+            dir_penalty = 0.0
+
+        # Continuity penalty
+        cont_penalty = _bearing_continuity_penalty(beam['cities'], cand_pos, graph)
+        best_cont = cont_penalty
+        if is_2hop and via_id:
+            via_pos = get_coords(via_id)
+            cont_via = _bearing_continuity_penalty(beam['cities'], via_pos, graph)
+            best_cont = min(cont_penalty, cont_via)
+
+        total = w_score + direction_weight * dir_penalty + continuity_weight * best_cont
+        return total, via_id
+
+    for step in range(max_days):
+        current_day_offset = step + 1
+        progress = step / max(1, max_days - 1)
+        current_beam_width = max(final_beam_width,
+                                  int(initial_beam_width - progress * (initial_beam_width - final_beam_width)))
+
+        all_expansions = []
+
+        for beam_idx, beam in enumerate(beams):
+            current_city = beam['cities'][-1]
+            current_day  = beam['days'][-1]  # actual fractional day at current city
+
+            # Skip if beam has used up all available days
+            if current_day - start_day >= max_days:
+                all_expansions.append((beam['total_score'], beam, None, None, False))
+                continue
+
+            visited = set(beam['cities'][-5:])  # avoid very recent revisits
+
+            best_candidates = []
+
+            # 1-hop neighbors
+            for neighbor in graph.neighbors(current_city):
+                if neighbor in visited:
+                    continue
+                score, _ = score_candidate(neighbor, current_day, beam)
+                if score < float('inf'):
+                    best_candidates.append((score, neighbor, False, None))
+
+            # 2-hop neighbors
+            for neighbor1 in graph.neighbors(current_city):
+                if neighbor1 in visited:
+                    continue
+                for neighbor2 in graph.neighbors(neighbor1):
+                    if neighbor2 in visited or neighbor2 == current_city:
+                        continue
+                    score, _ = score_candidate(neighbor2, current_day, beam,
+                                                is_2hop=True, via_id=neighbor1)
+                    if score < float('inf'):
+                        best_candidates.append((score, neighbor2, True, neighbor1))
+
+            # Take best candidates for this beam
+            best_candidates.sort(key=lambda x: x[0])
+            for score, cand_city, is_2hop, via_city in best_candidates[:3]:
+                new_beam = {
+                    'cities': list(beam['cities']),
+                    'days': list(beam['days']),
+                    'scores': list(beam['scores']),
+                    'total_score': 0.0,
+                }
+                if is_2hop and via_city:
+                    edge_1 = graph.get_edge_data(current_city, via_city)
+                    edge_2 = graph.get_edge_data(via_city, cand_city)
+                    dist_1 = edge_1['weight'] if edge_1 else 0
+                    dist_2 = edge_2['weight'] if edge_2 else 0
+                    day_via  = current_day + dist_1 / daily_km
+                    day_cand = current_day + (dist_1 + dist_2) / daily_km
+
+                    new_beam['cities'].append(via_city)
+                    new_beam['days'].append(day_via)
+                    via_score, _ = score_candidate(via_city, current_day, beam)
+                    if via_score == float('inf'):
+                        via_score = score  # fallback
+                    new_beam['scores'].append(via_score)
+                    new_beam['cities'].append(cand_city)
+                    new_beam['days'].append(day_cand)
+                    new_beam['scores'].append(score)
+                else:
+                    edge = graph.get_edge_data(current_city, cand_city)
+                    dist = edge['weight'] if edge else 0
+                    day_cand = current_day + dist / daily_km
+                    new_beam['cities'].append(cand_city)
+                    new_beam['days'].append(day_cand)
+                    new_beam['scores'].append(score)
+
+                # Recalculate average score
+                if new_beam['scores']:
+                    new_beam['total_score'] = sum(new_beam['scores']) / len(new_beam['scores'])
+
+                all_expansions.append((new_beam['total_score'], new_beam, cand_city, via_city, is_2hop))
+
+        if not all_expansions:
+            break
+
+        # Sort by total score and keep best beams
+        all_expansions.sort(key=lambda x: x[0])
+
+        # Deduplicate: don't keep beams ending at same city
+        seen_endings = set()
+        new_beams = []
+        for total_score, beam, _, _, _ in all_expansions:
+            end_city = beam['cities'][-1]
+            if end_city not in seen_endings:
+                seen_endings.add(end_city)
+                new_beams.append(beam)
+                if len(new_beams) >= current_beam_width:
+                    break
+
+        if not new_beams:
+            break
+
+        beams = new_beams
+
+        # Handle 2-hop step consuming 2 days
+        # Some beams may have advanced 2 days, adjust step count
+        if on_progress:
+            on_progress(step, max_days)
+
+    # Return top routes
+    beams.sort(key=lambda b: b['total_score'])
+    results = []
+    for beam in beams[:final_beam_width]:
+        route = list(zip(beam['cities'], beam['days']))
+        results.append({
+            'cities': route,
+            'score': beam['total_score'],
+        })
+    return results
+
+
+def find_destination_route(graph, temperatures, start_city, start_day, max_days, daily_km,
+                           desired_low_temp=None, desired_high_temp=None,
+                           min_low_temp=float('-inf'), max_low_temp=float('inf'),
+                           min_high_temp=float('-inf'), max_high_temp=float('inf'),
+                           warming_factor=0.0, temp_weight=1.0, wind_weight=0.0, rain_weight=0.0,
+                           direction_weight=0.3, continuity_weight=2,
+                           blocked_countries=None, city_ids_by_country=None,
+                           on_progress=None):
+    """
+    Main entry point: find destinations + beam-search routes.
+    Returns (destination_cities, routes) where routes is list of route dicts.
+    """
+    work_graph = graph.copy()
+    if blocked_countries and city_ids_by_country:
+        work_graph = remove_nodes_for_blocked_countries(work_graph, blocked_countries, city_ids_by_country)
+
+    if start_city not in work_graph.nodes:
+        return [], []
+
+    destinations = find_destination_cities(
+        work_graph, temperatures, start_city, start_day, max_days, daily_km,
+        desired_low_temp, desired_high_temp,
+        min_low_temp, max_low_temp, min_high_temp, max_high_temp,
+        warming_factor, temp_weight, wind_weight, rain_weight,
+    )
+
+    if not destinations:
+        return [], []
+
+    routes = beam_search_route(
+        work_graph, temperatures, start_city, start_day, max_days, daily_km,
+        destinations, desired_low_temp, desired_high_temp,
+        min_low_temp, max_low_temp, min_high_temp, max_high_temp,
+        warming_factor, temp_weight, wind_weight, rain_weight,
+        direction_weight, continuity_weight,
+        on_progress=on_progress,
+    )
+
+    return destinations, routes
+
+
+# ---------------------------------------------------------------------------
+# Hierarchical Waypoint Search — divide-and-conquer route planning
+# ---------------------------------------------------------------------------
+
+def _find_waypoint_cities(graph, temperatures, from_city, from_day, to_city, to_day,
+                          daily_km, desired_low_temp=None, desired_high_temp=None,
+                          min_low_temp=float('-inf'), max_low_temp=float('inf'),
+                          min_high_temp=float('-inf'), max_high_temp=float('inf'),
+                          warming_factor=0.0, temp_weight=1.0, wind_weight=0.0, rain_weight=0.0,
+                          count=2):
+    """
+    Find the best 'count' waypoint cities for the midpoint of a route segment.
+
+    The midpoint must have air distance from from_city between 0.5 and 0.7 of the
+    segment's total air distance, and the best weather score for the middle day.
+
+    Returns list of (city_id, score, pos) sorted by score (best first).
+    """
+    from_node = graph.nodes[from_city]
+    to_node = graph.nodes[to_city]
+    from_pos = (float(from_node['lat']), float(from_node['lon']))
+    to_pos = (float(to_node['lat']), float(to_node['lon']))
+
+    segment_dist = haversine(from_pos, to_pos)
+    if segment_dist < 1.0:
+        return []
+
+    mid_day = (from_day + to_day) / 2.0
+    target_day = ((int(mid_day) - 1) % 365) + 1
+
+    min_dist = 0.5 * segment_dist
+    max_dist = 0.7 * segment_dist
+
+    candidates = []
+    for cid in graph.nodes():
+        if cid == from_city or cid == to_city:
+            continue
+        if cid not in temperatures:
+            continue
+        nd = graph.nodes[cid]
+        pos = (float(nd['lat']), float(nd['lon']))
+        dist_from = haversine(from_pos, pos)
+
+        if dist_from < min_dist or dist_from > max_dist:
+            continue
+
+        weather = get_interpolated_weather(cid, target_day, temperatures, warming_factor)
+        temp_score, violated = calculate_temperature_score(
+            weather, 2, desired_low_temp, desired_high_temp,
+            min_low_temp, max_low_temp, min_high_temp, max_high_temp
+        )
+        if violated:
+            continue
+
+        score = temp_weight * (temp_score / TEMP_SCORE_REF)
+        if wind_weight > 0 and len(weather) > 3 and weather[3] is not None:
+            score += wind_weight * ((weather[3] / WIND_SCALE) ** 2 / WIND_SCORE_REF)
+        if rain_weight > 0 and len(weather) > 2 and weather[2] is not None:
+            score += rain_weight * ((weather[2] / RAIN_SCALE) ** 2 / RAIN_SCORE_REF)
+
+        candidates.append((cid, score, pos))
+
+    if not candidates:
+        return []
+
+    candidates.sort(key=lambda x: x[1])
+
+    # Select with minimum spacing to ensure geographic diversity
+    min_spacing = segment_dist / 5
+    selected = []
+    for cid, score, pos in candidates:
+        too_close = any(haversine(pos, s_pos) < min_spacing for _, _, s_pos in selected)
+        if not too_close:
+            selected.append((cid, score, pos))
+            if len(selected) >= count:
+                break
+
+    return selected
+
+
+def _score_waypoint_combo(combo, temperatures, desired_low_temp, desired_high_temp,
+                          min_low_temp, max_low_temp, min_high_temp, max_high_temp,
+                          warming_factor, temp_weight, wind_weight, rain_weight):
+    """Score a waypoint combination (lower = better). Skips start city."""
+    total = 0.0
+    for cid, day in combo[1:]:
+        target_day = ((int(day) - 1) % 365) + 1
+        weather = get_interpolated_weather(cid, target_day, temperatures, warming_factor)
+        temp_score, _ = calculate_temperature_score(
+            weather, 2, desired_low_temp, desired_high_temp,
+            min_low_temp, max_low_temp, min_high_temp, max_high_temp
+        )
+        total += temp_weight * (temp_score / TEMP_SCORE_REF)
+        if wind_weight > 0 and len(weather) > 3 and weather[3] is not None:
+            total += wind_weight * ((weather[3] / WIND_SCALE) ** 2 / WIND_SCORE_REF)
+        if rain_weight > 0 and len(weather) > 2 and weather[2] is not None:
+            total += rain_weight * ((weather[2] / RAIN_SCALE) ** 2 / RAIN_SCORE_REF)
+    return total
+
+
+def _expand_combination(combo, graph, temperatures, daily_km,
+                        desired_low_temp, desired_high_temp,
+                        min_low_temp, max_low_temp, min_high_temp, max_high_temp,
+                        warming_factor, temp_weight, wind_weight, rain_weight,
+                        min_segment_days=10):
+    """
+    Expand a combination by finding midpoints for all long segments.
+
+    For each segment with day_gap >= min_segment_days, finds up to 2 midpoint cities.
+    Returns all new combos as a cartesian product of midpoint choices per segment.
+    """
+    # Collect midpoint options per segment
+    segments_midpoints = []
+    for i in range(len(combo) - 1):
+        from_city, from_day = combo[i]
+        to_city, to_day = combo[i + 1]
+
+        if (to_day - from_day) >= min_segment_days:
+            from_node = graph.nodes[from_city]
+            to_node = graph.nodes[to_city]
+            from_pos = (float(from_node['lat']), float(from_node['lon']))
+            to_pos = (float(to_node['lat']), float(to_node['lon']))
+            segment_air_dist = haversine(from_pos, to_pos)
+            midpoints = _find_waypoint_cities(
+                graph, temperatures, from_city, from_day, to_city, to_day,
+                daily_km, desired_low_temp, desired_high_temp,
+                min_low_temp, max_low_temp, min_high_temp, max_high_temp,
+                warming_factor, temp_weight, wind_weight, rain_weight, count=2
+            )
+            # Set mid_day proportional to air distance so time allocation matches travel distance
+            opts = []
+            for cid, _, mid_pos in midpoints:
+                dist_ratio = haversine(from_pos, mid_pos) / segment_air_dist if segment_air_dist > 0 else 0.6
+                mid_day = from_day + dist_ratio * (to_day - from_day)
+                opts.append((cid, mid_day))
+        else:
+            opts = []
+        segments_midpoints.append(opts)
+
+    # Build expanded combos iteratively (cartesian product of segment choices)
+    expanded = [[combo[0]]]
+    for i, opts in enumerate(segments_midpoints):
+        to_wp = combo[i + 1]
+        new_expanded = []
+        if opts:
+            for partial in expanded:
+                for mid_wp in opts:
+                    new_expanded.append(partial + [mid_wp, to_wp])
+        else:
+            for partial in expanded:
+                new_expanded.append(partial + [to_wp])
+        expanded = new_expanded
+
+    return expanded
+
+
+def hierarchical_waypoint_route(graph, temperatures, start_city, start_day, max_days, daily_km,
+                                destination_cities,
+                                desired_low_temp=None, desired_high_temp=None,
+                                min_low_temp=float('-inf'), max_low_temp=float('inf'),
+                                min_high_temp=float('-inf'), max_high_temp=float('inf'),
+                                warming_factor=0.0, temp_weight=1.0, wind_weight=0.0, rain_weight=0.0,
+                                min_segment_days=10, top_k=10,
+                                on_progress=None):
+    """
+    Hierarchical waypoint search.
+
+    1. Initialises one combination per destination city
+    2. Iteratively inserts midpoint cities for each long segment (day_gap >= min_segment_days)
+       - Each segment gets up to 2 candidate midpoints
+       - All cartesian products are scored; best top_k kept
+    3. Once all segments are short, uses Hybrid A* (optimized_travel_planner) to
+       build actual graph paths between consecutive waypoints
+    4. Returns top 5 routes sorted by average weather score
+    """
+    # Initial combinations: start → each destination
+    # Compute realistic travel days for each destination from its air distance.
+    # find_destination_cities uses max_air_distance = max_days*daily_km*0.7.
+    # Estimate actual road days as dist/(0.7*daily_km).
+    combinations = []
+    for cid, _score, dist in destination_cities:
+        realistic_days = dist / (0.7 * daily_km)
+        travel_days = min(float(max_days), realistic_days)
+        end_day = float(start_day) + travel_days
+        combinations.append([(start_city, float(start_day)), (cid, end_day)])
+
+    # Iteratively refine until all segments are short
+    iteration = 0
+    while True:
+        any_long = any(
+            (to_day - from_day) >= min_segment_days
+            for combo in combinations
+            for (_f, from_day), (_t, to_day) in zip(combo, combo[1:])
+        )
+        if not any_long:
+            break
+
+        if on_progress:
+            on_progress(iteration, iteration + 2)
+
+        new_combos = []
+        for combo in combinations:
+            expanded = _expand_combination(
+                combo, graph, temperatures, daily_km,
+                desired_low_temp, desired_high_temp,
+                min_low_temp, max_low_temp, min_high_temp, max_high_temp,
+                warming_factor, temp_weight, wind_weight, rain_weight,
+                min_segment_days
+            )
+            new_combos.extend(expanded)
+
+        # Deduplicate by city sequence
+        seen = set()
+        unique = []
+        for combo in new_combos:
+            key = tuple(cid for cid, _ in combo)
+            if key not in seen:
+                seen.add(key)
+                unique.append(combo)
+
+        # Score and keep best top_k
+        scored = sorted(
+            ((_score_waypoint_combo(
+                combo, temperatures,
+                desired_low_temp, desired_high_temp,
+                min_low_temp, max_low_temp, min_high_temp, max_high_temp,
+                warming_factor, temp_weight, wind_weight, rain_weight
+            ), combo) for combo in unique),
+            key=lambda x: x[0]
+        )
+        combinations = [combo for _, combo in scored[:top_k]]
+        iteration += 1
+
+    if on_progress:
+        on_progress(iteration, iteration + 1)
+
+    # Build actual graph routes with Hybrid A*
+    routes = []
+    for combo in combinations:
+        try:
+            full_path = []
+            current_day = float(start_day)
+            interpol_tt = None
+            spatial_i_tt = None
+
+            for i in range(len(combo) - 1):
+                from_city_id, from_day = combo[i]
+                to_city_id, to_day = combo[i + 1]
+                expected_days = max(1.0, to_day - from_day)
+
+                try:
+                    seg_path, _seg_score, interpol_tt, spatial_i_tt = optimized_travel_planner(
+                        graph, from_city_id, to_city_id, current_day, temperatures,
+                        daily_km, expected_days,
+                        desired_low_temp, desired_high_temp,
+                        min_low_temp, max_low_temp, min_high_temp, max_high_temp,
+                        temp_weight=temp_weight, warming_factor=warming_factor,
+                        distance_weight=0.85,
+                        interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt
+                    )
+                except Exception:
+                    seg_path = [from_city_id, to_city_id]
+
+                if not full_path:
+                    full_path.extend(seg_path)
+                else:
+                    full_path.extend(seg_path[1:])
+
+                current_day += expected_days
+
+            # Assign days to each city in path
+            route_cities = []
+            day = float(start_day)
+            for j, cid in enumerate(full_path):
+                route_cities.append((cid, day))
+                if j < len(full_path) - 1:
+                    edge = graph.get_edge_data(cid, full_path[j + 1])
+                    if edge:
+                        day += edge['weight'] / daily_km
+
+            score = _score_waypoint_combo(
+                route_cities, temperatures,
+                desired_low_temp, desired_high_temp,
+                min_low_temp, max_low_temp, min_high_temp, max_high_temp,
+                warming_factor, temp_weight, wind_weight, rain_weight
+            ) / max(1, len(route_cities) - 1)
+
+            routes.append({'cities': route_cities, 'score': score})
+
+        except Exception:
+            continue
+
+    routes.sort(key=lambda x: x['score'])
+    return routes[:5]
+
+
+def find_destination_route_hierarchical(graph, temperatures, start_city, start_day, max_days, daily_km,
+                                       desired_low_temp=None, desired_high_temp=None,
+                                       min_low_temp=float('-inf'), max_low_temp=float('inf'),
+                                       min_high_temp=float('-inf'), max_high_temp=float('inf'),
+                                       warming_factor=0.0, temp_weight=1.0, wind_weight=0.0, rain_weight=0.0,
+                                       blocked_countries=None, city_ids_by_country=None,
+                                       on_progress=None):
+    """
+    Hierarchical waypoint destination route finder.
+    Finds 10 destination cities, then refines routes via divide-and-conquer waypoint search.
+    Returns (destination_cities, routes).
+    """
+    work_graph = graph.copy()
+    if blocked_countries and city_ids_by_country:
+        work_graph = remove_nodes_for_blocked_countries(work_graph, blocked_countries, city_ids_by_country)
+
+    if start_city not in work_graph.nodes:
+        return [], []
+
+    destinations = find_destination_cities(
+        work_graph, temperatures, start_city, start_day, max_days, daily_km,
+        desired_low_temp, desired_high_temp,
+        min_low_temp, max_low_temp, min_high_temp, max_high_temp,
+        warming_factor, temp_weight, wind_weight, rain_weight,
+    )
+
+    if not destinations:
+        return [], []
+
+    routes = hierarchical_waypoint_route(
+        work_graph, temperatures, start_city, start_day, max_days, daily_km,
+        destinations, desired_low_temp, desired_high_temp,
+        min_low_temp, max_low_temp, min_high_temp, max_high_temp,
+        warming_factor, temp_weight, wind_weight, rain_weight,
+        on_progress=on_progress,
+    )
+
+    return destinations, routes

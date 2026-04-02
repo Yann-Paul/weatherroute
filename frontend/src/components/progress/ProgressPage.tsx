@@ -61,6 +61,7 @@ export function ProgressPage() {
         step: data.step,
         message: data.message,
         jobType: data.jobType ?? job.jobType,
+        algorithm: data.algorithm ?? job.algorithm,
         osrmDone: data.osrmDone,
         osrmTotal: data.osrmTotal,
         roughMap: data.roughMap ?? job.roughMap,
@@ -75,8 +76,11 @@ export function ProgressPage() {
       });
 
       if (data.status === "done" || data.status === "preview") {
-        const isGpx = (data.jobType ?? job.jobType) === "gpx";
-        setTimeout(() => navigate(isGpx ? `/gpx/results/${jobId}` : `/results/${jobId}`), 600);
+        const jt = data.jobType ?? job.jobType;
+        const target = jt === "gpx" ? `/gpx/results/${jobId}`
+          : jt === "destination" ? `/destination/results/${jobId}`
+          : `/results/${jobId}`;
+        setTimeout(() => navigate(target), 600);
         return;
       }
 
@@ -108,13 +112,18 @@ export function ProgressPage() {
 
   const isGpxJob = job.jobType === "gpx";
   const isWeatherRoute = job.jobType === "weather_route";
+  const isDestination = job.jobType === "destination";
+  const isHierarchical = isDestination && job.algorithm === "hierarchical";
   const hasRegistering = job.registeringTotal > 0;
+  const destSearchStep = isHierarchical ? "hierarchical_search" : "beam_search";
   const stepOrder = isGpxJob
     ? ["elevation", "forecast"]
+    : isDestination
+    ? ["destination_search", destSearchStep, "building_routes", "done"]
     : isWeatherRoute
     ? hasRegistering ? ["registering", "osrm", "elevation", "forecast"] : ["osrm", "elevation", "forecast"]
     : hasRegistering ? ["registering", "route", "osrm", "elevation", "forecast"] : ["route", "osrm", "elevation", "forecast"];
-  const defaultStep = isGpxJob ? "elevation" : hasRegistering ? "registering" : isWeatherRoute ? "osrm" : "route";
+  const defaultStep = isGpxJob ? "elevation" : isDestination ? "destination_search" : hasRegistering ? "registering" : isWeatherRoute ? "osrm" : "route";
   const isError = job.status === "error";
   const osrmProgress =
     job.osrmTotal > 0 ? (job.osrmDone / job.osrmTotal) * 100 : 0;
@@ -126,61 +135,83 @@ export function ProgressPage() {
           <CardTitle>{t.progress.heading}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1" aria-live="polite" aria-atomic="false">
-          {!isGpxJob && hasRegistering && (
-            <StepIndicator
-              label={t.progress.stepRegistering}
-              status={getStepStatus(job.step || defaultStep, "registering", isError, stepOrder)}
-              detail={job.step === "registering" ? job.message : undefined}
-              progress={
-                job.step === "registering" && job.registeringTotal > 0
-                  ? (job.registeringDone / job.registeringTotal) * 100
-                  : undefined
-              }
-            />
+          {isDestination ? (
+            <>
+              <StepIndicator
+                label={t.progress.stepDestinationSearch}
+                status={getStepStatus(job.step || defaultStep, "destination_search", isError, stepOrder)}
+                detail={job.step === "destination_search" ? job.message : undefined}
+              />
+              <StepIndicator
+                label={isHierarchical ? t.progress.stepHierarchical : t.progress.stepBeamSearch}
+                status={getStepStatus(job.step || defaultStep, destSearchStep, isError, stepOrder)}
+                detail={job.step === destSearchStep ? job.message : undefined}
+              />
+              <StepIndicator
+                label={t.progress.stepBuildingRoutes}
+                status={getStepStatus(job.step || defaultStep, "building_routes", isError, stepOrder)}
+                detail={job.step === "building_routes" ? job.message : undefined}
+              />
+            </>
+          ) : (
+            <>
+              {!isGpxJob && hasRegistering && (
+                <StepIndicator
+                  label={t.progress.stepRegistering}
+                  status={getStepStatus(job.step || defaultStep, "registering", isError, stepOrder)}
+                  detail={job.step === "registering" ? job.message : undefined}
+                  progress={
+                    job.step === "registering" && job.registeringTotal > 0
+                      ? (job.registeringDone / job.registeringTotal) * 100
+                      : undefined
+                  }
+                />
+              )}
+              {!isGpxJob && !isWeatherRoute && (
+                <StepIndicator
+                  label={t.progress.stepRoute}
+                  status={getStepStatus(job.step || defaultStep, "route", isError, stepOrder)}
+                  detail={job.step === "route" ? job.message : undefined}
+                />
+              )}
+              {!isGpxJob && (
+                <StepIndicator
+                  label={t.progress.stepOsrm}
+                  status={getStepStatus(job.step || defaultStep, "osrm", isError, stepOrder)}
+                  detail={
+                    job.step === "osrm" && job.osrmTotal > 0
+                      ? t.progress.stepOsrmDetail(job.osrmDone, job.osrmTotal)
+                      : undefined
+                  }
+                  progress={job.step === "osrm" ? osrmProgress : undefined}
+                />
+              )}
+              <StepIndicator
+                label={t.progress.stepElevation}
+                status={getStepStatus(job.step || defaultStep, "elevation", isError, stepOrder)}
+                detail={job.step === "elevation" ? job.message : undefined}
+                progress={
+                  job.step === "elevation" && job.elevationBatchTotal > 0
+                    ? (job.elevationBatchDone / job.elevationBatchTotal) * 100
+                    : undefined
+                }
+              />
+              <StepIndicator
+                label={t.progress.stepForecast}
+                status={getStepStatus(job.step || defaultStep, "forecast", isError, stepOrder)}
+                detail={
+                  job.step === "forecast" && job.forecastTotal > 0
+                    ? t.progress.stepForecastDetail(job.forecastDone, job.forecastTotal)
+                    : undefined
+                }
+                progress={
+                  job.step === "forecast" && job.forecastTotal > 0
+                    ? (job.forecastDone / job.forecastTotal) * 100
+                    : undefined
+                }
+              />
+            </>
           )}
-          {!isGpxJob && !isWeatherRoute && (
-            <StepIndicator
-              label={t.progress.stepRoute}
-              status={getStepStatus(job.step || defaultStep, "route", isError, stepOrder)}
-              detail={job.step === "route" ? job.message : undefined}
-            />
-          )}
-          {!isGpxJob && (
-            <StepIndicator
-              label={t.progress.stepOsrm}
-              status={getStepStatus(job.step || defaultStep, "osrm", isError, stepOrder)}
-              detail={
-                job.step === "osrm" && job.osrmTotal > 0
-                  ? t.progress.stepOsrmDetail(job.osrmDone, job.osrmTotal)
-                  : undefined
-              }
-              progress={job.step === "osrm" ? osrmProgress : undefined}
-            />
-          )}
-          <StepIndicator
-            label={t.progress.stepElevation}
-            status={getStepStatus(job.step || defaultStep, "elevation", isError, stepOrder)}
-            detail={job.step === "elevation" ? job.message : undefined}
-            progress={
-              job.step === "elevation" && job.elevationBatchTotal > 0
-                ? (job.elevationBatchDone / job.elevationBatchTotal) * 100
-                : undefined
-            }
-          />
-          <StepIndicator
-            label={t.progress.stepForecast}
-            status={getStepStatus(job.step || defaultStep, "forecast", isError, stepOrder)}
-            detail={
-              job.step === "forecast" && job.forecastTotal > 0
-                ? t.progress.stepForecastDetail(job.forecastDone, job.forecastTotal)
-                : undefined
-            }
-            progress={
-              job.step === "forecast" && job.forecastTotal > 0
-                ? (job.forecastDone / job.forecastTotal) * 100
-                : undefined
-            }
-          />
 
           {job.warnings && job.warnings.length > 0 && (
             <div className="mt-4 space-y-2">

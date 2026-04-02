@@ -43,6 +43,9 @@ from module import (
     sample_chunk_fixed_density,
     select_forecast_points,
     fetch_open_meteo_forecast,
+    find_destination_route,
+    find_destination_route_hierarchical,
+    haversine,
 )
 
 OPEN_ELEV_SRTM = "https://api.opentopodata.org/v1/srtm30m"        # SRTM: 60°S–60°N
@@ -739,6 +742,174 @@ def submit_job(data: JobSubmission):
     return {"jobId": job_id}
 
 
+class DestinationFinderSubmission(BaseModel):
+    startCity: str
+    startDay: int
+    desiredDayTemp: float = 25
+    desiredNightTemp: float = 15
+    dayTempMin: float = -20
+    dayTempMax: float = 50
+    nightTempMin: float = -30
+    nightTempMax: float = 40
+    warmingFactor: float = 1.5
+    tempWeight: float = 1.0
+    windWeight: float = 0.0
+    rainWeight: float = 0.0
+    maxDailyKm: float = 120
+    maxTravelDays: int = 30
+    elevResolution: int = 1000
+    blockedCountries: List[str] = []
+    routingMode: Optional[str] = "car"
+    brouterProfile: Optional[str] = "trekking"
+    algorithm: Optional[str] = "beam_search"  # "beam_search" or "hierarchical"
+
+
+@app.post("/api/destination-jobs")
+def submit_destination_job(data: DestinationFinderSubmission):
+    start_city, _ = resolve_city_name(data.startCity)
+    if not start_city:
+        raise HTTPException(400, f"Startstadt nicht gefunden: {data.startCity}")
+
+    params = dict(
+        start_city=start_city,
+        start_day=data.startDay,
+        low_temp=data.desiredNightTemp,
+        high_temp=data.desiredDayTemp,
+        high_temp_min=data.dayTempMin,
+        high_temp_max=data.dayTempMax,
+        low_temp_min=data.nightTempMin,
+        low_temp_max=data.nightTempMax,
+        daily_km=data.maxDailyKm,
+        max_days=data.maxTravelDays,
+        elev_points_per_1000km=data.elevResolution,
+        temp_weight=data.tempWeight,
+        wind_weight=data.windWeight,
+        rain_weight=data.rainWeight,
+        warming_factor=data.warmingFactor,
+        routing_mode=(
+            f"brouter_{data.brouterProfile or 'trekking'}"
+            if (data.routingMode or "car") == "brouter"
+            else (data.routingMode or "car")
+        ),
+        blocked_countries=data.blockedCountries,
+        algorithm=data.algorithm or "beam_search",
+    )
+
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {
+        "status": "pending",
+        "step": "destination_search",
+        "message": "Zielstädte werden gesucht...",
+        "jobType": "destination",
+        "algorithm": params.get("algorithm", "beam_search"),
+        "osrm_done": 0,
+        "osrm_total": 0,
+        "rough_map": None,
+        "result": None,
+        "error": None,
+        "elevation_batch_done": 0,
+        "elevation_batch_total": 0,
+        "forecast_done": 0,
+        "forecast_total": 0,
+        "registering_done": 0,
+        "registering_total": 0,
+        "warnings": [],
+        "destination_routes_done": 0,
+        "destination_routes_total": 5,
+    }
+
+    t = threading.Thread(target=run_destination_job, args=(job_id, params), daemon=True)
+    t.start()
+
+    return {"jobId": job_id}
+
+
+class DestinationDetailRequest(BaseModel):
+    """Start a detailed OSRM+elevation+forecast job for one destination route."""
+    cityIds: List[str]
+    startDay: int
+    desiredDayTemp: float = 25
+    desiredNightTemp: float = 15
+    dayTempMin: float = -20
+    dayTempMax: float = 50
+    nightTempMin: float = -30
+    nightTempMax: float = 40
+    warmingFactor: float = 1.5
+    tempWeight: float = 1.0
+    windWeight: float = 0.0
+    rainWeight: float = 0.0
+    distanceWeight: float = 0.5
+    maxDailyKm: float = 120
+    maxTravelDays: int = 365
+    elevResolution: int = 1000
+    blockedCountries: List[str] = []
+    routingMode: Optional[str] = "car"
+    brouterProfile: Optional[str] = "trekking"
+
+
+@app.post("/api/destination-detail-jobs")
+def submit_destination_detail_job(data: DestinationDetailRequest):
+    """Turn a destination graph-route into a full OSRM+elevation+forecast job."""
+    city_ids = [cid for cid in data.cityIds if cid in city_graph.nodes]
+    if len(city_ids) < 2:
+        raise HTTPException(400, "Mindestens 2 bekannte Städte erforderlich.")
+
+    params = dict(
+        city_ids=city_ids,
+        pending_registration=[],
+        city_rest_days={},
+        start_city=city_ids[0],
+        connections=[],
+        start_day=data.startDay,
+        low_temp=data.desiredNightTemp,
+        high_temp=data.desiredDayTemp,
+        high_temp_min=data.dayTempMin,
+        high_temp_max=data.dayTempMax,
+        low_temp_min=data.nightTempMin,
+        low_temp_max=data.nightTempMax,
+        daily_km=data.maxDailyKm,
+        max_days=data.maxTravelDays,
+        elev_points_per_1000km=data.elevResolution,
+        temp_weight=data.tempWeight,
+        wind_weight=data.windWeight,
+        rain_weight=data.rainWeight,
+        distance_weight=data.distanceWeight,
+        warming_factor=data.warmingFactor,
+        routing_mode=(
+            f"brouter_{data.brouterProfile or 'trekking'}"
+            if (data.routingMode or "car") == "brouter"
+            else (data.routingMode or "car")
+        ),
+        sorted_input=True,   # cities are already in order
+        blocked_countries=data.blockedCountries,
+    )
+
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {
+        "status": "pending",
+        "step": "osrm",
+        "message": "Straßenrouting wird berechnet...",
+        "jobType": "weather_route",
+        "osrm_done": 0,
+        "osrm_total": max(0, len(city_ids) - 1),
+        "rough_map": None,
+        "result": None,
+        "error": None,
+        "elevation_batch_done": 0,
+        "elevation_batch_total": 0,
+        "forecast_done": 0,
+        "forecast_total": 0,
+        "registering_done": 0,
+        "registering_total": 0,
+        "warnings": [],
+    }
+
+    t = threading.Thread(target=run_direct_osrm_job, args=(job_id, params), daemon=True)
+    t.start()
+
+    return {"jobId": job_id}
+
+
 @app.get("/api/jobs/{job_id}/status")
 def job_status(job_id: str):
     job = jobs.get(job_id)
@@ -751,6 +922,7 @@ def job_status(job_id: str):
         "step": job["step"],
         "message": job["message"],
         "jobType": job.get("jobType", "route"),
+        "algorithm": job.get("algorithm", "beam_search"),
         "osrmDone": job["osrm_done"],
         "osrmTotal": job["osrm_total"],
         "roughMap": rough_map,
@@ -762,6 +934,8 @@ def job_status(job_id: str):
         "registeringDone": job.get("registering_done", 0),
         "registeringTotal": job.get("registering_total", 0),
         "warnings": job.get("warnings", []),
+        "destinationRoutesDone": job.get("destination_routes_done", 0),
+        "destinationRoutesTotal": job.get("destination_routes_total", 0),
     }
 
 
@@ -1620,6 +1794,207 @@ def run_calculation(job_id: str, params: dict):
         update("elevation", "Fertig!", status="done")
         job["status"] = "done"
         job["result"]["elevationComplete"] = True
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        job["status"] = "error"
+        job["error"] = _friendly_error(e)
+
+
+# ---------------------------------------------------------------------------
+# Destination Finder background task
+# ---------------------------------------------------------------------------
+
+
+def run_destination_job(job_id: str, params: dict):
+    """Find destination cities + beam-search routes, then OSRM + elevation + forecast."""
+    job = jobs[job_id]
+
+    def update(step: str, message: str, **kwargs):
+        job["step"] = step
+        job["message"] = message
+        for k, v in kwargs.items():
+            job[k] = v
+
+    try:
+        job["status"] = "running"
+        update("destination_search", "Zielstädte werden gesucht...")
+
+        city_ids_by_country = load_city_ids_by_country("data/city_ids_by_country.json")
+
+        algorithm = params.get("algorithm", "beam_search")
+
+        def on_beam_progress(step, total):
+            pct = int(step / max(1, total) * 100)
+            update("beam_search", f"Beam-Search... {pct}%")
+
+        def on_hierarchical_progress(step, total):
+            pct = int(step / max(1, total) * 100)
+            update("hierarchical_search", f"Hierarchische Wegpunktsuche... {pct}%")
+
+        route_kwargs = dict(
+            start_city=params["start_city"],
+            start_day=params["start_day"],
+            max_days=params["max_days"],
+            daily_km=params["daily_km"],
+            desired_low_temp=params["low_temp"],
+            desired_high_temp=params["high_temp"],
+            min_low_temp=params["low_temp_min"],
+            max_low_temp=params["low_temp_max"],
+            min_high_temp=params["high_temp_min"],
+            max_high_temp=params["high_temp_max"],
+            warming_factor=params["warming_factor"],
+            temp_weight=params["temp_weight"],
+            wind_weight=params["wind_weight"],
+            rain_weight=params["rain_weight"],
+            blocked_countries=params["blocked_countries"],
+            city_ids_by_country=city_ids_by_country,
+        )
+
+        if algorithm == "hierarchical":
+            update("hierarchical_search", "Hierarchische Wegpunktsuche wird gestartet...")
+            destinations, routes = find_destination_route_hierarchical(
+                city_graph, temperatures,
+                **route_kwargs,
+                on_progress=on_hierarchical_progress,
+            )
+        else:
+            destinations, routes = find_destination_route(
+                city_graph, temperatures,
+                **route_kwargs,
+                on_progress=on_beam_progress,
+            )
+
+        if not routes:
+            job["status"] = "error"
+            job["error"] = "Keine Routen gefunden."
+            return
+
+        # Build destination cities info for response
+        dest_info = []
+        for cid, score, dist in destinations:
+            nd = city_graph.nodes[cid]
+            target_day = ((params["start_day"] + params["max_days"] - 1) % 365) + 1
+            weather = get_interpolated_weather(cid, target_day, temperatures, params["warming_factor"])
+            dest_info.append({
+                "id": cid,
+                "name": nd.get("name", cid),
+                "lat": float(nd["lat"]),
+                "lon": float(nd["lon"]),
+                "score": round(score, 2),
+                "distance": round(dist, 1),
+                "tmin": round(weather[0], 1) if weather[0] is not None else None,
+                "tmax": round(weather[1], 1) if weather[1] is not None else None,
+            })
+
+        # Build graph-only routes (no OSRM — straight lines between nodes)
+        update("building_routes", "Routen werden zusammengestellt...")
+        route_results = []
+        for ri, route_data in enumerate(routes):
+            route_cities = route_data['cities']  # list of (city_id, day)
+
+            # Collect city data + weather for each node
+            all_temps_data = []
+            for city_id, day in route_cities:
+                try:
+                    nd = city_graph.nodes[city_id]
+                    lat, lon = float(nd["lat"]), float(nd["lon"])
+                    weather = get_interpolated_weather(
+                        city_id, ((day - 1) % 365) + 1, temperatures, params["warming_factor"]
+                    )
+                    temp_score, _ = calculate_temperature_score(
+                        weather, 2,
+                        params["low_temp"], params["high_temp"],
+                        params["low_temp_min"], params["low_temp_max"],
+                        params["high_temp_min"], params["high_temp_max"],
+                    )
+                    city_name = nd.get("name", city_id)
+                    all_temps_data.append(
+                        (city_id, day, city_name, lat, lon, weather, temp_score)
+                    )
+                except KeyError:
+                    continue
+
+            if len(all_temps_data) < 2:
+                continue
+
+            # Scores for color normalization
+            scores = [d[6] for d in all_temps_data]
+            mn, mx = min(scores), max(scores)
+            rng = mx - mn if mx > mn else 1
+
+            # Straight-line segments between consecutive nodes, colored by score
+            segments = []
+            for i in range(len(all_temps_data) - 1):
+                _, _, _, lat1, lon1, _, score1 = all_temps_data[i]
+                _, _, _, lat2, lon2, _, score2 = all_temps_data[i + 1]
+                ns = ((score1 + score2) / 2 - mn) / rng
+                segments.append({
+                    "coordinates": [[lon1, lat1], [lon2, lat2]],
+                    "color": _score_color(ns),
+                })
+
+            # Markers with full weather info
+            start_day_val = all_temps_data[0][1]
+            markers = []
+            for city_id, day, city_name, lat, lon, temps, temp_score in all_temps_data:
+                markers.append({
+                    "id": city_id,
+                    "cityName": city_name,
+                    "lat": lat,
+                    "lon": lon,
+                    "dayNumber": day - start_day_val,
+                    "tmin": round(temps[0], 1) if temps[0] is not None else 0,
+                    "tmax": round(temps[1], 1) if temps[1] is not None else 0,
+                    "prcp": round(temps[2], 1) if len(temps) > 2 and temps[2] is not None else 0,
+                    "wspd": round(temps[3], 1) if len(temps) > 3 and temps[3] is not None else 0,
+                    "score": round((temp_score - mn) / rng * 10, 1),
+                })
+
+            # Air-distance total (sum of haversine segments)
+            total_air_km = sum(
+                haversine((all_temps_data[i][3], all_temps_data[i][4]),
+                          (all_temps_data[i+1][3], all_temps_data[i+1][4]))
+                for i in range(len(all_temps_data) - 1)
+            )
+            total_days = all_temps_data[-1][1] - start_day_val
+
+            route_results.append({
+                "routeIndex": ri,
+                "score": round(route_data['score'], 2),
+                "segments": segments,
+                "markers": markers,
+                "cities": [
+                    {
+                        "cityId": d[0],
+                        "cityName": d[2],
+                        "lat": d[3],
+                        "lon": d[4],
+                        "dayNumber": d[1] - start_day_val,
+                        "tmin": round(d[5][0], 1) if d[5][0] is not None else None,
+                        "tmax": round(d[5][1], 1) if d[5][1] is not None else None,
+                        "prcp": round(d[5][2], 1) if len(d[5]) > 2 and d[5][2] is not None else None,
+                        "wspd": round(d[5][3], 1) if len(d[5]) > 3 and d[5][3] is not None else None,
+                    }
+                    for d in all_temps_data
+                ],
+                "totalAirKm": round(total_air_km, 1),
+                "totalDays": total_days,
+                "startDay": params["start_day"],
+            })
+
+        job["result"] = {
+            "type": "destination",
+            "destinations": dest_info,
+            "routes": route_results,
+            "startDay": params["start_day"],
+            "desiredHigh": params["high_temp"],
+            "desiredLow": params["low_temp"],
+        }
+        job["destination_routes_done"] = len(routes)
+        update("done", "Fertig!", status="done")
+        job["status"] = "done"
 
     except Exception as e:
         import traceback
