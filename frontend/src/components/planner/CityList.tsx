@@ -16,7 +16,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, X, Plus, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { CityCombobox } from "./CityCombobox";
 import { usePlannerStore } from "@/stores/plannerStore";

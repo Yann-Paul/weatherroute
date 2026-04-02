@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { MapPin, Route as RouteIcon, Layers, ArrowRight, Wind, CloudRain } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,21 +27,6 @@ import type {
   DestinationRouteCity,
 } from "@/api/types";
 
-// Lerp between two colors based on a 0-1 score (0=best/green, 1=worst/red)
-function scoreToColor(score: number, isDark: boolean): string {
-  // score is 0-10, 0=best
-  const t = Math.min(1, score / 10);
-  if (isDark) {
-    const r = Math.round(50 + t * 180);
-    const g = Math.round(200 - t * 160);
-    const b = Math.round(80 - t * 60);
-    return `rgb(${r},${g},${b})`;
-  }
-  const r = Math.round(40 + t * 170);
-  const g = Math.round(160 - t * 120);
-  const b = Math.round(60 - t * 40);
-  return `rgb(${r},${g},${b})`;
-}
 
 function TempBadge({ tmin, tmax, desired, isDark = true }: { tmin: number | null; tmax: number | null; desired: number; isDark?: boolean }) {
   if (tmin == null || tmax == null) return null;

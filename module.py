@@ -2828,6 +2828,7 @@ def beam_search_route(graph, temperatures, start_city, start_day, max_days, dail
                       min_high_temp=float('-inf'), max_high_temp=float('inf'),
                       warming_factor=0.0, temp_weight=1.0, wind_weight=0.0, rain_weight=0.0,
                       direction_weight=0.3, continuity_weight=2,
+                      revisit_weight=1.0,
                       initial_beam_width=20, final_beam_width=5,
                       on_progress=None):
     """
@@ -2948,7 +2949,21 @@ def beam_search_route(graph, temperatures, start_city, start_day, max_days, dail
             cont_via = _bearing_continuity_penalty(beam['cities'], via_pos, graph)
             best_cont = min(cont_penalty, cont_via)
 
-        total = w_score + direction_weight * dir_penalty + continuity_weight * best_cont
+        # Proximity penalty — penalise coming close to older visited cities (excluding last 5)
+        prox_penalty = 0.0
+        if revisit_weight > 0:
+            older_cities = beam['cities'][:-5] if len(beam['cities']) > 5 else []
+            if older_cities:
+                min_dist = min(haversine(cand_pos, get_coords(c)) for c in older_cities)
+                if min_dist < 500:
+                    prox_penalty = (1.0 - min_dist / 500.0) ** 2
+                if is_2hop and via_id:
+                    via_pos_p = get_coords(via_id)
+                    min_dist_via = min(haversine(via_pos_p, get_coords(c)) for c in older_cities)
+                    if min_dist_via < 500:
+                        prox_penalty = max(prox_penalty, (1.0 - min_dist_via / 500.0) ** 2)
+
+        total = w_score + direction_weight * dir_penalty + continuity_weight * best_cont + revisit_weight * prox_penalty
         return total, via_id
 
     for step in range(max_days):
@@ -3077,6 +3092,7 @@ def find_destination_route(graph, temperatures, start_city, start_day, max_days,
                            min_high_temp=float('-inf'), max_high_temp=float('inf'),
                            warming_factor=0.0, temp_weight=1.0, wind_weight=0.0, rain_weight=0.0,
                            direction_weight=0.3, continuity_weight=2,
+                           revisit_weight=1.0,
                            blocked_countries=None, city_ids_by_country=None,
                            on_progress=None):
     """
@@ -3106,6 +3122,7 @@ def find_destination_route(graph, temperatures, start_city, start_day, max_days,
         min_low_temp, max_low_temp, min_high_temp, max_high_temp,
         warming_factor, temp_weight, wind_weight, rain_weight,
         direction_weight, continuity_weight,
+        revisit_weight,
         on_progress=on_progress,
     )
 
