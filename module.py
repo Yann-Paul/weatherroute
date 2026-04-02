@@ -3142,8 +3142,9 @@ def _find_waypoint_cities(graph, temperatures, from_city, from_day, to_city, to_
     """
     Find the best 'count' waypoint cities for the midpoint of a route segment.
 
-    The midpoint must have air distance from from_city between 0.5 and 0.7 of the
-    segment's total air distance, and the best weather score for the middle day.
+    The midpoint must have air distance to both from_city and to_city between 50%
+    and 70% of segment_days * daily_km (where segment_days = (to_day - from_day) / 2),
+    and the best weather score for the middle day.
 
     Returns list of (city_id, score, pos) sorted by score (best first).
     """
@@ -3156,11 +3157,10 @@ def _find_waypoint_cities(graph, temperatures, from_city, from_day, to_city, to_
     if segment_dist < 1.0:
         return []
 
-    mid_day = (from_day + to_day) / 2.0
-    target_day = ((int(mid_day) - 1) % 365) + 1
-
-    min_dist = 0.5 * segment_dist
-    max_dist = 0.7 * segment_dist
+    segment_days = (to_day - from_day) / 2.0
+    travelable = segment_days * daily_km
+    min_dist = 0.5 * travelable
+    max_dist = 0.7 * travelable
 
     candidates = []
     for cid in graph.nodes():
@@ -3171,9 +3171,17 @@ def _find_waypoint_cities(graph, temperatures, from_city, from_day, to_city, to_
         nd = graph.nodes[cid]
         pos = (float(nd['lat']), float(nd['lon']))
         dist_from = haversine(from_pos, pos)
+        dist_to = haversine(to_pos, pos)
 
         if dist_from < min_dist or dist_from > max_dist:
             continue
+        if dist_to < min_dist or dist_to > max_dist:
+            continue
+
+        denom = dist_from + dist_to
+        dist_ratio = dist_from / denom if denom > 0 else 0.5
+        mid_day_C = from_day + dist_ratio * (to_day - from_day)
+        target_day = ((int(mid_day_C) - 1) % 365) + 1
 
         weather = get_interpolated_weather(cid, target_day, temperatures, warming_factor)
         temp_score, violated = calculate_temperature_score(
@@ -3251,17 +3259,18 @@ def _expand_combination(combo, graph, temperatures, daily_km,
             to_node = graph.nodes[to_city]
             from_pos = (float(from_node['lat']), float(from_node['lon']))
             to_pos = (float(to_node['lat']), float(to_node['lon']))
-            segment_air_dist = haversine(from_pos, to_pos)
             midpoints = _find_waypoint_cities(
                 graph, temperatures, from_city, from_day, to_city, to_day,
                 daily_km, desired_low_temp, desired_high_temp,
                 min_low_temp, max_low_temp, min_high_temp, max_high_temp,
                 warming_factor, temp_weight, wind_weight, rain_weight, count=2
             )
-            # Set mid_day proportional to air distance so time allocation matches travel distance
             opts = []
             for cid, _, mid_pos in midpoints:
-                dist_ratio = haversine(from_pos, mid_pos) / segment_air_dist if segment_air_dist > 0 else 0.6
+                d_from = haversine(from_pos, mid_pos)
+                d_to = haversine(to_pos, mid_pos)
+                denom = d_from + d_to
+                dist_ratio = d_from / denom if denom > 0 else 0.5
                 mid_day = from_day + dist_ratio * (to_day - from_day)
                 opts.append((cid, mid_day))
         else:
@@ -3329,6 +3338,8 @@ def hierarchical_waypoint_route(graph, temperatures, start_city, start_day, max_
         if on_progress:
             on_progress(iteration, iteration + 2)
 
+        before_keys = {tuple(cid for cid, _ in combo) for combo in combinations}
+
         new_combos = []
         for combo in combinations:
             expanded = _expand_combination(
@@ -3348,6 +3359,11 @@ def hierarchical_waypoint_route(graph, temperatures, start_city, start_day, max_
             if key not in seen:
                 seen.add(key)
                 unique.append(combo)
+
+        after_keys = {tuple(cid for cid, _ in combo) for combo in unique}
+        if after_keys == before_keys:
+            # No midpoints found for any long segment — cannot refine further
+            break
 
         # Score and keep best top_k
         scored = sorted(
@@ -3390,7 +3406,9 @@ def hierarchical_waypoint_route(graph, temperatures, start_city, start_day, max_
                         interpol_tt=interpol_tt, spatial_i_tt=spatial_i_tt
                     )
                 except Exception:
-                    seg_path = [from_city_id, to_city_id]
+                    seg_path = nx.shortest_path(
+                        graph, from_city_id, to_city_id, weight='weight'
+                    )
 
                 if not full_path:
                     full_path.extend(seg_path)
@@ -3450,6 +3468,18 @@ def find_destination_route_hierarchical(graph, temperatures, start_city, start_d
         min_low_temp, max_low_temp, min_high_temp, max_high_temp,
         warming_factor, temp_weight, wind_weight, rain_weight,
     )
+
+    if not destinations:
+        return [], []
+
+    # Keep only destinations on the same supercontinent as start city.
+    # Americas: lon < -30;  Afrika-Eurasia-Australien: lon >= -30
+    start_lon = float(work_graph.nodes[start_city]['lon'])
+    start_in_americas = start_lon < -30.0
+    destinations = [
+        (cid, score, dist) for cid, score, dist in destinations
+        if (float(work_graph.nodes[cid]['lon']) < -30.0) == start_in_americas
+    ]
 
     if not destinations:
         return [], []

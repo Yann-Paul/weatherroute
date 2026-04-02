@@ -283,13 +283,13 @@ export function DestinationResultsPage() {
                         className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-white text-[9px] font-bold text-white shadow"
                         style={{ background: bg, borderColor: isFirst || isLast ? "#fff" : bg + "aa" }}
                       >
-                        {city.dayNumber}
+                        {Math.ceil(city.dayNumber)}
                       </div>
                     </MarkerContent>
                     <MarkerPopup>
                       <div className="min-w-[140px] space-y-0.5 p-2 text-xs">
                         <p className="font-semibold">{city.cityName}</p>
-                        <p className="text-muted-foreground">{lang === "de" ? "Tag" : "Day"} {city.dayNumber}</p>
+                        <p className="text-muted-foreground">{lang === "de" ? "Tag" : "Day"} {Math.ceil(city.dayNumber)}</p>
                         {city.tmin != null && <p>🌡 {city.tmin}° / {city.tmax}°</p>}
                         {city.prcp != null && <p className="flex items-center gap-1"><CloudRain className="h-3 w-3" />{city.prcp} mm</p>}
                         {city.wspd != null && <p className="flex items-center gap-1"><Wind className="h-3 w-3" />{city.wspd} km/h</p>}
@@ -354,7 +354,7 @@ export function DestinationResultsPage() {
                           key={ci}
                           className={`border-b last:border-0 ${ci === 0 || ci === route.cities.length - 1 ? "bg-muted/30 font-medium" : ""}`}
                         >
-                          <td className="px-2 py-1.5 tabular-nums text-muted-foreground">{city.dayNumber}</td>
+                          <td className="px-2 py-1.5 tabular-nums text-muted-foreground">{Math.ceil(city.dayNumber)}</td>
                           <td className="px-2 py-1.5">{city.cityName}</td>
                           <td className="px-2 py-1.5">
                             <TempBadge tmin={city.tmin} tmax={city.tmax} desired={results.desiredHigh} isDark={isDark} />

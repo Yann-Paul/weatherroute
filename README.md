@@ -566,14 +566,21 @@ Solange mindestens ein Segment (to_day − from_day) ≥ min_segment_days:
       sonst:
         [_find_waypoint_cities aufrufen:]
 
-        segment_dist = Haversine(A, B)             [km, Luftlinie]
-        mid_day      = (from_day + to_day) / 2,0   [arithmetischer Mitteltag]
-        target_day   = ((int(mid_day) − 1) % 365) + 1  [Kalender-Tag]
+        segment_days  = (to_day − from_day) / 2,0       [verfügbare Fahrtage pro Hälfte]
+        travelable    = segment_days × daily_km          [erreichbare Luftdistanz in km]
 
         Alle Graphstädte C prüfen:
           dist_from = Haversine(A, C)
-          Bedingung: 0,5 × segment_dist ≤ dist_from ≤ 0,7 × segment_dist
-            [Kandidat muss zwischen 50% und 70% der Luftlinie liegen]
+          dist_to   = Haversine(B, C)
+          Bedingung: 0,5 × travelable ≤ dist_from ≤ 0,7 × travelable
+                 und 0,5 × travelable ≤ dist_to   ≤ 0,7 × travelable
+            [C muss in 50–70 % der fahrbaren Tagesdistanz von A und von B liegen]
+
+          Ankunftstag berechnen:
+            dist_ratio = dist_from / (dist_from + dist_to)
+            mid_day_C  = from_day + dist_ratio × (to_day − from_day)
+            target_day = ((int(mid_day_C) − 1) % 365) + 1
+
           Wetter interpolieren für target_day
           Grenzwerte prüfen → bei Verletzung überspringen
           score = w_score_normiert(C, target_day)
@@ -583,11 +590,6 @@ Solange mindestens ein Segment (to_day − from_day) ≥ min_segment_days:
           greedy: besten Kandidaten wählen, nächsten nur wenn
           Abstand zu allen bereits gewählten ≥ min_spacing
           → maximal 2 Kandidaten pro Segment
-
-        Ankunftstag der Mittelpunktstadt berechnen:
-          dist_ratio = Haversine(A, C) / segment_dist
-          mid_day_C  = from_day + dist_ratio × (to_day − from_day)
-            [proportional zur Luftdistanz innerhalb des Segments]
 
     Kartesisches Produkt aller Segment-Optionen:
       Segment 1: [opt_A, opt_B]  (2 Kandidaten)
