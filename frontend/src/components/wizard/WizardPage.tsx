@@ -15,6 +15,8 @@ import {
   Zap,
   Navigation,
   HelpCircle,
+  Compass,
+  Target,
 } from "lucide-react";
 import beispielImg from "@/pictures/routenplaner_beispiel.png";
 import {
@@ -42,31 +44,28 @@ import { ConnectionList } from "@/components/planner/ConnectionList";
 import { CountryCombobox } from "@/components/planner/CountryCombobox";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { useJobStore } from "@/stores/jobStore";
-import { submitJob } from "@/api/client";
+import { submitJob, submitDestinationJob } from "@/api/client";
 import { monthDayToDayOfYear, PRESET_BLOCKED_COUNTRIES } from "@/utils/constants";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
 import { getCountryName } from "@/utils/countries";
 import type { CitySearchResult } from "@/api/types";
 
-type Step = "welcome" | "intro" | "cities" | "routing" | "travel" | "temperature" | "api";
+type Step = "welcome" | "intro" | "cities" | "routing" | "travel" | "temperature" | "api"
+           | "dest-travel" | "dest-weather" | "dest-algorithm";
 
 const WIZARD_STEPS: Step[] = ["intro", "cities", "routing", "travel", "temperature", "api"];
-
-// ─── shared helpers ──────────────────────────────────────────────────────────
-
-function wizardStepIdx(step: Step) {
-  return WIZARD_STEPS.indexOf(step); // -1 for welcome, 0–4 for steps
-}
+const DEST_STEPS: Step[] = ["dest-travel", "dest-weather", "dest-algorithm"];
 
 // ─── progress dots ───────────────────────────────────────────────────────────
 
 function ProgressDots({ current }: { current: Step }) {
-  const idx = wizardStepIdx(current);
+  const steps = DEST_STEPS.includes(current) ? DEST_STEPS : WIZARD_STEPS;
+  const idx = steps.indexOf(current);
   if (idx === -1) return null;
   return (
     <div className="flex items-center justify-center gap-1.5 py-1">
-      {WIZARD_STEPS.map((_, i) => {
+      {steps.map((_, i) => {
         const isActive = i === idx;
         const isDone = i < idx;
         return (
@@ -83,7 +82,7 @@ function ProgressDots({ current }: { current: Step }) {
             >
               {isDone ? <Check className="h-3 w-3" /> : i + 1}
             </div>
-            {i < WIZARD_STEPS.length - 1 && (
+            {i < steps.length - 1 && (
               <div
                 className={["h-px w-7", i < idx ? "bg-primary/30" : "bg-border"].join(" ")}
               />
@@ -153,6 +152,7 @@ function NavButtons({
   isLast,
   submitting,
   disableNext,
+  calculateLabel,
 }: {
   onBack: () => void;
   onNext: () => void;
@@ -160,6 +160,7 @@ function NavButtons({
   isLast: boolean;
   submitting?: boolean;
   disableNext?: boolean;
+  calculateLabel?: string;
 }) {
   const t = useT();
   const w = t.wizard;
@@ -182,7 +183,7 @@ function NavButtons({
         {isLast
           ? submitting
             ? w.calculating
-            : w.calculate
+            : (calculateLabel ?? w.calculate)
           : w.next}
         {!isLast && <ChevronRight className="h-4 w-4" />}
       </Button>
@@ -215,11 +216,12 @@ function StepHeader({
   subtitle: string;
 }) {
   const t = useT();
-  const n = wizardStepIdx(step) + 1;
+  const steps = DEST_STEPS.includes(step) ? DEST_STEPS : WIZARD_STEPS;
+  const n = steps.indexOf(step) + 1;
   return (
     <div className="space-y-1 pb-1">
       <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-        {t.wizard.step(n, WIZARD_STEPS.length)}
+        {t.wizard.step(n, steps.length)}
       </p>
       <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
       <p className="text-sm text-muted-foreground">{subtitle}</p>
@@ -753,6 +755,318 @@ function ApiStep() {
   );
 }
 
+// ─── dest step 1 — start city, date, days, km ────────────────────────────────
+
+function DestTravelStep({
+  startMonth,
+  startDay,
+  setStartMonth,
+  setStartDay,
+}: {
+  startMonth: string;
+  startDay: string;
+  setStartMonth: (v: string) => void;
+  setStartDay: (v: string) => void;
+}) {
+  const store = usePlannerStore();
+  const t = useT();
+  const w = t.wizard;
+  const daysInMonth = new Date(new Date().getFullYear(), parseInt(startMonth), 0).getDate();
+
+  return (
+    <div className="space-y-5">
+      <StepHeader step="dest-travel" title={w.destTravelTitle} subtitle={w.destTravelSubtitle} />
+
+      {/* Start city */}
+      <div className="rounded-xl border bg-card p-4 space-y-2">
+        <SectionLabel title={w.destStartCityTitle} hint={w.destStartCityHint} />
+        <CityCombobox
+          value={store.startCity}
+          onSelect={(c: CitySearchResult) => store.setStartCity(c.name)}
+          placeholder={t.planner.startCityPlaceholder}
+          className="w-full"
+        />
+      </div>
+
+      {/* Start date */}
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <SectionLabel title={w.destStartDateTitle} />
+        <div className="flex items-center gap-2">
+          <Select value={startMonth} onValueChange={setStartMonth}>
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {t.months.map((m, i) => (
+                <SelectItem key={i} value={String(i + 1)}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={startDay} onValueChange={setStartDay}>
+            <SelectTrigger className="w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: daysInMonth }, (_, i) => (
+                <SelectItem key={i} value={String(i + 1)}>
+                  {i + 1}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Hint>{w.forecastNote}</Hint>
+      </div>
+
+      {/* Days & km */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-xl border bg-card p-4 space-y-2">
+          <SectionLabel title={w.destMaxDaysTitle} hint={w.destMaxDaysHint} />
+          <Input
+            type="number"
+            min={1}
+            max={730}
+            value={store.maxTravelDays}
+            onChange={(e) => store.setMaxTravelDays(Number(e.target.value))}
+          />
+        </div>
+        <div className="rounded-xl border bg-card p-4 space-y-2">
+          <SectionLabel title={w.destMaxKmTitle} hint={w.destMaxKmHint} />
+          <Input
+            type="number"
+            min={10}
+            max={500}
+            value={store.maxDailyKm}
+            onChange={(e) => store.setMaxDailyKm(Number(e.target.value))}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── dest step 2 — weather preferences ───────────────────────────────────────
+
+function DestWeatherStep() {
+  const store = usePlannerStore();
+  const t = useT();
+  const w = t.wizard;
+  const tc = t.advanced.temperature;
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const weights = [
+    {
+      label: tc.tempWeight(store.tempWeight.toFixed(2)),
+      hints: [tc.tempWeightDesc1, tc.tempWeightDesc2, tc.tempWeightDesc3],
+      value: store.tempWeight,
+      onChange: store.setTempWeight,
+    },
+    {
+      label: tc.windWeight(store.windWeight.toFixed(2)),
+      hints: [tc.windWeightDesc1, tc.windWeightDesc2, tc.windWeightDesc3],
+      value: store.windWeight,
+      onChange: store.setWindWeight,
+    },
+    {
+      label: tc.rainWeight(store.rainWeight.toFixed(2)),
+      hints: [tc.rainWeightDesc1, tc.rainWeightDesc2, tc.rainWeightDesc3],
+      value: store.rainWeight,
+      onChange: store.setRainWeight,
+    },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <StepHeader step="dest-weather" title={w.destWeatherTitle} subtitle={w.destWeatherSubtitle} />
+
+      {/* Target temperatures */}
+      <div className="rounded-xl border bg-card p-4 space-y-4">
+        <p className="text-sm font-medium">{tc.heading}</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>{tc.desiredDay}</Label>
+            <Input
+              type="number"
+              value={store.desiredDayTemp}
+              onChange={(e) => store.setTemp("desiredDayTemp", Number(e.target.value))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>{tc.desiredNight}</Label>
+            <Input
+              type="number"
+              value={store.desiredNightTemp}
+              onChange={(e) => store.setTemp("desiredNightTemp", Number(e.target.value))}
+            />
+          </div>
+        </div>
+        <Hint>{tc.targetDesc}</Hint>
+      </div>
+
+      {/* Weights */}
+      <div className="rounded-xl border bg-card p-4 space-y-5">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">{w.weightsTitle}</p>
+          <Hint>{w.weightsSubtitle}</Hint>
+        </div>
+        {weights.map(({ label, hints, value, onChange }) => (
+          <div key={label} className="space-y-1.5">
+            <Label>{label}</Label>
+            <div className="space-y-0.5 text-xs text-muted-foreground">
+              {hints.map((h) => (
+                <p key={h}>{h}</p>
+              ))}
+            </div>
+            <Slider
+              min={0}
+              max={1}
+              step={0.05}
+              value={[value]}
+              onValueChange={([v]) => onChange(v)}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Advanced settings toggle */}
+      <button
+        type="button"
+        onClick={() => setShowAdvanced((v) => !v)}
+        className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/50"
+      >
+        <span className="flex items-center gap-2">
+          <Settings className="h-4 w-4 text-muted-foreground" />
+          {w.advancedWeatherSettings}
+        </span>
+        {showAdvanced
+          ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+
+      {showAdvanced && (
+        <div className="rounded-xl border bg-card p-4 space-y-5">
+          <div className="space-y-1.5">
+            <Label>{tc.dayRange(store.dayTempMin, store.dayTempMax)}</Label>
+            <Hint>{tc.dayRangeDesc}</Hint>
+            <Slider
+              min={-20}
+              max={50}
+              step={1}
+              value={[store.dayTempMin, store.dayTempMax]}
+              onValueChange={([min, max]) => {
+                store.setTemp("dayTempMin", min);
+                store.setTemp("dayTempMax", max);
+              }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{tc.nightRange(store.nightTempMin, store.nightTempMax)}</Label>
+            <Hint>{tc.nightRangeDesc}</Hint>
+            <Slider
+              min={-30}
+              max={40}
+              step={1}
+              value={[store.nightTempMin, store.nightTempMax]}
+              onValueChange={([min, max]) => {
+                store.setTemp("nightTempMin", min);
+                store.setTemp("nightTempMax", max);
+              }}
+            />
+          </div>
+          <div className="rounded-lg border border-muted bg-muted/40 p-3">
+            <p className="text-xs text-muted-foreground">{w.tempRangeWarning}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{tc.warmingFactor(store.warmingFactor.toFixed(1))}</Label>
+            <div className="space-y-0.5 text-xs text-muted-foreground">
+              <p>{tc.warmingFactorDesc1}</p>
+              <p>{tc.warmingFactorDesc2}</p>
+              <p>{tc.warmingFactorDesc3} <span className="font-medium">{tc.recommended}</span></p>
+              <p>{tc.warmingFactorDesc4}</p>
+            </div>
+            <Slider
+              min={-1}
+              max={4}
+              step={0.1}
+              value={[store.warmingFactor]}
+              onValueChange={([v]) => store.setWarmingFactor(v)}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── dest step 3 — algorithm selection ───────────────────────────────────────
+
+function DestAlgorithmStep() {
+  const store = usePlannerStore();
+  const t = useT();
+  const w = t.wizard;
+
+  return (
+    <div className="space-y-5">
+      <StepHeader step="dest-algorithm" title={w.destAlgorithmTitle} subtitle={w.destAlgorithmSubtitle} />
+
+      {/* Algorithm selection */}
+      <div className="grid grid-cols-1 gap-3">
+        <OptionCard
+          selected={store.destinationAlgorithm === "beam_search"}
+          onClick={() => store.setDestinationAlgorithm("beam_search")}
+          icon={<Target className="h-4 w-4" />}
+          title={w.destBeamTitle}
+          description={w.destBeamDesc}
+        />
+        <OptionCard
+          selected={store.destinationAlgorithm === "hierarchical"}
+          onClick={() => store.setDestinationAlgorithm("hierarchical")}
+          icon={<Navigation className="h-4 w-4" />}
+          title={w.destHierTitle}
+          description={w.destHierDesc}
+        />
+      </div>
+
+      {/* Algorithm explanations */}
+      <div className="rounded-xl border bg-card p-4 space-y-4">
+        <p className="text-sm font-semibold">{w.destBeamTitle}</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">{w.destAlgorithmInfoBeam}</p>
+        <div className="border-t border-border pt-4">
+          <p className="text-sm font-semibold">{w.destHierTitle}</p>
+          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{w.destAlgorithmInfoHier}</p>
+        </div>
+      </div>
+
+      {/* Results comparison table */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium">{w.destResultsTitle}</p>
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="p-3 text-left font-medium text-muted-foreground w-1/4"></th>
+                <th className="p-3 text-left font-medium">{w.destResultsBeamLabel}</th>
+                <th className="p-3 text-left font-medium">{w.destResultsHierLabel}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {w.destResultsRows.map((row, i) => (
+                <tr key={i} className={i > 0 ? "border-t border-border" : ""}>
+                  <td className="p-3 text-xs font-medium text-muted-foreground">{row.aspect}</td>
+                  <td className="p-3 text-xs">{row.beam}</td>
+                  <td className="p-3 text-xs">{row.hier}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── main wizard page ─────────────────────────────────────────────────────────
 
 export function WizardPage() {
@@ -763,6 +1077,7 @@ export function WizardPage() {
   const w = t.wizard;
   const lang = useLangStore((s) => s.lang);
 
+  const [wizardMode, setWizardMode] = useState<"route" | "destination">("route");
   const [step, setStep] = useState<Step>("welcome");
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -787,7 +1102,9 @@ export function WizardPage() {
     String(storedDate ? storedDate.getDate() : new Date().getDate())
   );
 
-  const STEP_ORDER: Step[] = ["welcome", ...WIZARD_STEPS];
+  const STEP_ORDER: Step[] = wizardMode === "destination"
+    ? ["welcome", ...DEST_STEPS]
+    : ["welcome", ...WIZARD_STEPS];
 
   function goNext() {
     const idx = STEP_ORDER.indexOf(step);
@@ -797,11 +1114,18 @@ export function WizardPage() {
         return;
       }
     }
+    if (step === "dest-travel") {
+      if (!store.startCity) {
+        setErrors([t.planner.errors.noStartCity ?? "Startstadt ist erforderlich."]);
+        return;
+      }
+    }
     setErrors([]);
     if (idx < STEP_ORDER.length - 1) {
       setStep(STEP_ORDER[idx + 1]);
     } else {
-      handleSubmit();
+      if (wizardMode === "destination") handleSubmitDestination();
+      else handleSubmit();
     }
   }
 
@@ -844,6 +1168,48 @@ export function WizardPage() {
     }
   }
 
+  async function handleSubmitDestination() {
+    const errs: string[] = [];
+    if (!store.startCity) errs.push(t.planner.errors.noStartCity ?? "Startstadt ist erforderlich.");
+    if (store.desiredNightTemp > store.desiredDayTemp) errs.push(t.planner.errors.nightExceedsDay);
+    if (errs.length > 0) {
+      setErrors(errs);
+      return;
+    }
+    setErrors([]);
+    setSubmitting(true);
+    try {
+      const computedStartDay = monthDayToDayOfYear(parseInt(startMonth), parseInt(startDay));
+      const { jobId } = await submitDestinationJob({
+        startCity: store.startCity,
+        startDay: computedStartDay,
+        desiredDayTemp: store.desiredDayTemp,
+        desiredNightTemp: store.desiredNightTemp,
+        dayTempMin: store.dayTempMin,
+        dayTempMax: store.dayTempMax,
+        nightTempMin: store.nightTempMin,
+        nightTempMax: store.nightTempMax,
+        warmingFactor: store.warmingFactor,
+        tempWeight: store.tempWeight,
+        windWeight: store.windWeight,
+        rainWeight: store.rainWeight,
+        maxDailyKm: store.maxDailyKm,
+        maxTravelDays: store.maxTravelDays,
+        elevResolution: store.elevResolution,
+        blockedCountries: store.blockedCountries,
+        routingMode: store.routingMode,
+        brouterProfile: store.brouterProfile,
+        algorithm: store.destinationAlgorithm,
+      });
+      setJobId(jobId);
+      navigate(`/progress/${jobId}`);
+    } catch (err) {
+      setErrors([err instanceof Error ? err.message : t.planner.errors.submissionFailed]);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   // ── Welcome screen ──────────────────────────────────────────────────────────
   if (step === "welcome") {
     return (
@@ -860,7 +1226,7 @@ export function WizardPage() {
           {/* New tour option */}
           <button
             type="button"
-            onClick={() => setStep("intro")}
+            onClick={() => { setWizardMode("route"); setStep("intro"); }}
             className="flex flex-col gap-4 rounded-2xl border-2 border-border bg-card p-6 text-left transition-all hover:border-primary/50 hover:shadow-sm"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
@@ -872,11 +1238,26 @@ export function WizardPage() {
             </div>
           </button>
 
+          {/* Find destination option */}
+          <button
+            type="button"
+            onClick={() => { setWizardMode("destination"); store.setMode("destination"); setStep("dest-travel"); }}
+            className="flex flex-col gap-4 rounded-2xl border-2 border-border bg-card p-6 text-left transition-all hover:border-primary/50 hover:shadow-sm"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <Compass className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold">{w.destTitle}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{w.destDesc}</p>
+            </div>
+          </button>
+
           {/* GPX option */}
           <button
             type="button"
             onClick={() => navigate("/gpx/wizard")}
-            className="flex flex-col gap-4 rounded-2xl border-2 border-border bg-card p-6 text-left transition-all hover:border-primary/50 hover:shadow-sm"
+            className="flex flex-col gap-4 rounded-2xl border-2 border-border bg-card p-6 text-left transition-all hover:border-primary/50 hover:shadow-sm sm:col-span-2"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
               <FileUp className="h-5 w-5" />
@@ -930,15 +1311,33 @@ export function WizardPage() {
         )}
         {step === "temperature" && <TemperatureStep />}
         {step === "api" && <ApiStep />}
+        {step === "dest-travel" && (
+          <DestTravelStep
+            startMonth={startMonth}
+            startDay={startDay}
+            setStartMonth={setStartMonth}
+            setStartDay={setStartDay}
+          />
+        )}
+        {step === "dest-weather" && <DestWeatherStep />}
+        {step === "dest-algorithm" && <DestAlgorithmStep />}
       </div>
 
-      <NavButtons
-        onBack={goBack}
-        onNext={step === "api" ? handleSubmit : goNext}
-        onAllSettings={() => navigate("/")}
-        isLast={step === "api"}
-        submitting={submitting}
-      />
+      {(() => {
+        const isLastStep = step === "api" || step === "dest-algorithm";
+        return (
+          <NavButtons
+            onBack={goBack}
+            onNext={isLastStep
+              ? (wizardMode === "destination" ? handleSubmitDestination : handleSubmit)
+              : goNext}
+            onAllSettings={() => navigate("/")}
+            isLast={isLastStep}
+            submitting={submitting}
+            calculateLabel={wizardMode === "destination" ? w.destCalculate : w.calculate}
+          />
+        );
+      })()}
     </div>
   );
 }
