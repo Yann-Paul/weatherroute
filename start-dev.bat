@@ -5,4 +5,4 @@ echo   Frontend: http://localhost:5173
 echo.
 
 start "WeatherRoute Backend" cmd /k "uvicorn api_app:app --reload"
-cd frontend && start "WeatherRoute Frontend" cmd /k "npm run dev"
+cd frontend && start "WeatherRoute Frontend" cmd /k "npx vite"

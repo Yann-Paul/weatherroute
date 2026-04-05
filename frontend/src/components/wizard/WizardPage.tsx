@@ -1039,30 +1039,6 @@ function DestAlgorithmStep() {
         </div>
       </div>
 
-      {/* Results comparison table */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium">{w.destResultsTitle}</p>
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="p-3 text-left font-medium text-muted-foreground w-1/4"></th>
-                <th className="p-3 text-left font-medium">{w.destResultsBeamLabel}</th>
-                <th className="p-3 text-left font-medium">{w.destResultsHierLabel}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {w.destResultsRows.map((row, i) => (
-                <tr key={i} className={i > 0 ? "border-t border-border" : ""}>
-                  <td className="p-3 text-xs font-medium text-muted-foreground">{row.aspect}</td>
-                  <td className="p-3 text-xs">{row.beam}</td>
-                  <td className="p-3 text-xs">{row.hier}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }

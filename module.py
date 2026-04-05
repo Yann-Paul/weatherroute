@@ -3364,17 +3364,13 @@ def hierarchical_waypoint_route(graph, temperatures, start_city, start_day, max_
        - All cartesian products are scored; best top_k kept
     3. Once all segments are short, uses Hybrid A* (optimized_travel_planner) to
        build actual graph paths between consecutive waypoints
-    4. Returns top 5 routes sorted by average weather score
+    4. Returns top 10 routes sorted by average weather score
     """
     # Initial combinations: start → each destination
-    # Compute realistic travel days for each destination from its air distance.
-    # find_destination_cities uses max_air_distance = max_days*daily_km*0.7.
-    # Estimate actual road days as dist/(0.7*daily_km).
+    # Use the full trip duration as end_day, matching Phase 1's target_day.
     combinations = []
     for cid, _score, dist in destination_cities:
-        realistic_days = dist / (0.7 * daily_km)
-        travel_days = min(float(max_days), realistic_days)
-        end_day = float(start_day) + travel_days
+        end_day = float(start_day) + float(max_days)
         combinations.append([(start_city, float(start_day)), (cid, end_day)])
 
     # Iteratively refine until all segments are short
@@ -3418,7 +3414,7 @@ def hierarchical_waypoint_route(graph, temperatures, start_city, start_day, max_
             # No midpoints found for any long segment — cannot refine further
             break
 
-        # Score and keep best top_k
+        # Score and keep best top_k with diversity constraint (≥5 distinct destination cities)
         scored = sorted(
             ((_score_waypoint_combo(
                 combo, temperatures,
@@ -3428,7 +3424,30 @@ def hierarchical_waypoint_route(graph, temperatures, start_city, start_day, max_
             ), combo) for combo in unique),
             key=lambda x: x[0]
         )
-        combinations = [combo for _, combo in scored[:top_k]]
+
+        # Collect best combo per destination city
+        best_per_dest = {}
+        for score, combo in scored:
+            dest = combo[-1][0]
+            if dest not in best_per_dest:
+                best_per_dest[dest] = (score, combo)
+
+        # Force at least 5 distinct destination cities into the selection
+        n_forced = min(5, len(best_per_dest))
+        forced_pairs = sorted(best_per_dest.values(), key=lambda x: x[0])[:n_forced]
+        selected = [combo for _, combo in forced_pairs]
+        selected_keys = {tuple(cid for cid, _ in combo) for combo in selected}
+
+        # Fill remaining slots with overall best combos (by score)
+        for _, combo in scored:
+            if len(selected) >= top_k:
+                break
+            key = tuple(cid for cid, _ in combo)
+            if key not in selected_keys:
+                selected.append(combo)
+                selected_keys.add(key)
+
+        combinations = selected
         iteration += 1
 
     if on_progress:
@@ -3493,7 +3512,18 @@ def hierarchical_waypoint_route(graph, temperatures, start_city, start_day, max_
             continue
 
     routes.sort(key=lambda x: x['score'])
-    return routes[:5]
+
+    # Return up to 10 routes with distinct destination cities
+    seen_dests = set()
+    diverse_routes = []
+    for r in routes:
+        dest = r['cities'][-1][0]
+        if dest not in seen_dests:
+            seen_dests.add(dest)
+            diverse_routes.append(r)
+            if len(diverse_routes) >= 10:
+                break
+    return diverse_routes
 
 
 def find_destination_route_hierarchical(graph, temperatures, start_city, start_day, max_days, daily_km,

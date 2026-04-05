@@ -543,11 +543,9 @@ Nach der letzten Iteration:
 **Schritt 1 — Initialisierung**
 
 ```
-Für jede Zielstadt D (aus Phase 1) mit Luftdistanz dist:
-  realistic_days = dist / (0,7 × daily_km)
-    [Schätzung: Straßenroute ≈ 40% länger als Luftlinie]
-  travel_days    = min(max_days, realistic_days)
-  end_day        = start_day + travel_days
+Für jede Zielstadt D (aus Phase 1):
+  end_day = start_day + max_days
+    [entspricht dem target_day aus Phase 1 — volle Reisedauer]
 
   Kombination = [(start_city, start_day), (D, end_day)]
 ```

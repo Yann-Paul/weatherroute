@@ -44,7 +44,9 @@
       "Bash(grep:*)",
       "Bash(cd frontend:*)",
       "Bash(python3 -m json.tool)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(rm -rf node_modules)",
+      "Bash(npm install:*)"
     ]
   }
 }
