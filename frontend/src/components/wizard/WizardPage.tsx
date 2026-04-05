@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Slider } from "@/components/ui/slider";
 import {
   Select,
@@ -488,22 +489,22 @@ function TravelStep({
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-xl border bg-card p-4 space-y-2">
           <SectionLabel title={w.maxKmTitle} hint={w.maxKmHint} />
-          <Input
-            type="number"
+          <NumericInput
             min={10}
             max={500}
             value={store.maxDailyKm}
-            onChange={(e) => store.setMaxDailyKm(Number(e.target.value))}
+            fallback={80}
+            onChange={(v) => store.setMaxDailyKm(v)}
           />
         </div>
         <div className="rounded-xl border bg-card p-4 space-y-2">
           <SectionLabel title={w.maxDaysTitle} hint={w.maxDaysHint} />
-          <Input
-            type="number"
+          <NumericInput
             min={1}
             max={730}
             value={store.maxTravelDays}
-            onChange={(e) => store.setMaxTravelDays(Number(e.target.value))}
+            fallback={365}
+            onChange={(v) => store.setMaxTravelDays(v)}
           />
         </div>
       </div>
@@ -557,18 +558,18 @@ function TemperatureStep() {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>{tc.desiredDay}</Label>
-            <Input
-              type="number"
+            <NumericInput
               value={store.desiredDayTemp}
-              onChange={(e) => store.setTemp("desiredDayTemp", Number(e.target.value))}
+              fallback={22}
+              onChange={(v) => store.setTemp("desiredDayTemp", v)}
             />
           </div>
           <div className="space-y-2">
             <Label>{tc.desiredNight}</Label>
-            <Input
-              type="number"
+            <NumericInput
               value={store.desiredNightTemp}
-              onChange={(e) => store.setTemp("desiredNightTemp", Number(e.target.value))}
+              fallback={12}
+              onChange={(v) => store.setTemp("desiredNightTemp", v)}
             />
           </div>
         </div>
@@ -783,7 +784,7 @@ function DestTravelStep({
         <CityCombobox
           value={store.startCity}
           onSelect={(c: CitySearchResult) => store.setStartCity(c.name)}
-          placeholder={t.planner.startCityPlaceholder}
+          placeholder={t.planner.startCityRequiredPlaceholder ?? "Startstadt eingeben..."}
           className="w-full"
         />
       </div>
@@ -824,22 +825,22 @@ function DestTravelStep({
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-xl border bg-card p-4 space-y-2">
           <SectionLabel title={w.destMaxDaysTitle} hint={w.destMaxDaysHint} />
-          <Input
-            type="number"
+          <NumericInput
             min={1}
             max={730}
             value={store.maxTravelDays}
-            onChange={(e) => store.setMaxTravelDays(Number(e.target.value))}
+            fallback={365}
+            onChange={(v) => store.setMaxTravelDays(v)}
           />
         </div>
         <div className="rounded-xl border bg-card p-4 space-y-2">
           <SectionLabel title={w.destMaxKmTitle} hint={w.destMaxKmHint} />
-          <Input
-            type="number"
+          <NumericInput
             min={10}
             max={500}
             value={store.maxDailyKm}
-            onChange={(e) => store.setMaxDailyKm(Number(e.target.value))}
+            fallback={80}
+            onChange={(v) => store.setMaxDailyKm(v)}
           />
         </div>
       </div>
@@ -887,18 +888,18 @@ function DestWeatherStep() {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>{tc.desiredDay}</Label>
-            <Input
-              type="number"
+            <NumericInput
               value={store.desiredDayTemp}
-              onChange={(e) => store.setTemp("desiredDayTemp", Number(e.target.value))}
+              fallback={22}
+              onChange={(v) => store.setTemp("desiredDayTemp", v)}
             />
           </div>
           <div className="space-y-2">
             <Label>{tc.desiredNight}</Label>
-            <Input
-              type="number"
+            <NumericInput
               value={store.desiredNightTemp}
-              onChange={(e) => store.setTemp("desiredNightTemp", Number(e.target.value))}
+              fallback={12}
+              onChange={(v) => store.setTemp("desiredNightTemp", v)}
             />
           </div>
         </div>

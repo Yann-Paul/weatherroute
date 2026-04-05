@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -49,17 +48,19 @@ export function AdvancedPanel() {
 
       <CollapsibleContent className="space-y-4 px-1">
         {/* Direct Connections */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">{tc.directConnections.heading}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              {t.connections.description}
-            </p>
-            <ConnectionList />
-          </CardContent>
-        </Card>
+        {store.mode === "route" && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">{tc.directConnections.heading}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                {t.connections.description}
+              </p>
+              <ConnectionList />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Temperature Preferences */}
         <Card>
@@ -70,22 +71,18 @@ export function AdvancedPanel() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{tc.temperature.desiredDay}</Label>
-                <Input
-                  type="number"
+                <NumericInput
                   value={store.desiredDayTemp}
-                  onChange={(e) =>
-                    store.setTemp("desiredDayTemp", Number(e.target.value))
-                  }
+                  fallback={22}
+                  onChange={(v) => store.setTemp("desiredDayTemp", v)}
                 />
               </div>
               <div className="space-y-2">
                 <Label>{tc.temperature.desiredNight}</Label>
-                <Input
-                  type="number"
+                <NumericInput
                   value={store.desiredNightTemp}
-                  onChange={(e) =>
-                    store.setTemp("desiredNightTemp", Number(e.target.value))
-                  }
+                  fallback={12}
+                  onChange={(v) => store.setTemp("desiredNightTemp", v)}
                 />
               </div>
             </div>

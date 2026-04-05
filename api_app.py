@@ -917,6 +917,7 @@ def job_status(job_id: str):
         raise HTTPException(404, "Job not found")
 
     rough_map = job.get("rough_map")
+    error_cities = job.get("error_cities")
     return {
         "status": job["status"],
         "step": job["step"],
@@ -927,6 +928,7 @@ def job_status(job_id: str):
         "osrmTotal": job["osrm_total"],
         "roughMap": rough_map,
         "error": job.get("error"),
+        "errorCities": error_cities,
         "elevationBatchDone": job.get("elevation_batch_done", 0),
         "elevationBatchTotal": job.get("elevation_batch_total", 0),
         "forecastDone": job.get("forecast_done", 0),
@@ -1396,7 +1398,7 @@ def run_calculation(job_id: str, params: dict):
             return
 
         # Find optimal route
-        route, start_day, fail_reason = find_optimal_route(
+        route, start_day, fail_reason, error_data = find_optimal_route(
             city_graph,
             params["blocked_countries"],
             city_ids_by_country,
@@ -1425,6 +1427,8 @@ def run_calculation(job_id: str, params: dict):
         if not route:
             job["status"] = "error"
             job["error"] = fail_reason or "No valid route found."
+            if error_data:
+                job["error_cities"] = error_data
             return
 
         # Build rough map preview

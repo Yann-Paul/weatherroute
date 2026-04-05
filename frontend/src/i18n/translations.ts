@@ -32,6 +32,7 @@ const de = {
     },
     startCity: "Startstadt (optional)",
     startCityPlaceholder: "Startstadt automatisch ermitteln...",
+    startCityRequiredPlaceholder: "Startstadt eingeben...",
     autoDetectDate: "Bestes Startdatum automatisch ermitteln",
     validationError: "Validierungsfehler",
     errors: {
@@ -173,6 +174,8 @@ const de = {
     lostConnection: "Verbindung zum Server verloren.",
     toastError: "Verbindung verloren. Bitte erneut versuchen.",
     toastWarning: "Verbindung unterbrochen, wird wiederholt...",
+    disconnectedCityMapLabel: "Nicht erreichbare Stadt (rot markiert)",
+    disconnectedCityPopup: "Nicht erreichbar",
   },
   results: {
     tabMap: "Karte",
@@ -485,6 +488,7 @@ const en = {
     },
     startCity: "Start city (optional)",
     startCityPlaceholder: "Auto-detect start city...",
+    startCityRequiredPlaceholder: "Enter start city...",
     autoDetectDate: "Auto-detect best start date",
     validationError: "Validation Error",
     errors: {
@@ -626,6 +630,8 @@ const en = {
     lostConnection: "Lost connection to server.",
     toastError: "Connection lost. Please try again.",
     toastWarning: "Connection lost, retrying...",
+    disconnectedCityMapLabel: "Unreachable city (marked in red)",
+    disconnectedCityPopup: "Unreachable",
   },
   results: {
     tabMap: "Map",

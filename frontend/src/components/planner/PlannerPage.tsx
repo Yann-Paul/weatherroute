@@ -255,7 +255,7 @@ export function PlannerPage() {
             <CityCombobox
               value={store.startCity}
               onSelect={(c: CitySearchResult) => store.setStartCity(c.name)}
-              placeholder={t.planner.startCityPlaceholder}
+              placeholder={store.mode === "destination" ? (t.planner.startCityRequiredPlaceholder ?? "Startstadt eingeben...") : t.planner.startCityPlaceholder}
               className="w-full"
             />
           </div>

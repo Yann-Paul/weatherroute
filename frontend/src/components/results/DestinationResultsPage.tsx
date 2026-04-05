@@ -174,7 +174,7 @@ export function DestinationResultsPage() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Route {i + 1}</span>
-                    <span className="text-xs text-muted-foreground">{r.totalDays}d · {Math.round(r.totalAirKm)} km</span>
+                    <span className="text-xs text-muted-foreground">{Math.round(r.totalDays)}d · {Math.round(r.totalAirKm)} km</span>
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
                     {r.cities[0]?.cityName} → {r.cities[r.cities.length - 1]?.cityName}
@@ -327,7 +327,7 @@ export function DestinationResultsPage() {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {route.totalDays} {lang === "de" ? "Tage" : "days"} ·{" "}
+                  {Math.round(route.totalDays)} {lang === "de" ? "Tage" : "days"} ·{" "}
                   ~{Math.round(route.totalAirKm)} km {lang === "de" ? "Luftlinie" : "air distance"} ·{" "}
                   Score: {route.score}
                 </p>

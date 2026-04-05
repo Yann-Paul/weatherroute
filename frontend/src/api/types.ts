@@ -54,6 +54,18 @@ export interface PlannerFormData {
 
 export type JobStatus = "pending" | "running" | "done" | "preview" | "error";
 
+export interface ErrorCity {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+}
+
+export interface ErrorCitiesData {
+  disconnected_cities: ErrorCity[];
+  all_cities: ErrorCity[];
+}
+
 export interface JobStatusResponse {
   status: JobStatus;
   step: string;
@@ -64,6 +76,7 @@ export interface JobStatusResponse {
   osrmTotal: number;
   roughMap: RoughMapData | null;
   error: string | null;
+  errorCities?: ErrorCitiesData | null;
   elevationBatchDone: number;
   elevationBatchTotal: number;
   forecastDone: number;

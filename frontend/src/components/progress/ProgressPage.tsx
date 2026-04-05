@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, AlertTriangle } from "lucide-react";
 import { StepIndicator } from "./StepIndicator";
 import { PreviewMap } from "./PreviewMap";
+import { ErrorCityMap } from "./ErrorCityMap";
 import { useJobStore } from "@/stores/jobStore";
 import { getJobStatus } from "@/api/client";
 import { useT } from "@/i18n/useT";
@@ -37,78 +38,97 @@ export function ProgressPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const job = useJobStore();
-  const pollingRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const retryCount = useRef(0);
   const t = useT();
   const lang = useLangStore((s) => s.lang);
 
   useEffect(() => {
     document.title = lang === "de" ? "WeatherRoute — Wird berechnet…" : "WeatherRoute — Computing…";
   }, [lang]);
-  // Capture strings into ref so poll callback always sees latest lang
+
+  // Keep refs so the polling closure always sees the latest values
+  // without needing to restart the effect when they change.
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const jobRef = useJobStore;          // stable store reference (Zustand selector)
   const tRef = useRef(t);
   tRef.current = t;
 
-  const poll = useCallback(async () => {
+  useEffect(() => {
     if (!jobId) return;
 
-    try {
-      const data = await getJobStatus(jobId);
-      retryCount.current = 0;
+    // This flag is set to false when this effect is cleaned up (jobId changed or
+    // component unmounted). Every await checks it so stale in-flight requests
+    // are discarded instead of writing to the shared store.
+    let active = true;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let retries = 0;
 
-      job.updateStatus({
-        status: data.status,
-        step: data.step,
-        message: data.message,
-        jobType: data.jobType ?? job.jobType,
-        algorithm: data.algorithm ?? job.algorithm,
-        osrmDone: data.osrmDone,
-        osrmTotal: data.osrmTotal,
-        roughMap: data.roughMap ?? job.roughMap,
-        error: data.error,
-        elevationBatchDone: data.elevationBatchDone ?? 0,
-        elevationBatchTotal: data.elevationBatchTotal ?? 0,
-        forecastDone: data.forecastDone ?? 0,
-        forecastTotal: data.forecastTotal ?? 0,
-        registeringDone: data.registeringDone ?? 0,
-        registeringTotal: data.registeringTotal ?? 0,
-        warnings: data.warnings ?? [],
-      });
+    async function doPoll() {
+      if (!active) return;
+      try {
+        const data = await getJobStatus(jobId!);
 
-      if (data.status === "done" || data.status === "preview") {
-        const jt = data.jobType ?? job.jobType;
-        const target = jt === "gpx" ? `/gpx/results/${jobId}`
-          : jt === "destination" ? `/destination/results/${jobId}`
-          : `/results/${jobId}`;
-        setTimeout(() => navigate(target), 600);
-        return;
-      }
+        // Discard result if this poll session was cancelled while awaiting
+        if (!active) return;
 
-      if (data.status === "error") return;
-
-      pollingRef.current = setTimeout(poll, 900);
-    } catch {
-      retryCount.current += 1;
-      if (retryCount.current >= 5) {
-        job.updateStatus({
-          status: "error",
-          error: tRef.current.progress.lostConnection,
+        retries = 0;
+        jobRef.getState().updateStatus({
+          status: data.status,
+          step: data.step,
+          message: data.message,
+          jobType: data.jobType ?? jobRef.getState().jobType,
+          algorithm: data.algorithm ?? jobRef.getState().algorithm,
+          osrmDone: data.osrmDone,
+          osrmTotal: data.osrmTotal,
+          roughMap: data.roughMap ?? jobRef.getState().roughMap,
+          error: data.error,
+          errorCities: data.errorCities ?? null,
+          elevationBatchDone: data.elevationBatchDone ?? 0,
+          elevationBatchTotal: data.elevationBatchTotal ?? 0,
+          forecastDone: data.forecastDone ?? 0,
+          forecastTotal: data.forecastTotal ?? 0,
+          registeringDone: data.registeringDone ?? 0,
+          registeringTotal: data.registeringTotal ?? 0,
+          warnings: data.warnings ?? [],
         });
-        toast.error(tRef.current.progress.toastError);
-        return;
-      }
-      toast.warning(tRef.current.progress.toastWarning);
-      const backoff = Math.min(1000 * Math.pow(2, retryCount.current), 10000);
-      pollingRef.current = setTimeout(poll, backoff);
-    }
-  }, [jobId, navigate]);
 
-  useEffect(() => {
-    poll();
+        if (data.status === "done" || data.status === "preview") {
+          const jt = data.jobType ?? jobRef.getState().jobType;
+          const target =
+            jt === "gpx" ? `/gpx/results/${jobId}`
+            : jt === "destination" ? `/destination/results/${jobId}`
+            : `/results/${jobId}`;
+          timeoutId = setTimeout(() => navigateRef.current(target), 600);
+          return;
+        }
+
+        if (data.status === "error") return;
+
+        timeoutId = setTimeout(doPoll, 900);
+      } catch {
+        if (!active) return;
+        retries += 1;
+        if (retries >= 5) {
+          jobRef.getState().updateStatus({
+            status: "error",
+            error: tRef.current.progress.lostConnection,
+          });
+          toast.error(tRef.current.progress.toastError);
+          return;
+        }
+        toast.warning(tRef.current.progress.toastWarning);
+        const backoff = Math.min(1000 * Math.pow(2, retries), 10000);
+        timeoutId = setTimeout(doPoll, backoff);
+      }
+    }
+
+    doPoll();
+
     return () => {
-      if (pollingRef.current) clearTimeout(pollingRef.current);
+      active = false;
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
     };
-  }, [poll]);
+  }, [jobId]); // only restart when the job ID actually changes
 
   const isGpxJob = job.jobType === "gpx";
   const isWeatherRoute = job.jobType === "weather_route";
@@ -235,11 +255,19 @@ export function ProgressPage() {
         </CardContent>
       </Card>
 
-      {job.roughMap && (
+      {isError && job.errorCities ? (
+        <div className="animate-fade-in-scale min-h-[400px] overflow-hidden rounded-3xl border border-destructive">
+          <ErrorCityMap
+            allCities={job.errorCities.all_cities}
+            disconnectedCities={job.errorCities.disconnected_cities}
+            label={t.progress.disconnectedCityMapLabel}
+          />
+        </div>
+      ) : job.roughMap ? (
         <div className="animate-fade-in-scale min-h-[400px] overflow-hidden rounded-3xl border border-border">
           <PreviewMap data={job.roughMap} />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

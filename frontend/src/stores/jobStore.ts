@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { JobStatus, RoughMapData } from "@/api/types";
+import type { JobStatus, RoughMapData, ErrorCitiesData } from "@/api/types";
 
 interface JobState {
   jobId: string | null;
@@ -12,6 +12,7 @@ interface JobState {
   osrmTotal: number;
   roughMap: RoughMapData | null;
   error: string | null;
+  errorCities: ErrorCitiesData | null;
   elevationBatchDone: number;
   elevationBatchTotal: number;
   forecastDone: number;
@@ -36,6 +37,7 @@ const initialState = {
   osrmTotal: 0,
   roughMap: null as RoughMapData | null,
   error: null as string | null,
+  errorCities: null as ErrorCitiesData | null,
   elevationBatchDone: 0,
   elevationBatchTotal: 0,
   forecastDone: 0,

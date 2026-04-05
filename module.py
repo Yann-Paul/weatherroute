@@ -1310,7 +1310,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
             print("city: " + str(city) + " not found in graph")
             reason = (f'Stadt (ID {city}) ist nicht im Graphen – '
                       f'möglicherweise in einem gesperrten Land.')
-            return None, None, reason
+            return None, None, reason, None
 
     # Build city_coords for all graph nodes (needed for wind/rain scoring)
     city_coords = {cid: (graph.nodes[cid]['lat'], graph.nodes[cid]['lon']) for cid in graph.nodes()}
@@ -1361,6 +1361,59 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
     # ══════════════════════════════════════════════════════════════════
     else:
         targets_day_estimates = calc_targets_day_estimates(graph, target_cities, daily_max_km, distance_weight)
+
+        # Detect cities with no reachable connection to any other target city.
+        # A city is "isolated" when it has no graph path at all;
+        # it is "too far" when every path to every other city exceeds max_days.
+        all_input_cities = list(target_cities)
+        if start_city and start_city not in all_input_cities:
+            all_input_cities.append(start_city)
+            try:
+                node = graph.nodes[start_city]
+                coords[start_city] = (node['lat'], node['lon'])
+            except KeyError:
+                pass
+        isolated = []
+        too_far = []
+        for city in all_input_cities:
+            others = [c for c in all_input_cities if c != city]
+            days_to_others = [
+                targets_day_estimates.get(city + "_" + other,
+                    targets_day_estimates.get(other + "_" + city, None))
+                for other in others
+            ]
+            reachable = [d for d in days_to_others if d is not None]
+            if not reachable:
+                isolated.append(city)
+            elif all(d > max_days for d in reachable):
+                too_far.append(city)
+        problematic = isolated + too_far
+        if problematic:
+            prob_names = [city_names.get(c, c) for c in problematic]
+            if isolated:
+                fail_reason = (
+                    f'Stadt(e) ohne Verbindung zu anderen Zielen: {", ".join(city_names.get(c, c) for c in isolated)}. '
+                    f'Prüfe, ob alle Städte im selben Straßennetz liegen.'
+                )
+            else:
+                fail_reason = (
+                    f'Zu weit entfernte Stadt(e): {", ".join(prob_names)}. '
+                    f'Die Entfernung übersteigt das Tageslimit von {max_days} Tagen. '
+                    f'Erhöhe „Max. Reisetage" oder wähle näher gelegene Städte.'
+                )
+            error_data = {
+                "disconnected_cities": [
+                    {"id": c, "name": city_names.get(c, c),
+                     "lat": coords[c][0], "lon": coords[c][1]}
+                    for c in problematic if c in coords
+                ],
+                "all_cities": [
+                    {"id": c, "name": city_names.get(c, c),
+                     "lat": coords[c][0], "lon": coords[c][1]}
+                    for c in all_input_cities if c in coords
+                ],
+            }
+            return None, None, fail_reason, error_data
 
         start_time = time.time()
 
@@ -1626,7 +1679,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
             if total_days > max_days:
                 valid = False
                 print("Exceeded max days", str(total_days), "days out of", str(max_days),
-                      "with route:", [city_names[city] for city, _, _, _ in full_route])
+                      "with route:", [city_names.get(city, city) for city, _, _, _ in full_route])
                 _fail_counter[
                     f'Route benötigt {total_days} Tage, aber das Maximum ist {max_days}. '
                     f'Erhöhe „Max. Reisetage" oder „Max. Tagesstrecke".'
@@ -1767,7 +1820,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
     print(f"Total time for shortest path calls:          {total_shortest_path_time:.2f}s")
 
     if best_full_route:
-        return best_full_route, best_start_day, None
+        return best_full_route, best_start_day, None, None
     else:
         # Pick the most frequently occurring failure reason as the diagnosis
         if _fail_counter:
@@ -1775,7 +1828,7 @@ def find_optimal_route(graph, blocked_countries, city_ids_by_country, temperatur
         else:
             fail_reason = ('Kein gültiger Routenverlauf gefunden. '
                            'Überprüfe Städte, Temperaturgrenzen und Reiselimits.')
-        return None, None, fail_reason
+        return None, None, fail_reason, None
 
 
 
