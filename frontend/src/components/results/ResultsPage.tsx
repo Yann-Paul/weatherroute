@@ -11,6 +11,7 @@ import { ElevationChart } from "./ElevationChart";
 import { TemperatureChart } from "./TemperatureChart";
 import { WeatherGrid } from "./WeatherGrid";
 import { RouteList } from "./RouteList";
+import { ModelBadges } from "./ModelBadges";
 import { useResultsStore } from "@/stores/resultsStore";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { getJobResults, getJobStatus, saveRoute } from "@/api/client";
@@ -35,8 +36,10 @@ function buildRouteName(results: JobResults, lang: "de" | "en"): string {
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
-  const { setResults, updateElevation, activeTab, setActiveTab } = useResultsStore();
+  const { setResults, updateElevation, activeTab, setActiveTab, setJobId } = useResultsStore();
   const elevationComplete = useResultsStore((s) => s.elevationComplete);
+  const forecast = useResultsStore((s) => s.forecast);
+  const elevation = useResultsStore((s) => s.elevation);
   const route = useResultsStore((s) => s.route);
   const startDay = useResultsStore((s) => s.startDay);
   const loadFromResults = usePlannerStore((s) => s.loadFromResults);
@@ -58,6 +61,7 @@ export function ResultsPage() {
       try {
         const data = await getJobResults(jobId!);
         setResults(data);
+        setJobId(jobId!);
         // Check if forecast is still being refreshed (restored route)
         const status = await getJobStatus(jobId!);
         if (status.status !== "done") {
@@ -83,6 +87,7 @@ export function ResultsPage() {
         if (status.status === "done") {
           const data = await getJobResults(jobId!);
           setResults(data);
+          setJobId(jobId!);
           setForecastUpdating(false);
         } else {
           forecastPollingRef.current = setTimeout(pollForecast, 2000);
@@ -240,28 +245,35 @@ export function ResultsPage() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full justify-start">
-          <TabsTrigger value="map" className="gap-1.5" aria-label={t.results.tabMap}>
-            <Map className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{t.results.tabMap}</span>
-          </TabsTrigger>
-          <TabsTrigger value="elevation" className="gap-1.5" aria-label={t.results.tabElevation}>
-            <Mountain className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{t.results.tabElevation}</span>
-          </TabsTrigger>
-          <TabsTrigger value="temperature" className="gap-1.5" aria-label={t.results.tabTemperature}>
-            <Thermometer className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{t.results.tabTemperature}</span>
-          </TabsTrigger>
-          <TabsTrigger value="weather" className="gap-1.5" aria-label={t.results.tabWeather}>
-            <CloudSun className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{t.results.tabWeather}</span>
-          </TabsTrigger>
-          <TabsTrigger value="route" className="gap-1.5" aria-label={t.results.tabRoute}>
-            <List className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{t.results.tabRoute}</span>
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex flex-wrap items-center gap-2">
+          <TabsList className="justify-start">
+            <TabsTrigger value="map" className="gap-1.5" aria-label={t.results.tabMap}>
+              <Map className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">{t.results.tabMap}</span>
+            </TabsTrigger>
+            <TabsTrigger value="elevation" className="gap-1.5" aria-label={t.results.tabElevation}>
+              <Mountain className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">{t.results.tabElevation}</span>
+            </TabsTrigger>
+            <TabsTrigger value="temperature" className="gap-1.5" aria-label={t.results.tabTemperature}>
+              <Thermometer className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">{t.results.tabTemperature}</span>
+            </TabsTrigger>
+            <TabsTrigger value="weather" className="gap-1.5" aria-label={t.results.tabWeather}>
+              <CloudSun className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">{t.results.tabWeather}</span>
+            </TabsTrigger>
+            <TabsTrigger value="route" className="gap-1.5" aria-label={t.results.tabRoute}>
+              <List className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">{t.results.tabRoute}</span>
+            </TabsTrigger>
+          </TabsList>
+          {forecast && (
+            <div className="ml-auto shrink-0">
+              <ModelBadges forecast={forecast} totalKm={elevation?.totalKm} />
+            </div>
+          )}
+        </div>
 
         <TabsContent value="map">
           <ForecastMap />

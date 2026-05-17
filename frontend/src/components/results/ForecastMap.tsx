@@ -17,6 +17,7 @@ import { dayToShortDE } from "@/utils/tempColor";
 import { useIsDark } from "@/stores/themeStore";
 import type { ForecastPoint, ForecastPointData, ForecastDailyData, ForecastHourData } from "@/api/types";
 
+
 const HOUR_STEPS = [0, 6, 12, 18, 24];
 
 function legendGradient(isDark: boolean): string {
@@ -541,11 +542,24 @@ function ZoomTracker({ onZoom }: { onZoom: (z: number) => void }) {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
+function relDayToLabel(relDay: number, startDay: number, lang: string): string {
+  const absDay = ((startDay + Math.round(relDay) - 1 + 3650) % 365) + 1;
+  return dayToShortDE(absDay, lang === "de" ? "de" : "en");
+}
+
+function relDayToCircle(relDay: number, startDay: number): string {
+  const absDay = ((startDay + Math.round(relDay) - 1 + 3650) % 365) + 1;
+  const d = new Date(new Date().getFullYear(), 0);
+  d.setDate(absDay);
+  return `${d.getDate()}.${d.getMonth() + 1}`;
+}
+
 export function ForecastMap() {
   const forecast = useResultsStore((s) => s.forecast);
   const forecastError = useResultsStore((s) => s.forecastError);
   const setHoveredKm = useResultsStore((s) => s.setHoveredKm);
   const visibleKmRange = useResultsStore((s) => s.visibleKmRange);
+  const hoveredModelKmRange = useResultsStore((s) => s.hoveredModelKmRange);
   const elevation = useResultsStore((s) => s.elevation);
   const markers = useResultsStore((s) => s.markers);
   const segments = useResultsStore((s) => s.segments);
@@ -1313,8 +1327,8 @@ const lang = useLangStore((s) => s.lang);
           {t.forecastMap.dailyOverview}
         </button>
 
-        {!dailyMode && (
-          <div className="ml-auto flex items-center gap-3 text-[11px] text-muted-foreground">
+        <div className="ml-auto flex items-center gap-3 text-[11px] text-muted-foreground">
+          {!dailyMode && (<>
             <span className="flex items-center gap-1">
               <svg width="12" height="12" viewBox="-6 -6 12 12"><polygon points="0,-6 -2.5,-1 2.5,-1" fill="rgb(0,180,20)"/><line x1="0" y1="4" x2="0" y2="-1" stroke="rgb(0,180,20)" strokeWidth="2" strokeLinecap="round"/></svg>
               {t.forecastMap.tailwind}
@@ -1323,8 +1337,8 @@ const lang = useLangStore((s) => s.lang);
               <svg width="12" height="12" viewBox="-6 -6 12 12"><polygon points="0,-6 -2.5,-1 2.5,-1" fill="rgb(220,0,20)"/><line x1="0" y1="4" x2="0" y2="-1" stroke="rgb(220,0,20)" strokeWidth="2" strokeLinecap="round"/></svg>
               {t.forecastMap.headwind}
             </span>
-          </div>
-        )}
+          </>)}
+        </div>
       </div>
 
       {/* Map */}
@@ -1332,12 +1346,23 @@ const lang = useLangStore((s) => s.lang);
         <FitBounds coordinates={routeCoords} />
         <ZoomTracker onZoom={handleZoom} />
         <MapRoute id="forecast-route" coordinates={routeCoords} color="rgba(220,60,40,0.7)" width={3} opacity={0.85} />
+        {hoveredModelKmRange && forecast && (() => {
+          const [ks, ke] = hoveredModelKmRange;
+          const me = forecast.miniElev;
+          const coords: [number, number][] = [];
+          const s = kmToLatLon(ks, me); coords.push([s[1], s[0]]);
+          for (const [km, lat, lon] of me) { if (km > ks && km < ke) coords.push([lon, lat]); }
+          const e = kmToLatLon(ke, me); coords.push([e[1], e[0]]);
+          return coords.length >= 2
+            ? <MapRoute id="model-highlight" coordinates={coords} color="rgba(255,210,0,0.95)" width={5} opacity={0.9} />
+            : null;
+        })()}
 
         {visibleDayTransitions.map((dt, i) => (
           <MapMarker key={`dt-${i}`} longitude={dt.lon} latitude={dt.lat}>
             <MarkerContent>
               <div className="rounded border border-border bg-card/90 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground shadow-sm whitespace-nowrap backdrop-blur-sm">
-                {t.forecastMap.dayMarker(dt.relDay)}
+                {relDayToLabel(dt.relDay, startDay, lang)}
               </div>
             </MarkerContent>
           </MapMarker>
@@ -1350,12 +1375,12 @@ const lang = useLangStore((s) => s.lang);
                 className="flex size-7 cursor-pointer items-center justify-center rounded-full border-2 text-[9px] font-bold shadow-md"
                 style={{ background: "hsl(var(--primary))", borderColor: "hsl(var(--chart-1))", color: "hsl(var(--primary-foreground))" }}
               >
-                {Math.round(s.relDay)}
+                {relDayToCircle(s.relDay, startDay)}
               </div>
             </MarkerContent>
             <MarkerPopup>
               <p className="font-medium">{s.name}</p>
-              <p className="text-xs text-muted-foreground">{t.forecastMap.dayMarker(Math.round(s.relDay))}</p>
+              <p className="text-xs text-muted-foreground">{relDayToLabel(s.relDay, startDay, lang)}</p>
             </MarkerPopup>
           </MapMarker>
         ))}

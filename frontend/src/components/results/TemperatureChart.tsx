@@ -8,6 +8,7 @@ import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
 import type { WeatherStop, ElevationCityData, ForecastData } from "@/api/types";
 
+
 // ─── Interpolation helpers (same as ElevationChart) ──────────────────────────
 
 function interpTempAtKm(
@@ -487,6 +488,7 @@ export function TemperatureChart() {
             className="flex-1"
           />
         </div>
+
       </div>
 
       {/* Segment charts */}

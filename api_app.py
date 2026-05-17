@@ -949,6 +949,65 @@ def job_results(job_id: str):
     return job["result"]
 
 
+_ALLOWED_FORECAST_MODELS = {
+    "best_match", "ecmwf_ifs025", "ecmwf_ifs04", "ecmwf_aifs025",
+    "icon_seamless", "gfs_seamless", "meteofrance_seamless",
+    "metno_seamless", "gem_seamless",
+}
+
+
+@app.get("/api/jobs/{job_id}/gpx-forecast/{model_name}")
+def gpx_forecast_by_model(job_id: str, model_name: str):
+    if model_name not in _ALLOWED_FORECAST_MODELS:
+        raise HTTPException(400, "Unknown model")
+    job = jobs.get(job_id)
+    if not job or job["status"] not in ("done", "preview") or not job.get("result"):
+        raise HTTPException(404, "Results not available")
+    meta = job.get("gpx_forecast_meta")
+    if not meta or not meta.get("forecast_pts"):
+        return {"weatherPointUpdates": {}}
+    forecast_pts = meta["forecast_pts"]
+    pts_for_meteo = [fp for _, _, fp in forecast_pts]
+    try:
+        fdata = fetch_open_meteo_forecast(pts_for_meteo, model=model_name)
+    except Exception as exc:
+        raise HTTPException(500, f"Forecast error: {exc}")
+    _HOUR_STEPS = [0, 6, 12, 18]
+    def _nearest_hour_key(hour_frac):
+        step = min(_HOUR_STEPS, key=lambda h: abs(hour_frac - h))
+        return str(step)
+    updates = {}
+    for i, (pt_idx, arrival_hour_frac, _fp) in enumerate(forecast_pts):
+        pdata = fdata.get(i, {})
+        if pdata.get("ok", False):
+            h_data = (pdata.get("hourly") or {}).get(_nearest_hour_key(arrival_hour_frac)) or {}
+            updates[str(pt_idx)] = {
+                "temp": h_data.get("temp"),
+                "prcp": h_data.get("prcp"),
+                "wspd": h_data.get("wspd"),
+                "wdir": h_data.get("wdir"),
+                "cloud": h_data.get("cloud"),
+            }
+    return {"weatherPointUpdates": updates}
+
+
+@app.get("/api/jobs/{job_id}/forecast/{model_name}")
+def job_forecast_by_model(job_id: str, model_name: str):
+    if model_name not in _ALLOWED_FORECAST_MODELS:
+        raise HTTPException(400, "Unknown model")
+    job = jobs.get(job_id)
+    if not job or job["status"] not in ("done", "preview") or not job.get("result"):
+        raise HTTPException(404, "Results not available")
+    forecast = job["result"].get("forecast")
+    if not forecast:
+        raise HTTPException(404, "No forecast data")
+    try:
+        fdata = fetch_open_meteo_forecast(forecast["points"], model=model_name)
+    except Exception as exc:
+        raise HTTPException(500, f"Forecast error: {exc}")
+    return {"data": {str(k): v for k, v in fdata.items()}}
+
+
 @app.post("/api/gpx/jobs")
 async def submit_gpx_job(
     file: UploadFile = File(...),
@@ -2632,6 +2691,11 @@ def run_gpx_analysis(
         def _nearest_hour_key(hour_frac: float) -> str:
             step = min(_HOUR_STEPS, key=lambda h: abs(hour_frac - h))
             return str(step)
+
+        # Store forecast point metadata so model switching can re-fetch later
+        job["gpx_forecast_meta"] = {
+            "forecast_pts": [(pt_idx, ah_frac, fp) for pt_idx, ah_frac, fp in forecast_pts]
+        }
 
         # Fetch forecast data for points <= 15 days away
         if forecast_pts:

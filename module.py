@@ -2664,7 +2664,7 @@ def select_forecast_points(profile, latlons, min_spacing_km=15, max_spacing_km=2
     ]
 
 
-def fetch_open_meteo_forecast(points, on_progress=None):
+def fetch_open_meteo_forecast(points, on_progress=None, model="best_match"):
     """Fetch Open-Meteo forecast for a list of points with target_date."""
     from concurrent.futures import ThreadPoolExecutor
     from datetime import date as _date
@@ -2685,7 +2685,7 @@ def fetch_open_meteo_forecast(points, on_progress=None):
                 "longitude":     pt["lon"],
                 "hourly":        "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration",
                 "daily":         "precipitation_sum,windspeed_10m_max,sunshine_duration,temperature_2m_max,temperature_2m_min",
-                "models":        "best_match",
+                "models":        model,
                 "forecast_days": 16,
                 "timezone":      "auto",
             }, timeout=15)

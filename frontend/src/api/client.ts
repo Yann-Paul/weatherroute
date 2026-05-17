@@ -10,6 +10,8 @@ import type {
   SavedRouteSummary,
   DestinationFinderFormData,
   DestinationJobResults,
+  ModelForecastData,
+  GpxForecastUpdate,
 } from "./types";
 
 const BASE = "/api";
@@ -49,6 +51,14 @@ export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
 
 export async function getJobResults(jobId: string): Promise<JobResults> {
   return request(`/jobs/${jobId}/results`);
+}
+
+export async function getModelForecast(jobId: string, model: string): Promise<ModelForecastData> {
+  return request(`/jobs/${jobId}/forecast/${model}`);
+}
+
+export async function getGpxModelForecast(jobId: string, model: string): Promise<GpxForecastUpdate> {
+  return request(`/jobs/${jobId}/gpx-forecast/${model}`);
 }
 
 export async function submitGpxJob(

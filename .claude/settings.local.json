@@ -46,7 +46,16 @@
       "Bash(python3 -m json.tool)",
       "Bash(python3:*)",
       "Bash(rm -rf node_modules)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\yann-\\\\Documents\\\\Programming\\\\Python\\\\weathermap\\\\web_elevation_forecast\\\\weatherroute\" -Recurse -File)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "PowerShell(head *)",
+      "WebFetch(domain:api.open-meteo.com)",
+      "WebFetch(domain:open-meteo.com)",
+      "Bash(dir *)",
+      "Bash(curl -s \"https://api.open-meteo.com/v1/forecast?latitude=48&longitude=10&models=ecmwf_ifs_hres&hourly=temperature_2m,precipitation,windspeed_10m,winddirection_10m&daily=precipitation_sum,windspeed_10m_max,temperature_2m_max,temperature_2m_min&forecast_days=5&timezone=auto\")",
+      "Bash(curl -v \"https://api.open-meteo.com/v1/forecast?latitude=48&longitude=10&models=ecmwf_ifs_hres&hourly=temperature_2m&daily=temperature_2m_max,temperature_2m_min&forecast_days=5&timezone=auto\")",
+      "Bash(Find the *)"
     ]
   }
 }

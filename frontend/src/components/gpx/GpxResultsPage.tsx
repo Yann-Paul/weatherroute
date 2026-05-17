@@ -1,16 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "react-router";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getGpxResults } from "@/api/client";
-import type { GpxJobResults } from "@/api/types";
+import { getGpxResults, getGpxModelForecast } from "@/api/client";
+import type { GpxJobResults, GpxWeatherPoint } from "@/api/types";
 import { useT } from "@/i18n/useT";
 import { GpxRouteMap } from "./GpxRouteMap";
 import { GpxElevationChart } from "./GpxElevationChart";
 import { GpxTemperatureChart } from "./GpxTemperatureChart";
 import { GpxWeatherTable } from "./GpxWeatherTable";
+import { GpxModelBadges } from "./GpxModelBadges";
+
+type ModelOverride = Record<string, {
+  temp: number | null; prcp: number | null;
+  wspd: number | null; wdir: number | null; cloud: number | null;
+}>;
 
 export function GpxResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -18,12 +24,57 @@ export function GpxResultsPage() {
   const [results, setResults] = useState<GpxJobResults | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Model switching state
+  const [selectedModel, setSelectedModel] = useState("best_match");
+  const [pendingModel, setPendingModel] = useState<string | null>(null);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelCache, setModelCache] = useState<Record<string, ModelOverride>>({});
+
   useEffect(() => {
     if (!jobId) return;
     getGpxResults(jobId)
       .then(setResults)
       .catch((e: Error) => setError(e.message));
   }, [jobId]);
+
+  // Merge model overrides into weather points
+  const activeWeatherPoints = useMemo<GpxWeatherPoint[]>(() => {
+    if (!results) return [];
+    const overrides = modelCache[selectedModel];
+    if (!overrides) return results.weatherPoints;
+    return results.weatherPoints.map((wp, idx) => {
+      const ov = overrides[String(idx)];
+      return ov ? { ...wp, ...ov } : wp;
+    });
+  }, [results, selectedModel, modelCache]);
+
+  // Forecast km range (for zone bar)
+  const forecastRange = useMemo(() => {
+    if (!results) return null;
+    const pts = results.weatherPoints.filter((wp) => wp.isForecast);
+    if (!pts.length) return null;
+    return { start: pts[0].km, end: pts[pts.length - 1].km };
+  }, [results]);
+
+  async function handleSelectModel(model: string) {
+    if (modelLoading || model === selectedModel || !jobId) return;
+    if (modelCache[model]) {
+      setSelectedModel(model);
+      return;
+    }
+    setModelLoading(true);
+    setPendingModel(model);
+    try {
+      const data = await getGpxModelForecast(jobId, model);
+      setModelCache((prev) => ({ ...prev, [model]: data.weatherPointUpdates }));
+      setSelectedModel(model);
+    } catch (e) {
+      console.error("GPX model forecast error:", e);
+    } finally {
+      setModelLoading(false);
+      setPendingModel(null);
+    }
+  }
 
   if (error) {
     return (
@@ -76,15 +127,30 @@ export function GpxResultsPage() {
       </div>
 
       <Tabs defaultValue="map">
-        <TabsList className="w-full justify-start">
-          <TabsTrigger value="map">{t.gpx.results.tabMap}</TabsTrigger>
-          <TabsTrigger value="elevation">{t.gpx.results.tabElevation}</TabsTrigger>
-          <TabsTrigger value="temperature">{t.gpx.results.tabTemperature}</TabsTrigger>
-          <TabsTrigger value="weather">{t.gpx.results.tabWeather}</TabsTrigger>
-        </TabsList>
+        <div className="flex flex-wrap items-center gap-2">
+          <TabsList className="justify-start">
+            <TabsTrigger value="map">{t.gpx.results.tabMap}</TabsTrigger>
+            <TabsTrigger value="elevation">{t.gpx.results.tabElevation}</TabsTrigger>
+            <TabsTrigger value="temperature">{t.gpx.results.tabTemperature}</TabsTrigger>
+            <TabsTrigger value="weather">{t.gpx.results.tabWeather}</TabsTrigger>
+          </TabsList>
+          {forecastRange && (
+            <div className="ml-auto shrink-0">
+              <GpxModelBadges
+                selectedModel={selectedModel}
+                pendingModel={pendingModel}
+                modelLoading={modelLoading}
+                onSelect={handleSelectModel}
+                totalKm={results.totalKm}
+                forecastKmStart={forecastRange.start}
+                forecastKmEnd={forecastRange.end}
+              />
+            </div>
+          )}
+        </div>
 
         <TabsContent value="map">
-          <GpxRouteMap results={results} />
+          <GpxRouteMap results={{ ...results, weatherPoints: activeWeatherPoints }} />
         </TabsContent>
 
         <TabsContent value="elevation">
@@ -93,7 +159,7 @@ export function GpxResultsPage() {
               {elevation ? (
                 <GpxElevationChart
                   elevation={elevation}
-                  weatherPoints={results.weatherPoints}
+                  weatherPoints={activeWeatherPoints}
                   dailyConfigs={results.dailyConfigs}
                   startDate={results.startDate}
                 />
@@ -110,7 +176,7 @@ export function GpxResultsPage() {
               {elevation ? (
                 <GpxTemperatureChart
                   elevation={elevation}
-                  weatherPoints={results.weatherPoints}
+                  weatherPoints={activeWeatherPoints}
                   dailyConfigs={results.dailyConfigs}
                   startDate={results.startDate}
                 />
@@ -122,7 +188,7 @@ export function GpxResultsPage() {
         </TabsContent>
 
         <TabsContent value="weather">
-          <GpxWeatherTable weatherPoints={results.weatherPoints} />
+          <GpxWeatherTable weatherPoints={activeWeatherPoints} />
         </TabsContent>
       </Tabs>
     </div>

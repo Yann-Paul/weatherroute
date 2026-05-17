@@ -24,6 +24,7 @@ interface CityComboboxProps {
   onSelect: (city: CitySearchResult) => void;
   placeholder?: string;
   className?: string;
+  defaultOpen?: boolean;
 }
 
 export function CityCombobox({
@@ -31,8 +32,9 @@ export function CityCombobox({
   onSelect,
   placeholder,
   className,
+  defaultOpen,
 }: CityComboboxProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen ?? false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CitySearchResult[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);

@@ -56,7 +56,7 @@ export function dayOfYearToDate(dayOfYear: number, year = 2025, locale = "en-US"
 }
 
 export function monthDayToDayOfYear(month: number, day: number): number {
-  const date = new Date(2025, month - 1, day);
-  const start = new Date(2025, 0, 1);
-  return Math.floor((date.getTime() - start.getTime()) / 86400000) + 1;
+  const date = Date.UTC(2025, month - 1, day);
+  const start = Date.UTC(2025, 0, 1);
+  return Math.floor((date - start) / 86400000) + 1;
 }

@@ -12,9 +12,10 @@ import {
 } from "@/components/ui/select";
 import { WeatherCell } from "./WeatherCell";
 import { useResultsStore } from "@/stores/resultsStore";
+
 import { dayOfYearToDate, computeBearing } from "@/utils/constants";
 import { useT } from "@/i18n/useT";
-import type { WeatherStop } from "@/api/types";
+import type { WeatherStop, WeatherOffsetData } from "@/api/types";
 
 // ─── Row descriptor ───────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ export function WeatherGrid() {
     setTableStep,
     setTableColumns,
   } = useResultsStore();
+  const forecast = useResultsStore((s) => s.forecast);
   const t = useT();
 
   // Build rows: arrival day + rest days per stop
@@ -56,6 +58,49 @@ export function WeatherGrid() {
     }
     return result.sort((a, b) => a.relDay - b.relDay);
   }, [weather]);
+
+  // Interpolate forecast data to each city's km position for colOffset=0 display
+  const forecastByCity = useMemo(() => {
+    if (!forecast?.points.length || !forecast.routeStops.length) return {} as Record<string, WeatherOffsetData | null>;
+    const result: Record<string, WeatherOffsetData | null> = {};
+    for (const stop of weather) {
+      const routeStop = forecast.routeStops.find((rs) => rs.name === stop.cityName);
+      if (!routeStop) { result[stop.cityId] = null; continue; }
+
+      const km = routeStop.km;
+      const { points, data } = forecast;
+      if (km < points[0].km || km > points[points.length - 1].km) { result[stop.cityId] = null; continue; }
+
+      let ci = points.findIndex((p) => p.km >= km);
+      if (ci < 0) ci = points.length - 1;
+      if (ci === 0) ci = 1;
+
+      const fd0 = data[String(ci - 1)], fd1 = data[String(ci)];
+      if (!fd0?.ok || !fd1?.ok || !fd0.daily || !fd1.daily) { result[stop.cityId] = null; continue; }
+
+      const p0 = points[ci - 1], p1 = points[ci];
+      const t = p1.km > p0.km ? (km - p0.km) / (p1.km - p0.km) : 0;
+      const lerp = (a: number | null, b: number | null): number | null =>
+        a != null && b != null ? a + t * (b - a) : (a ?? b ?? null);
+
+      // Wind direction from noon hourly data (closer point wins)
+      const wdir0 = fd0.hourly?.["12"]?.wdir ?? null;
+      const wdir1 = fd1.hourly?.["12"]?.wdir ?? null;
+      const wdir = t < 0.5 ? (wdir0 ?? wdir1) : (wdir1 ?? wdir0);
+
+      result[stop.cityId] = {
+        tmin: lerp(fd0.daily.tmin, fd1.daily.tmin),
+        tmax: lerp(fd0.daily.tmax, fd1.daily.tmax),
+        prcp: lerp(fd0.daily.prcp, fd1.daily.prcp),
+        wspd: lerp(fd0.daily.wspd, fd1.daily.wspd),
+        wdir: wdir ?? null,
+        wspdResultant: null,
+      };
+    }
+    return result;
+  }, [forecast, weather]);
+
+  const hasForecastData = Object.values(forecastByCity).some((v) => v !== null);
 
   // Build columns: each column represents a different start-day offset
   const columns = useMemo(() => {
@@ -149,6 +194,9 @@ export function WeatherGrid() {
                     <div className="text-xs font-bold">{col.label}</div>
                     <div className="text-[11px] text-muted-foreground">
                       {col.colOffset >= 0 ? "+" : ""}{col.colOffset}d
+                      {col.colOffset === 0 && hasForecastData && (
+                        <span className="ml-1 text-blue-400" title="Live-Vorhersage">☁</span>
+                      )}
                     </div>
                   </th>
                 ))}
@@ -171,7 +219,12 @@ export function WeatherGrid() {
                   </th>
                   {columns.map((col) => {
                     const lookupOffset = col.colOffset + row.restDayOffset;
-                    const data = row.stop.byOffset[String(lookupOffset)] ?? null;
+                    const climateData = row.stop.byOffset[String(lookupOffset)] ?? null;
+                    // For colOffset=0 (actual route dates), use live forecast data if available
+                    const forecastData = col.colOffset === 0 && row.restDayOffset === 0
+                      ? (forecastByCity[row.stop.cityId] ?? null)
+                      : null;
+                    const data = forecastData ?? climateData;
                     const calDay = ((startDay + col.colOffset + Math.round(row.relDay) - 1 + 3650) % 365) + 1;
                     const dateStr = dayOfYearToDate(calDay, currentYear, t.dateLocale);
                     return (

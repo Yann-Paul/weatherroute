@@ -6,7 +6,9 @@ import type {
   WeatherStop,
   RouteStop,
   ForecastData,
+  ForecastPointData,
 } from "@/api/types";
+import { getModelForecast } from "@/api/client";
 
 interface ResultsState {
   segments: RouteSegment[];
@@ -28,6 +30,14 @@ interface ResultsState {
   dateOffset: number;
   tableStep: number;
   tableColumns: number;
+
+  // Model switching
+  jobId: string | null;
+  selectedModel: string;
+  modelDataCache: Record<string, Record<string, ForecastPointData>>;
+  modelLoading: boolean;
+  pendingModel: string | null;
+  modelError: string | null;
 
   setResults: (data: {
     segments: RouteSegment[];
@@ -52,6 +62,7 @@ interface ResultsState {
   }) => void;
   hoveredKm: number | null;
   visibleKmRange: [number, number] | null;
+  hoveredModelKmRange: [number, number] | null;
 
   setActiveTab: (tab: string) => void;
   setDateOffset: (offset: number) => void;
@@ -59,6 +70,9 @@ interface ResultsState {
   setTableColumns: (cols: number) => void;
   setHoveredKm: (km: number | null) => void;
   setVisibleKmRange: (range: [number, number] | null) => void;
+  setHoveredModelKmRange: (range: [number, number] | null) => void;
+  setJobId: (jobId: string) => void;
+  selectModel: (model: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -83,12 +97,27 @@ const initialState = {
   tableColumns: 7,
   hoveredKm: null as number | null,
   visibleKmRange: null as [number, number] | null,
+  hoveredModelKmRange: null as [number, number] | null,
+  jobId: null as string | null,
+  selectedModel: "best_match",
+  modelDataCache: {} as Record<string, Record<string, ForecastPointData>>,
+  modelLoading: false,
+  pendingModel: null as string | null,
+  modelError: null as string | null,
 };
 
-export const useResultsStore = create<ResultsState>()((set) => ({
+export const useResultsStore = create<ResultsState>()((set, get) => ({
   ...initialState,
 
-  setResults: (data) => set({ ...data, activeTab: "map" }),
+  setResults: (data) => set({
+    ...data,
+    activeTab: "map",
+    selectedModel: "best_match",
+    modelDataCache: data.forecast ? { "best_match": data.forecast.data } : {},
+    modelLoading: false,
+    pendingModel: null,
+    modelError: null,
+  }),
 
   updateElevation: (data) => set(data),
 
@@ -98,6 +127,35 @@ export const useResultsStore = create<ResultsState>()((set) => ({
   setTableColumns: (tableColumns) => set({ tableColumns }),
   setHoveredKm: (hoveredKm) => set({ hoveredKm }),
   setVisibleKmRange: (visibleKmRange) => set({ visibleKmRange }),
+  setHoveredModelKmRange: (hoveredModelKmRange) => set({ hoveredModelKmRange }),
+  setJobId: (jobId) => set({ jobId }),
+
+  selectModel: async (model) => {
+    const { jobId, selectedModel, modelDataCache, forecast, modelLoading } = get();
+    if (modelLoading || selectedModel === model || !jobId) return;
+
+    if (modelDataCache[model]) {
+      set({
+        selectedModel: model,
+        forecast: forecast ? { ...forecast, data: modelDataCache[model] } : null,
+      });
+      return;
+    }
+
+    set({ modelLoading: true, pendingModel: model, modelError: null });
+    try {
+      const result = await getModelForecast(jobId, model);
+      set((state) => ({
+        selectedModel: model,
+        modelLoading: false,
+        pendingModel: null,
+        modelDataCache: { ...state.modelDataCache, [model]: result.data },
+        forecast: state.forecast ? { ...state.forecast, data: result.data } : null,
+      }));
+    } catch (e) {
+      set({ modelLoading: false, pendingModel: null, modelError: String(e) });
+    }
+  },
 
   reset: () => set(initialState),
 }));

@@ -144,6 +144,14 @@ Die fertige Route wird mit vollständigen Wetterdaten visualisiert:
 - Tabellarische Übersicht aller Reisetage
 - Temperaturen, Niederschlag, Windgeschwindigkeit pro Stadt und Tag
 
+**Wettermodell-Umschalter**
+- Neben der Tab-Leiste platziert — bleibt beim Wechsel zwischen den Ansichten erhalten
+- Auswahl zwischen `best_match`, `ECMWF` (`ecmwf_ifs025`), `ICON` (`icon_seamless`) und `GFS` (`gfs_seamless`)
+- Einmal geladene Modelldaten werden gecacht — kein erneuter Abruf beim Zurückwechseln
+- Hover über das aktive Modell-Badge hebt die Vorhersage-Zone auf der Karte gelb hervor
+- Ein blauer Balken zeigt welcher Streckenanteil Vorhersagedaten hat (skaliert auf Gesamtroute)
+- Wettergitter: Spalte `+0d` zeigt Live-Vorhersagedaten des gewählten Modells (☁-Indikator im Spaltenkopf), alle anderen Spalten zeigen weiterhin historische Klimanormale
+
 **Route speichern**
 - Aktuelle Route mit Name versehen und für spätere Nutzung speichern
 
@@ -162,6 +170,7 @@ Für bereits geplante Routen (z. B. aus Wanderungs- oder Radfahrplanern):
 - Temperaturverlauf entlang der Route
 - Höhenprofil
 - Wettertabelle nach Etappen
+- Wettermodell-Umschalter (`best_match`, `ECMWF`, `ICON`, `GFS`) — neben der Tab-Leiste, aktualisiert alle vier Ansichten; gecacht wie in der Routenplaner-Ansicht
 
 ---
 
@@ -656,6 +665,7 @@ Rückgabe: beste 5 Routen als [{ 'cities': [(city_id, day), ...], 'score': float
 | [Open-Elevation](https://api.open-elevation.com) | SRTM-Höhendaten (56°S–60°N) |
 | [OpenTopoData](https://api.opentopodata.org) | ASTER-Höhendaten (Polarregionen bis 83°N) |
 | [Nominatim](https://nominatim.openstreetmap.org) | Geocoding für Städte außerhalb des Graphen |
+| [Open-Meteo](https://api.open-meteo.com) | Live-Wettervorhersage (16 Tage) mit wählbarem Modell (`best_match`, ECMWF, ICON, GFS, …) |
 
 ---
 
@@ -700,6 +710,7 @@ weatherroute/
 │       │   │   ├── TemperatureChart.tsx # Temperaturdiagramm
 │       │   │   ├── ElevationChart.tsx  # Höhenprofil
 │       │   │   ├── WeatherGrid.tsx     # Wettertabelle
+│       │   │   ├── ModelBadges.tsx     # Wettermodell-Umschalter (best_match / ECMWF / ICON / GFS)
 │       │   │   └── RouteList.tsx       # Stadtliste mit Details
 │       │   ├── gpx/
 │       │   │   ├── GpxPage.tsx         # GPX-Upload
@@ -707,7 +718,8 @@ weatherroute/
 │       │   │   ├── GpxRouteMap.tsx     # GPX-Karte
 │       │   │   ├── GpxElevationChart.tsx
 │       │   │   ├── GpxTemperatureChart.tsx
-│       │   │   └── GpxWeatherTable.tsx
+│       │   │   ├── GpxWeatherTable.tsx
+│       │   │   └── GpxModelBadges.tsx  # Wettermodell-Umschalter für GPX
 │       │   ├── layout/
 │       │   │   └── TopBar.tsx          # Navigation
 │       │   ├── ui/                     # Radix UI Basiskomponenten
@@ -740,6 +752,8 @@ weatherroute/
 | `POST` | `/api/jobs` | Routenberechnung starten |
 | `GET` | `/api/jobs/{id}/status` | Berechnungsfortschritt abfragen |
 | `GET` | `/api/jobs/{id}/results` | Fertige Ergebnisse abrufen |
+| `GET` | `/api/jobs/{id}/forecast/{model}` | Vorhersage mit alternativem Wettermodell abrufen (Routenplaner) |
+| `GET` | `/api/jobs/{id}/gpx-forecast/{model}` | Vorhersage mit alternativem Wettermodell abrufen (GPX) |
 | `POST` | `/api/destination-jobs` | Zielsuche starten |
 | `POST` | `/api/gpx/jobs` | GPX-Analyse starten |
 | `GET` | `/api/saved-routes` | Gespeicherte Routen auflisten |

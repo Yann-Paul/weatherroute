@@ -205,6 +205,7 @@ export interface ForecastPointData {
   ok: boolean;
   hourly?: Record<string, ForecastHourData>;
   daily?: ForecastDailyData;
+  model?: string;
 }
 
 export interface ForecastPoint {
@@ -223,6 +224,20 @@ export interface ForecastData {
   routeStops: { name: string; lat: number; lon: number; km: number; relDay: number }[];
   desiredHigh: number;
   desiredLow: number;
+}
+
+export interface ModelForecastData {
+  data: Record<string, ForecastPointData>;
+}
+
+export interface GpxForecastUpdate {
+  weatherPointUpdates: Record<string, {
+    temp: number | null;
+    prcp: number | null;
+    wspd: number | null;
+    wdir: number | null;
+    cloud: number | null;
+  }>;
 }
 
 export interface GpxDayConfig {

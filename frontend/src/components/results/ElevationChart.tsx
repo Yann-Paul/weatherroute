@@ -10,6 +10,7 @@ import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
 import type { WeatherStop, ElevationCityData, ForecastData } from "@/api/types";
 
+
 // ─── Lapse-rate-corrected temperature interpolation ──────────────────────────
 
 function interpTempAtKm(
@@ -496,6 +497,7 @@ export function ElevationChart() {
             className="flex-1"
           />
         </div>
+
       </div>
 
       {/* Segment charts */}

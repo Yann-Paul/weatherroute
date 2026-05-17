@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   DndContext,
   closestCenter,
@@ -22,7 +23,7 @@ import { usePlannerStore } from "@/stores/plannerStore";
 import { useT } from "@/i18n/useT";
 import type { CitySearchResult } from "@/api/types";
 
-function SortableCityRow({ index }: { index: number }) {
+function SortableCityRow({ index, autoOpen }: { index: number; autoOpen?: boolean }) {
   const city = usePlannerStore((s) => s.cities[index]);
   const updateCity = usePlannerStore((s) => s.updateCity);
   const removeCity = usePlannerStore((s) => s.removeCity);
@@ -69,6 +70,7 @@ function SortableCityRow({ index }: { index: number }) {
           updateCity(index, { id: c.id, name: c.name })
         }
         className="flex-1"
+        defaultOpen={autoOpen}
       />
 
       <div className="flex flex-col items-center gap-0.5" title={t.cityList.pauseTitle}>
@@ -104,6 +106,14 @@ export function CityList() {
   const addCity = usePlannerStore((s) => s.addCity);
   const reorderCities = usePlannerStore((s) => s.reorderCities);
   const t = useT();
+  const [autoOpenIndex, setAutoOpenIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (autoOpenIndex !== null) {
+      const id = setTimeout(() => setAutoOpenIndex(null), 0);
+      return () => clearTimeout(id);
+    }
+  }, [autoOpenIndex]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -132,7 +142,7 @@ export function CityList() {
       >
         <SortableContext items={items} strategy={verticalListSortingStrategy}>
           {cities.map((_, i) => (
-            <SortableCityRow key={`city-${i}`} index={i} />
+            <SortableCityRow key={`city-${i}`} index={i} autoOpen={i === autoOpenIndex} />
           ))}
         </SortableContext>
       </DndContext>
@@ -140,7 +150,10 @@ export function CityList() {
       <Button
         variant="outline"
         size="sm"
-        onClick={() => addCity({ id: "", name: "", restDays: 0 })}
+        onClick={() => {
+          setAutoOpenIndex(cities.length);
+          addCity({ id: "", name: "", restDays: 0 });
+        }}
         className="w-full"
       >
         <Plus className="mr-2 h-4 w-4" />
