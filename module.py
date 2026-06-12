@@ -2680,7 +2680,7 @@ def fetch_open_meteo_forecast(points, on_progress=None, model="best_match"):
             target = pt.get("target_date")
             if not target:
                 return i, {"ok": False}
-            resp = requests.get(OPEN_METEO, params={
+            params = {
                 "latitude":      pt["lat"],
                 "longitude":     pt["lon"],
                 "hourly":        "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration",
@@ -2688,8 +2688,26 @@ def fetch_open_meteo_forecast(points, on_progress=None, model="best_match"):
                 "models":        model,
                 "forecast_days": 16,
                 "timezone":      "auto",
-            }, timeout=15)
-            resp.raise_for_status()
+            }
+            resp = None
+            for attempt in range(4):
+                if attempt > 0:
+                    time.sleep(min(2 ** attempt, 16))
+                try:
+                    resp = requests.get(OPEN_METEO, params=params, timeout=30)
+                    resp.raise_for_status()
+                    break
+                except requests.exceptions.HTTPError as e:
+                    status = getattr(getattr(e, "response", None), "status_code", None)
+                    if status in (429, 500, 502, 503, 504):
+                        print(f"[Forecast] Point {i} retry {attempt+1} (HTTP {status})", flush=True)
+                        continue
+                    raise
+                except requests.exceptions.Timeout:
+                    print(f"[Forecast] Point {i} timeout, retry {attempt+1}", flush=True)
+                    continue
+            else:
+                raise RuntimeError(f"Open-Meteo nach 4 Versuchen nicht erreichbar")
             data = resp.json()
 
             # Elevation correction: actual GPS elevation vs. model terrain elevation.
@@ -2756,7 +2774,7 @@ def fetch_open_meteo_forecast(points, on_progress=None, model="best_match"):
         return result
 
     result = {}
-    with ThreadPoolExecutor(max_workers=3) as ex:
+    with ThreadPoolExecutor(max_workers=1) as ex:
         for i, data in ex.map(fetch_one_tracked, enumerate(points)):
             result[i] = data
     return result

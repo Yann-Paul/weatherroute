@@ -2787,17 +2787,35 @@ def run_gpx_analysis(
                 if stop_is_forecast:
                     # Use Open-Meteo forecast API (same source as route points)
                     try:
-                        _resp = requests.get(
-                            "https://api.open-meteo.com/v1/forecast",
-                            params={
-                                "latitude": stop_lat,
-                                "longitude": stop_lon,
-                                "hourly": "temperature_2m,precipitation,windspeed_10m",
-                                "forecast_days": 16,
-                                "timezone": "auto",
-                            },
-                            timeout=15,
-                        )
+                        _resp = None
+                        for _attempt in range(4):
+                            if _attempt > 0:
+                                time.sleep(min(2 ** _attempt, 16))
+                            try:
+                                _resp = requests.get(
+                                    "https://api.open-meteo.com/v1/forecast",
+                                    params={
+                                        "latitude": stop_lat,
+                                        "longitude": stop_lon,
+                                        "hourly": "temperature_2m,precipitation,windspeed_10m",
+                                        "forecast_days": 16,
+                                        "timezone": "auto",
+                                    },
+                                    timeout=30,
+                                )
+                                _resp.raise_for_status()
+                                break
+                            except requests.exceptions.HTTPError as _he:
+                                _st = getattr(getattr(_he, "response", None), "status_code", None)
+                                if _st in (429, 500, 502, 503, 504):
+                                    print(f"[GPX Stop Forecast] retry {_attempt+1} (HTTP {_st})", flush=True)
+                                    continue
+                                raise
+                            except requests.exceptions.Timeout:
+                                print(f"[GPX Stop Forecast] timeout, retry {_attempt+1}", flush=True)
+                                continue
+                        else:
+                            raise RuntimeError("Open-Meteo nach 4 Versuchen nicht erreichbar")
                         _resp.raise_for_status()
                         _fd = _resp.json()
 
