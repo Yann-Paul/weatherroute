@@ -2665,8 +2665,12 @@ def select_forecast_points(profile, latlons, min_spacing_km=15, max_spacing_km=2
 
 
 def fetch_open_meteo_forecast(points, on_progress=None, model="best_match"):
-    """Fetch Open-Meteo forecast for a list of points with target_date."""
-    from concurrent.futures import ThreadPoolExecutor
+    """Fetch Open-Meteo forecast for a list of points with target_date.
+
+    All points are requested in a single batched API call (Open-Meteo
+    supports comma-separated lat/lon lists), which keeps usage well
+    within the free-tier rate limits even for routes with many points.
+    """
     from datetime import date as _date
 
     OPEN_METEO = "https://api.open-meteo.com/v1/forecast"
@@ -2674,41 +2678,60 @@ def fetch_open_meteo_forecast(points, on_progress=None, model="best_match"):
 
     LAPSE_RATE = 0.0065  # °C per metre (standard environmental lapse rate)
 
-    def fetch_one(args):
-        i, pt = args
+    result = {i: {"ok": False} for i in range(len(points))}
+
+    valid = [(i, pt) for i, pt in enumerate(points) if pt.get("target_date")]
+
+    def report_progress(n):
+        if on_progress:
+            for _ in range(n):
+                on_progress()
+
+    if not valid:
+        report_progress(len(points))
+        return result
+
+    params = {
+        "latitude":      ",".join(str(pt["lat"]) for _, pt in valid),
+        "longitude":     ",".join(str(pt["lon"]) for _, pt in valid),
+        "hourly":        "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration",
+        "daily":         "precipitation_sum,windspeed_10m_max,sunshine_duration,temperature_2m_max,temperature_2m_min",
+        "models":        model,
+        "forecast_days": 16,
+        "timezone":      "auto",
+    }
+
+    resp = None
+    for attempt in range(4):
+        if attempt > 0:
+            time.sleep(min(2 ** attempt, 16))
         try:
-            target = pt.get("target_date")
-            if not target:
-                return i, {"ok": False}
-            params = {
-                "latitude":      pt["lat"],
-                "longitude":     pt["lon"],
-                "hourly":        "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration",
-                "daily":         "precipitation_sum,windspeed_10m_max,sunshine_duration,temperature_2m_max,temperature_2m_min",
-                "models":        model,
-                "forecast_days": 16,
-                "timezone":      "auto",
-            }
-            resp = None
-            for attempt in range(4):
-                if attempt > 0:
-                    time.sleep(min(2 ** attempt, 16))
-                try:
-                    resp = requests.get(OPEN_METEO, params=params, timeout=30)
-                    resp.raise_for_status()
-                    break
-                except requests.exceptions.HTTPError as e:
-                    status = getattr(getattr(e, "response", None), "status_code", None)
-                    if status in (429, 500, 502, 503, 504):
-                        print(f"[Forecast] Point {i} retry {attempt+1} (HTTP {status})", flush=True)
-                        continue
-                    raise
-                except requests.exceptions.Timeout:
-                    print(f"[Forecast] Point {i} timeout, retry {attempt+1}", flush=True)
-                    continue
-            else:
-                raise RuntimeError(f"Open-Meteo nach 4 Versuchen nicht erreichbar")
-            data = resp.json()
+            resp = requests.get(OPEN_METEO, params=params, timeout=60)
+            resp.raise_for_status()
+            break
+        except requests.exceptions.HTTPError as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status in (429, 500, 502, 503, 504):
+                print(f"[Forecast] batch retry {attempt+1} (HTTP {status})", flush=True)
+                continue
+            print(f"[Forecast] batch failed: {e}", flush=True)
+            report_progress(len(points))
+            return result
+        except requests.exceptions.Timeout:
+            print(f"[Forecast] batch timeout, retry {attempt+1}", flush=True)
+            continue
+    else:
+        print("[Forecast] Open-Meteo nach 4 Versuchen nicht erreichbar", flush=True)
+        report_progress(len(points))
+        return result
+
+    data_list = resp.json()
+    if isinstance(data_list, dict):
+        data_list = [data_list]
+
+    for (i, pt), data in zip(valid, data_list):
+        try:
+            target = pt["target_date"]
 
             # Elevation correction: actual GPS elevation vs. model terrain elevation.
             # Open-Meteo returns "elevation" (model orography) automatically.
@@ -2762,21 +2785,11 @@ def fetch_open_meteo_forecast(points, on_progress=None, model="best_match"):
                     "tmin": _tc(dtmin[di] if di < len(dtmin) else None),
                 }
 
-            return i, {"ok": True, "hourly": hourly_result, "daily": daily_result}
+            result[i] = {"ok": True, "hourly": hourly_result, "daily": daily_result}
         except Exception as exc:
             print(f"[Forecast] Point {i} failed: {exc}")
-            return i, {"ok": False}
 
-    def fetch_one_tracked(args):
-        result = fetch_one(args)
-        if on_progress:
-            on_progress()
-        return result
-
-    result = {}
-    with ThreadPoolExecutor(max_workers=1) as ex:
-        for i, data in ex.map(fetch_one_tracked, enumerate(points)):
-            result[i] = data
+    report_progress(len(points))
     return result
 
 
