@@ -57,7 +57,25 @@
       "Bash(curl -v \"https://api.open-meteo.com/v1/forecast?latitude=48&longitude=10&models=ecmwf_ifs_hres&hourly=temperature_2m&daily=temperature_2m_max,temperature_2m_min&forecast_days=5&timezone=auto\")",
       "Bash(Find the *)",
       "Bash(awk -F: '$1>2400 && $1<3130')",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "WebFetch(domain:www.dwd.de)",
+      "WebFetch(domain:www.rainviewer.com)",
+      "WebFetch(domain:rainviewer.github.io)",
+      "WebFetch(domain:api.rainviewer.com)",
+      "Bash(npx eslint *)",
+      "Skill(run)",
+      "Bash(command -v chromium-cli)",
+      "Bash(command -v npx)",
+      "Read(//c//**)",
+      "Bash(npm ls *)",
+      "Bash(node -e \"console.log\\(require.resolve\\('playwright'\\)\\)\")",
+      "Bash(curl -sk -m 8 -o /dev/null -w \"HTTP %{http_code}\\\\n\" https://api.rainviewer.com/public/weather-maps.json)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(node \"C:\\\\Users\\\\yann-\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-yann--Documents-Programming-Python-weathermap-web-elevation-forecast-weatherroute\\\\00bf1057-af3d-4ed5-aeb4-fea0093921bb\\\\scratchpad\\\\radar_check.mjs\")",
+      "Bash(cp \"C:\\\\Users\\\\yann-\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-yann--Documents-Programming-Python-weathermap-web-elevation-forecast-weatherroute\\\\00bf1057-af3d-4ed5-aeb4-fea0093921bb\\\\scratchpad\\\\radar_check.mjs\" \"/c/Users/yann-/Documents/Programming/Python/weathermap/web_elevation_forecast/weatherroute/frontend/radar_check.mjs\")",
+      "Bash(node radar_check.mjs)",
+      "Bash(node radar_check2.mjs)",
+      "Bash(node radar_check3.mjs)"
     ]
   }
 }
