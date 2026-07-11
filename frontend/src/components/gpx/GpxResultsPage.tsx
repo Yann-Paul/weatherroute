@@ -1,11 +1,17 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams } from "react-router";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getGpxResults, getGpxModelForecast } from "@/api/client";
+import {
+  getGpxResults,
+  getGpxModelForecast,
+  fetchForecastViaBrowser,
+  fetchGpxStopsViaBrowser,
+} from "@/api/client";
 import type { GpxJobResults, GpxWeatherPoint } from "@/api/types";
+import { CLIENT_FALLBACK_NEEDED } from "@/api/types";
 import { useT } from "@/i18n/useT";
 import { GpxRouteMap } from "./GpxRouteMap";
 import { GpxElevationChart } from "./GpxElevationChart";
@@ -18,11 +24,25 @@ type ModelOverride = Record<string, {
   wspd: number | null; wdir: number | null; cloud: number | null;
 }>;
 
+// Nearest-hour lookup for route/pass points, mirrors _nearest_gpx_hour_key in api_app.py
+const GPX_HOUR_STEPS = [0, 6, 12, 18];
+function hourFracFromIso(iso: string): number {
+  const [hh, mm] = iso.slice(11, 16).split(":").map(Number);
+  return hh + mm / 60;
+}
+function nearestGpxHourKey(hourFrac: number): string {
+  return String(GPX_HOUR_STEPS.reduce((best, h) =>
+    Math.abs(hourFrac - h) < Math.abs(hourFrac - best) ? h : best
+  ));
+}
+
 export function GpxResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const t = useT();
   const [results, setResults] = useState<GpxJobResults | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [forecastFallbackStatus, setForecastFallbackStatus] = useState<"idle" | "loading" | "failed">("idle");
+  const fallbackStarted = useRef(false);
 
   // Model switching state
   const [selectedModel, setSelectedModel] = useState("best_match");
@@ -32,10 +52,87 @@ export function GpxResultsPage() {
 
   useEffect(() => {
     if (!jobId) return;
+    fallbackStarted.current = false;
+    setForecastFallbackStatus("idle");
     getGpxResults(jobId)
       .then(setResults)
       .catch((e: Error) => setError(e.message));
   }, [jobId]);
+
+  // Server couldn't reach Open-Meteo (e.g. rate-limited outbound IP) - fetch
+  // the missing points directly from the browser instead and patch them in.
+  useEffect(() => {
+    if (!results || results.forecastError !== CLIENT_FALLBACK_NEEDED || fallbackStarted.current) return;
+    fallbackStarted.current = true;
+    setForecastFallbackStatus("loading");
+
+    async function runFallback() {
+      const current = results!;
+      const pending = current.weatherPoints
+        .map((wp, idx) => ({ wp, idx }))
+        .filter((p) => p.wp.forecastPending);
+      const stopPending = pending.filter((p) => p.wp.type === "stop");
+      const routePending = pending.filter((p) => p.wp.type !== "stop");
+      const patched = [...current.weatherPoints];
+      let ok = pending.length === 0;
+
+      try {
+        if (routePending.length > 0) {
+          const points = routePending.map((p) => ({
+            lat: p.wp.lat, lon: p.wp.lon, ele: p.wp.ele,
+            target_date: p.wp.arrivalTime.slice(0, 10),
+          }));
+          const data = await fetchForecastViaBrowser(points, selectedModel);
+          routePending.forEach((p, i) => {
+            const pdata = data[String(i)];
+            if (pdata?.ok) {
+              const hourKey = nearestGpxHourKey(hourFracFromIso(p.wp.arrivalTime));
+              const h = pdata.hourly?.[hourKey];
+              if (h) {
+                patched[p.idx] = {
+                  ...patched[p.idx],
+                  temp: h.temp, prcp: h.prcp, wspd: h.wspd, wdir: h.wdir, cloud: h.cloud,
+                  forecastPending: false,
+                };
+              }
+            }
+          });
+          ok = true;
+        }
+        if (stopPending.length > 0) {
+          const stops = stopPending.map((p) => ({
+            lat: p.wp.lat, lon: p.wp.lon, ele: p.wp.ele,
+            stopTime: p.wp.stopTime!, nextStartTime: p.wp.nextStartTime!,
+          }));
+          const stopResults = await fetchGpxStopsViaBrowser(stops);
+          stopPending.forEach((p, i) => {
+            const sr = stopResults[i];
+            if (sr) {
+              patched[p.idx] = {
+                ...patched[p.idx],
+                temp: sr.temp, prcp: sr.prcp, wspd: sr.wspd,
+                nightData: sr.nightData, nightLow: sr.nightLow,
+                forecastPending: false,
+              };
+            }
+          });
+          ok = true;
+        }
+      } catch (e) {
+        console.error("GPX client-side forecast fallback failed:", e);
+        ok = false;
+      }
+
+      if (ok) {
+        setResults({ ...current, weatherPoints: patched, forecastError: null });
+        setForecastFallbackStatus("idle");
+      } else {
+        setForecastFallbackStatus("failed");
+      }
+    }
+
+    runFallback();
+  }, [results, selectedModel]);
 
   // Merge model overrides into weather points
   const activeWeatherPoints = useMemo<GpxWeatherPoint[]>(() => {
@@ -69,7 +166,33 @@ export function GpxResultsPage() {
       setModelCache((prev) => ({ ...prev, [model]: data.weatherPointUpdates }));
       setSelectedModel(model);
     } catch (e) {
-      console.error("GPX model forecast error:", e);
+      if (e instanceof Error && e.message === CLIENT_FALLBACK_NEEDED && results) {
+        try {
+          const routePts = results.weatherPoints
+            .map((wp, idx) => ({ wp, idx }))
+            .filter((p) => p.wp.isForecast && p.wp.type !== "stop");
+          const points = routePts.map((p) => ({
+            lat: p.wp.lat, lon: p.wp.lon, ele: p.wp.ele,
+            target_date: p.wp.arrivalTime.slice(0, 10),
+          }));
+          const data = await fetchForecastViaBrowser(points, model);
+          const overrides: ModelOverride = {};
+          routePts.forEach((p, i) => {
+            const pdata = data[String(i)];
+            if (pdata?.ok) {
+              const hourKey = nearestGpxHourKey(hourFracFromIso(p.wp.arrivalTime));
+              const h = pdata.hourly?.[hourKey];
+              if (h) overrides[String(p.idx)] = { temp: h.temp, prcp: h.prcp, wspd: h.wspd, wdir: h.wdir, cloud: h.cloud };
+            }
+          });
+          setModelCache((prev) => ({ ...prev, [model]: overrides }));
+          setSelectedModel(model);
+        } catch (e2) {
+          console.error("GPX model forecast fallback failed:", e2);
+        }
+      } else {
+        console.error("GPX model forecast error:", e);
+      }
     } finally {
       setModelLoading(false);
       setPendingModel(null);
@@ -101,6 +224,17 @@ export function GpxResultsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4">
+      {forecastFallbackStatus === "loading" && (
+        <div aria-live="polite" className="rounded-lg border border-chart-1/30 bg-chart-1/10 px-3 py-2 text-xs text-foreground">
+          {t.results.forecastFallbackLoading}
+        </div>
+      )}
+      {forecastFallbackStatus === "failed" && (
+        <Alert variant="destructive">
+          <AlertDescription>{t.results.forecastFallbackFailed}</AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex flex-wrap gap-4 text-sm">
         <div>
           <span className="text-muted-foreground">{t.gpx.results.totalKm}: </span>

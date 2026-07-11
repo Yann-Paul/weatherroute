@@ -12,6 +12,10 @@ import type {
   DestinationJobResults,
   ModelForecastData,
   GpxForecastUpdate,
+  OpenMeteoParsePoint,
+  GpxStopParsePoint,
+  GpxStopParseResult,
+  ForecastPointData,
 } from "./types";
 
 const BASE = "/api";
@@ -141,4 +145,75 @@ export async function submitDestinationDetailJob(data: {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Client-side weather fallback
+//
+// When the server can't reach Open-Meteo (its outbound IP got rate-limited,
+// which has happened intermittently on Render), the backend still finishes
+// the job but leaves the affected points empty and flags
+// forecastError === CLIENT_FALLBACK_NEEDED. The browser then fetches
+// Open-Meteo directly (using the visitor's own IP) and posts the raw
+// response back so the backend can parse it with the same logic as a normal
+// server-side fetch.
+// ---------------------------------------------------------------------------
+
+const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
+// Must match OPEN_METEO_HOURLY_FIELDS / OPEN_METEO_DAILY_FIELDS in module.py
+const OPEN_METEO_HOURLY_FIELDS =
+  "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration";
+const OPEN_METEO_DAILY_FIELDS =
+  "precipitation_sum,windspeed_10m_max,sunshine_duration,temperature_2m_max,temperature_2m_min";
+// Must match the narrow hourly set used for GPX overnight stops in api_app.py
+const OPEN_METEO_STOP_HOURLY_FIELDS = "temperature_2m,precipitation,windspeed_10m";
+
+async function fetchOpenMeteoRaw(params: Record<string, string>): Promise<unknown> {
+  const qs = new URLSearchParams(params);
+  const res = await fetch(`${OPEN_METEO_URL}?${qs.toString()}`);
+  if (!res.ok) {
+    throw new Error(`Open-Meteo request failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+/** Fetch a batch of route/forecast points directly from the browser, then
+ * have the backend parse the raw response (elevation correction etc.). */
+export async function fetchForecastViaBrowser(
+  points: OpenMeteoParsePoint[],
+  model: string
+): Promise<Record<string, ForecastPointData>> {
+  const rawData = await fetchOpenMeteoRaw({
+    latitude: points.map((p) => p.lat).join(","),
+    longitude: points.map((p) => p.lon).join(","),
+    hourly: OPEN_METEO_HOURLY_FIELDS,
+    daily: OPEN_METEO_DAILY_FIELDS,
+    models: model,
+    forecast_days: "16",
+    timezone: "auto",
+  });
+  const result = await request<ModelForecastData>("/forecast/parse", {
+    method: "POST",
+    body: JSON.stringify({ points, rawData }),
+  });
+  return result.data;
+}
+
+/** Fetch GPX overnight-stop points directly from the browser, then have the
+ * backend parse the raw response (night-time series, elevation correction). */
+export async function fetchGpxStopsViaBrowser(
+  stops: GpxStopParsePoint[]
+): Promise<GpxStopParseResult[]> {
+  const rawData = await fetchOpenMeteoRaw({
+    latitude: stops.map((s) => s.lat).join(","),
+    longitude: stops.map((s) => s.lon).join(","),
+    hourly: OPEN_METEO_STOP_HOURLY_FIELDS,
+    forecast_days: "16",
+    timezone: "auto",
+  });
+  const result = await request<{ stops: GpxStopParseResult[] }>("/forecast/parse-gpx-stops", {
+    method: "POST",
+    body: JSON.stringify({ stops, rawData }),
+  });
+  return result.stops;
 }

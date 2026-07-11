@@ -2664,71 +2664,82 @@ def select_forecast_points(profile, latlons, min_spacing_km=15, max_spacing_km=2
     ]
 
 
-def fetch_open_meteo_forecast(points, on_progress=None, model="best_match"):
-    """Fetch Open-Meteo forecast for a list of points with target_date.
+OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+OPEN_METEO_HOURLY_FIELDS = "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration"
+OPEN_METEO_DAILY_FIELDS = "precipitation_sum,windspeed_10m_max,sunshine_duration,temperature_2m_max,temperature_2m_min"
 
-    All points are requested in a single batched API call (Open-Meteo
-    supports comma-separated lat/lon lists), which keeps usage well
-    within the free-tier rate limits even for routes with many points.
+
+class OpenMeteoUnreachableError(Exception):
+    """Raised when Open-Meteo could not be reached from this server after retries.
+
+    Callers that support it can catch this specifically and fall back to
+    having the browser fetch Open-Meteo directly (using the visitor's own
+    IP instead of the server's, which may be rate-limited).
     """
-    from datetime import date as _date
 
-    OPEN_METEO = "https://api.open-meteo.com/v1/forecast"
-    HOUR_STEPS = [0, 6, 12, 18, 24]
 
-    LAPSE_RATE = 0.0065  # °C per metre (standard environmental lapse rate)
-
-    result = {i: {"ok": False} for i in range(len(points))}
-
-    valid = [(i, pt) for i, pt in enumerate(points) if pt.get("target_date")]
-
-    def report_progress(n):
-        if on_progress:
-            for _ in range(n):
-                on_progress()
-
-    if not valid:
-        report_progress(len(points))
-        return result
-
-    params = {
+def build_open_meteo_params(valid, model="best_match"):
+    """Build the Open-Meteo query params for a batch of (index, point) tuples."""
+    return {
         "latitude":      ",".join(str(pt["lat"]) for _, pt in valid),
         "longitude":     ",".join(str(pt["lon"]) for _, pt in valid),
-        "hourly":        "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration",
-        "daily":         "precipitation_sum,windspeed_10m_max,sunshine_duration,temperature_2m_max,temperature_2m_min",
+        "hourly":        OPEN_METEO_HOURLY_FIELDS,
+        "daily":         OPEN_METEO_DAILY_FIELDS,
         "models":        model,
         "forecast_days": 16,
         "timezone":      "auto",
     }
 
-    resp = None
+
+def request_open_meteo(params, url=OPEN_METEO_FORECAST_URL, timeout=60):
+    """Perform the Open-Meteo HTTP request with retry/backoff.
+
+    Raises OpenMeteoUnreachableError if the API could not be reached after
+    retries, so callers can distinguish "server can't reach Open-Meteo"
+    (worth falling back to a client-side fetch) from a per-point parse issue.
+    """
     for attempt in range(4):
         if attempt > 0:
             time.sleep(min(2 ** attempt, 16))
         try:
-            resp = requests.get(OPEN_METEO, params=params, timeout=60)
+            resp = requests.get(url, params=params, timeout=timeout)
             resp.raise_for_status()
-            break
+            return resp.json()
         except requests.exceptions.HTTPError as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
             if status in (429, 500, 502, 503, 504):
                 print(f"[Forecast] batch retry {attempt+1} (HTTP {status})", flush=True)
                 continue
             print(f"[Forecast] batch failed: {e}", flush=True)
-            report_progress(len(points))
-            return result
+            raise OpenMeteoUnreachableError(f"HTTP {status}: {e}") from e
         except requests.exceptions.Timeout:
             print(f"[Forecast] batch timeout, retry {attempt+1}", flush=True)
             continue
-    else:
-        print("[Forecast] Open-Meteo nach 4 Versuchen nicht erreichbar", flush=True)
-        report_progress(len(points))
-        return result
+        except requests.exceptions.RequestException as e:
+            print(f"[Forecast] batch request error: {e}", flush=True)
+            raise OpenMeteoUnreachableError(str(e)) from e
+    print("[Forecast] Open-Meteo nach 4 Versuchen nicht erreichbar", flush=True)
+    raise OpenMeteoUnreachableError("Open-Meteo nach 4 Versuchen nicht erreichbar")
 
-    data_list = resp.json()
+
+def parse_open_meteo_data(valid, data_list):
+    """Turn a raw Open-Meteo response into {index: {"ok", "hourly", "daily"}}.
+
+    `valid` is a list of (index, point) tuples (point needs "target_date",
+    "lat", "lon", optionally "ele"); `data_list` is the raw Open-Meteo
+    response (or a list of per-point responses), in the same order as
+    `valid`. This is shared between the server-side fetch path and the
+    client-fallback path (where the browser fetched the raw data instead).
+    """
+    from datetime import date as _date
+
+    HOUR_STEPS = [0, 6, 12, 18, 24]
+    LAPSE_RATE = 0.0065  # °C per metre (standard environmental lapse rate)
+
     if isinstance(data_list, dict):
         data_list = [data_list]
 
+    result = {}
     for (i, pt), data in zip(valid, data_list):
         try:
             target = pt["target_date"]
@@ -2789,6 +2800,36 @@ def fetch_open_meteo_forecast(points, on_progress=None, model="best_match"):
         except Exception as exc:
             print(f"[Forecast] Point {i} failed: {exc}")
 
+    return result
+
+
+def fetch_open_meteo_forecast(points, on_progress=None, model="best_match"):
+    """Fetch Open-Meteo forecast for a list of points with target_date.
+
+    All points are requested in a single batched API call (Open-Meteo
+    supports comma-separated lat/lon lists), which keeps usage well
+    within the free-tier rate limits even for routes with many points.
+    """
+    result = {i: {"ok": False} for i in range(len(points))}
+
+    valid = [(i, pt) for i, pt in enumerate(points) if pt.get("target_date")]
+
+    def report_progress(n):
+        if on_progress:
+            for _ in range(n):
+                on_progress()
+
+    if not valid:
+        report_progress(len(points))
+        return result
+
+    try:
+        data_list = request_open_meteo(build_open_meteo_params(valid, model))
+    except OpenMeteoUnreachableError:
+        report_progress(len(points))
+        return result
+
+    result.update(parse_open_meteo_data(valid, data_list))
     report_progress(len(points))
     return result
 

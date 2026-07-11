@@ -667,6 +667,32 @@ Rückgabe: beste 5 Routen als [{ 'cities': [(city_id, day), ...], 'score': float
 | [Nominatim](https://nominatim.openstreetmap.org) | Geocoding für Städte außerhalb des Graphen |
 | [Open-Meteo](https://api.open-meteo.com) | Live-Wettervorhersage (16 Tage) mit wählbarem Modell (`best_match`, ECMWF, ICON, GFS, …) |
 
+### Client-seitiger Fallback für Open-Meteo
+
+Der Server (z. B. auf Render) ruft Open-Meteo standardmäßig selbst auf. Da Render-Webservices ohne
+gebuchtes Static-Outbound-IP-Add-on eine gemeinsam genutzte, dynamische Absender-IP verwenden, kann
+diese IP gelegentlich von Open-Meteo rate-limitet werden, auch wenn die eigene Nutzung im
+Free-Tier-Rahmen liegt. Für diesen Fall gibt es einen automatischen Fallback:
+
+1. Schlägt der serverseitige Open-Meteo-Aufruf nach 4 Retry-Versuchen endgültig fehl
+   (`OpenMeteoUnreachableError` in `module.py`), schließt der Job trotzdem normal ab, aber mit
+   `forecastError: "CLIENT_FALLBACK_NEEDED"` statt Wetterdaten.
+2. Das Frontend erkennt dieses Flag und ruft `api.open-meteo.com` direkt aus dem Browser der
+   Nutzerin/des Nutzers auf (siehe `fetchForecastViaBrowser`/`fetchGpxStopsViaBrowser` in
+   `frontend/src/api/client.ts`) – also über deren eigene IP statt der des Servers.
+3. Die rohe Open-Meteo-Antwort wird an zwei zustandslose Backend-Endpunkte zurückgeschickt, die
+   dieselbe Parsing-/Höhenkorrektur-Logik wie der serverseitige Pfad anwenden:
+   `POST /api/forecast/parse` (Routenpunkte, Modellwechsel) und
+   `POST /api/forecast/parse-gpx-stops` (GPX-Übernachtungsstopps).
+4. Das Ergebnis wird nahtlos ins UI eingefügt; sichtbar ist nur ein kurzer Hinweistext
+   ("Wetterdienst über den Server nicht erreichbar – Wetterdaten werden über deinen Browser
+   geladen…").
+
+Dieser Mechanismus greift für die Hauptrouten-, Zielsuche- und GPX-Jobs sowie für den manuellen
+Modellwechsel-Button; für die einmalige Abfrage historischer Klimanormalwerte
+(`archive-api.open-meteo.com`, nur beim erstmaligen Hinzufügen neuer Städte) ist er nicht
+implementiert, da dieser Pfad selten aufgerufen wird und nicht zeitkritisch ist.
+
 ---
 
 ## Projektstruktur
@@ -754,6 +780,8 @@ weatherroute/
 | `GET` | `/api/jobs/{id}/results` | Fertige Ergebnisse abrufen |
 | `GET` | `/api/jobs/{id}/forecast/{model}` | Vorhersage mit alternativem Wettermodell abrufen (Routenplaner) |
 | `GET` | `/api/jobs/{id}/gpx-forecast/{model}` | Vorhersage mit alternativem Wettermodell abrufen (GPX) |
+| `POST` | `/api/forecast/parse` | [Client-Fallback](#client-seitiger-fallback-für-open-meteo): vom Browser geholte Open-Meteo-Rohdaten serverseitig parsen (Routenpunkte) |
+| `POST` | `/api/forecast/parse-gpx-stops` | [Client-Fallback](#client-seitiger-fallback-für-open-meteo): vom Browser geholte Open-Meteo-Rohdaten serverseitig parsen (GPX-Übernachtungsstopps) |
 | `POST` | `/api/destination-jobs` | Zielsuche starten |
 | `POST` | `/api/gpx/jobs` | GPX-Analyse starten |
 | `GET` | `/api/saved-routes` | Gespeicherte Routen auflisten |

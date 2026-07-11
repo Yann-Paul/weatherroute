@@ -230,6 +230,34 @@ export interface ModelForecastData {
   data: Record<string, ForecastPointData>;
 }
 
+// Client-side weather fallback: when the server can't reach Open-Meteo
+// (e.g. its outbound IP is rate-limited), the browser fetches Open-Meteo
+// directly and posts the raw response back here to be parsed server-side.
+export const CLIENT_FALLBACK_NEEDED = "CLIENT_FALLBACK_NEEDED";
+
+export interface OpenMeteoParsePoint {
+  lat: number;
+  lon: number;
+  ele?: number | null;
+  target_date: string;
+}
+
+export interface GpxStopParsePoint {
+  lat: number;
+  lon: number;
+  ele: number;
+  stopTime: string;
+  nextStartTime: string;
+}
+
+export interface GpxStopParseResult {
+  temp: number | null;
+  prcp: number | null;
+  wspd: number | null;
+  nightData: GpxNightHour[];
+  nightLow: number | null;
+}
+
 export interface GpxForecastUpdate {
   weatherPointUpdates: Record<string, {
     temp: number | null;
@@ -267,6 +295,9 @@ export interface GpxWeatherPoint {
   wdir: number | null;
   cloud: number | null;   // cloud cover % (forecast only)
   isForecast: boolean;
+  // True when the server couldn't reach Open-Meteo for this point and used a
+  // degraded placeholder (or no data). The frontend retries via the browser.
+  forecastPending: boolean;
   // Stop-specific fields:
   dayNumber?: number;
   stopTime?: string;
@@ -284,6 +315,7 @@ export interface GpxJobResults {
   startTime: string;
   dailyConfigs: GpxDayConfig[];
   trackPoints: [number, number][];
+  forecastError: string | null;
 }
 
 export interface SavedRouteSummary {

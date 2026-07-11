@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 import requests
@@ -42,11 +42,22 @@ from module import (
     build_combined_elevation_profile,
     sample_chunk_fixed_density,
     select_forecast_points,
-    fetch_open_meteo_forecast,
+    build_open_meteo_params,
+    request_open_meteo,
+    parse_open_meteo_data,
+    OpenMeteoUnreachableError,
     find_destination_route,
     find_destination_route_hierarchical,
     haversine,
 )
+
+# Sentinel forecastError value: the server couldn't reach Open-Meteo after
+# retries (e.g. rate-limited on Render's shared outbound IP). The frontend
+# reacts to this specific string by fetching Open-Meteo directly from the
+# visitor's browser (their own IP) and posting the raw result back to
+# /api/forecast/parse (or /api/forecast/parse-gpx-stops for GPX overnight
+# stops) to be parsed server-side.
+CLIENT_FALLBACK_NEEDED = "CLIENT_FALLBACK_NEEDED"
 
 OPEN_ELEV_SRTM = "https://api.opentopodata.org/v1/srtm30m"        # SRTM: 60°S–60°N
 OPEN_ELEV_ASTER= "https://api.opentopodata.org/v1/aster30m"       # ASTER: global to 83°N
@@ -956,6 +967,14 @@ _ALLOWED_FORECAST_MODELS = {
 }
 
 
+_GPX_STOP_HOUR_STEPS = [0, 6, 12, 18]
+
+
+def _nearest_gpx_hour_key(hour_frac):
+    step = min(_GPX_STOP_HOUR_STEPS, key=lambda h: abs(hour_frac - h))
+    return str(step)
+
+
 @app.get("/api/jobs/{job_id}/gpx-forecast/{model_name}")
 def gpx_forecast_by_model(job_id: str, model_name: str):
     if model_name not in _ALLOWED_FORECAST_MODELS:
@@ -967,20 +986,19 @@ def gpx_forecast_by_model(job_id: str, model_name: str):
     if not meta or not meta.get("forecast_pts"):
         return {"weatherPointUpdates": {}}
     forecast_pts = meta["forecast_pts"]
-    pts_for_meteo = [fp for _, _, fp in forecast_pts]
+    valid = [(i, fp) for i, (_, _, fp) in enumerate(forecast_pts)]
     try:
-        fdata = fetch_open_meteo_forecast(pts_for_meteo, model=model_name)
+        raw = request_open_meteo(build_open_meteo_params(valid, model_name))
+    except OpenMeteoUnreachableError:
+        raise HTTPException(503, detail=CLIENT_FALLBACK_NEEDED)
     except Exception as exc:
         raise HTTPException(500, f"Forecast error: {exc}")
-    _HOUR_STEPS = [0, 6, 12, 18]
-    def _nearest_hour_key(hour_frac):
-        step = min(_HOUR_STEPS, key=lambda h: abs(hour_frac - h))
-        return str(step)
+    fdata = parse_open_meteo_data(valid, raw)
     updates = {}
     for i, (pt_idx, arrival_hour_frac, _fp) in enumerate(forecast_pts):
         pdata = fdata.get(i, {})
         if pdata.get("ok", False):
-            h_data = (pdata.get("hourly") or {}).get(_nearest_hour_key(arrival_hour_frac)) or {}
+            h_data = (pdata.get("hourly") or {}).get(_nearest_gpx_hour_key(arrival_hour_frac)) or {}
             updates[str(pt_idx)] = {
                 "temp": h_data.get("temp"),
                 "prcp": h_data.get("prcp"),
@@ -1001,11 +1019,78 @@ def job_forecast_by_model(job_id: str, model_name: str):
     forecast = job["result"].get("forecast")
     if not forecast:
         raise HTTPException(404, "No forecast data")
+    valid = list(enumerate(forecast["points"]))
     try:
-        fdata = fetch_open_meteo_forecast(forecast["points"], model=model_name)
+        raw = request_open_meteo(build_open_meteo_params(valid, model_name))
+    except OpenMeteoUnreachableError:
+        raise HTTPException(503, detail=CLIENT_FALLBACK_NEEDED)
     except Exception as exc:
         raise HTTPException(500, f"Forecast error: {exc}")
+    fdata = parse_open_meteo_data(valid, raw)
     return {"data": {str(k): v for k, v in fdata.items()}}
+
+
+class ForecastParsePoint(BaseModel):
+    lat: float
+    lon: float
+    ele: Optional[float] = None
+    target_date: str
+
+
+class ForecastParseRequest(BaseModel):
+    points: List[ForecastParsePoint]
+    rawData: Any
+
+
+@app.post("/api/forecast/parse")
+def forecast_parse(payload: ForecastParseRequest):
+    """Stateless: parse a raw Open-Meteo response the browser fetched itself
+    (client-side fallback when the server can't reach Open-Meteo). Applies
+    the same elevation-correction/parsing logic as the server-side fetch."""
+    raw = payload.rawData
+    if isinstance(raw, dict):
+        raw = [raw]
+    if not isinstance(raw, list) or len(raw) != len(payload.points):
+        raise HTTPException(400, "rawData passt nicht zur Anzahl der Punkte")
+    valid = [(i, p.dict()) for i, p in enumerate(payload.points)]
+    fdata = parse_open_meteo_data(valid, raw)
+    return {"data": {str(k): v for k, v in fdata.items()}}
+
+
+class GpxStopParsePoint(BaseModel):
+    lat: float
+    lon: float
+    ele: float
+    stopTime: str
+    nextStartTime: str
+
+
+class GpxStopParseRequest(BaseModel):
+    stops: List[GpxStopParsePoint]
+    rawData: Any
+
+
+@app.post("/api/forecast/parse-gpx-stops")
+def forecast_parse_gpx_stops(payload: GpxStopParseRequest):
+    """Stateless equivalent of /api/forecast/parse for GPX overnight stops,
+    which need a full per-3h night-time series rather than fixed hour steps."""
+    raw = payload.rawData
+    if isinstance(raw, dict):
+        raw = [raw]
+    if not isinstance(raw, list) or len(raw) != len(payload.stops):
+        raise HTTPException(400, "rawData passt nicht zur Anzahl der Punkte")
+    results = []
+    for stop, data in zip(payload.stops, raw):
+        stop_dt = datetime.fromisoformat(stop.stopTime)
+        nxt_start_dt = datetime.fromisoformat(stop.nextStartTime)
+        temp, prcp, wspd, night_data = _parse_gpx_stop_raw(data, stop.ele, stop_dt, nxt_start_dt)
+        night_temps = [d["temp"] for d in night_data if d["temp"] is not None]
+        results.append({
+            "temp": temp, "prcp": prcp, "wspd": wspd,
+            "nightData": night_data,
+            "nightLow": round(min(night_temps), 1) if night_temps else None,
+        })
+    return {"stops": results}
 
 
 @app.post("/api/gpx/jobs")
@@ -1334,9 +1419,14 @@ def _run_elevation_worker(seg_queue, points_per_km, job, result_holder, use_aste
     print(f"[Elevation] Worker fertig — {batch_done} Batch(es), {len(api_results)} Punkte, {km_offset:.1f} km", flush=True)
 
 
-def _build_forecast(elev_data, start_day, osrm_distances, route,
-                    route_locations, city_graph, params, job):
-    """Build forecast_data from elevation data. Also used when restoring saved routes."""
+def _prepare_forecast_points(elev_data, start_day, osrm_distances, route, params):
+    """Compute the list of forecast points (with target_date) plus everything
+    needed to assemble the final forecast payload once weather data exists.
+
+    Returns (ctx | None, error | None). This step is pure/deterministic
+    (no network calls), so it can be re-run cheaply to resume a forecast
+    after a client-side fallback fetch.
+    """
     today = date.today()
     for yr in [today.year, today.year + 1]:
         candidate = date(yr, 1, 1) + timedelta(days=start_day - 1)
@@ -1362,42 +1452,85 @@ def _build_forecast(elev_data, start_day, osrm_distances, route,
                     f"Alle Routenpunkte liegen mehr als 16 Tage in der Zukunft "
                     f"(Startdatum: {actual_start.isoformat()}, Serverdatum: {today.isoformat()})"
                 )
-            job["step"] = "forecast"
-            job["forecast_total"] = len(fps_filtered)
-            job["forecast_done"] = 0
-            completed = [0]
-            def on_progress():
-                completed[0] += 1
-                job["forecast_done"] = completed[0]
-                job["message"] = f"Vorhersage: {completed[0]}/{len(fps_filtered)} Punkte"
-            try:
-                fdata = fetch_open_meteo_forecast(fps_filtered, on_progress=on_progress)
-            except Exception as fc_exc:
-                print(f"[Forecast] Exception: {fc_exc}", flush=True)
-                return None, f"Vorhersage-Fehler: {fc_exc}"
-            mini_elev = [
-                [round(km, 2), round(lat, 5), round(lon, 5), round(ele, 1)]
-                for (km, ele), (lat, lon) in zip(profile, latlons)
-            ][::3]
-            route_stops = []
-            for i_s, (city_id, day, city_name, _) in enumerate(route):
-                nd = city_graph.nodes.get(city_id, {})
-                lat_n = nd.get("lat"); lon_n = nd.get("lon")
-                if lat_n is not None and lon_n is not None and i_s < len(cum_km_list):
-                    route_stops.append({
-                        "name": city_name, "lat": round(float(lat_n), 5),
-                        "lon": round(float(lon_n), 5), "km": round(cum_km_list[i_s], 2),
-                        "relDay": day - route_days_list[0],
-                    })
             return {
-                "points": fps_filtered,
-                "data": {str(k): v for k, v in fdata.items()},
-                "miniElev": mini_elev,
-                "routeStops": route_stops,
-                "desiredHigh": params["high_temp"],
-                "desiredLow": params["low_temp"],
+                "fps_filtered": fps_filtered,
+                "profile": profile,
+                "latlons": latlons,
+                "cum_km_list": cum_km_list,
+                "route_days_list": route_days_list,
             }, None
     return None, f"Startdatum (Tag {start_day}) liegt nicht in der Zukunft (Serverdatum: {date.today().isoformat()})"
+
+
+def _finish_forecast_result(ctx, fdata, route, city_graph, params):
+    """Assemble the final forecast payload from prepared ctx + fetched/parsed
+    per-point weather data (fdata may have missing/ok:false entries)."""
+    profile = ctx["profile"]
+    latlons = ctx["latlons"]
+    cum_km_list = ctx["cum_km_list"]
+    route_days_list = ctx["route_days_list"]
+    fps_filtered = ctx["fps_filtered"]
+
+    mini_elev = [
+        [round(km, 2), round(lat, 5), round(lon, 5), round(ele, 1)]
+        for (km, ele), (lat, lon) in zip(profile, latlons)
+    ][::3]
+    route_stops = []
+    for i_s, (city_id, day, city_name, _) in enumerate(route):
+        nd = city_graph.nodes.get(city_id, {})
+        lat_n = nd.get("lat"); lon_n = nd.get("lon")
+        if lat_n is not None and lon_n is not None and i_s < len(cum_km_list):
+            route_stops.append({
+                "name": city_name, "lat": round(float(lat_n), 5),
+                "lon": round(float(lon_n), 5), "km": round(cum_km_list[i_s], 2),
+                "relDay": day - route_days_list[0],
+            })
+    return {
+        "points": fps_filtered,
+        "data": {str(k): v for k, v in fdata.items()},
+        "miniElev": mini_elev,
+        "routeStops": route_stops,
+        "desiredHigh": params["high_temp"],
+        "desiredLow": params["low_temp"],
+    }
+
+
+def _build_forecast(elev_data, start_day, osrm_distances, route,
+                    route_locations, city_graph, params, job):
+    """Build forecast_data from elevation data. Also used when restoring saved routes.
+
+    If Open-Meteo is unreachable from the server, this still returns a full
+    forecast payload (points/miniElev/routeStops, but no weather data) with
+    forecastError=CLIENT_FALLBACK_NEEDED, so the frontend has enough to fetch
+    the weather itself via the visitor's browser and patch it in afterwards.
+    """
+    ctx, error = _prepare_forecast_points(elev_data, start_day, osrm_distances, route, params)
+    if error:
+        return None, error
+
+    fps_filtered = ctx["fps_filtered"]
+    job["step"] = "forecast"
+    job["forecast_total"] = len(fps_filtered)
+    job["forecast_done"] = 0
+    completed = [0]
+    def on_progress():
+        completed[0] += 1
+        job["forecast_done"] = completed[0]
+        job["message"] = f"Vorhersage: {completed[0]}/{len(fps_filtered)} Punkte"
+
+    valid = list(enumerate(fps_filtered))
+    try:
+        raw = request_open_meteo(build_open_meteo_params(valid, "best_match"))
+        fdata = parse_open_meteo_data(valid, raw)
+        for _ in fps_filtered:
+            on_progress()
+        return _finish_forecast_result(ctx, fdata, route, city_graph, params), None
+    except OpenMeteoUnreachableError:
+        job["message"] = "Wetterdienst nicht erreichbar – wird über deinen Browser nachgeladen"
+        return _finish_forecast_result(ctx, {}, route, city_graph, params), CLIENT_FALLBACK_NEEDED
+    except Exception as fc_exc:
+        print(f"[Forecast] Exception: {fc_exc}", flush=True)
+        return None, f"Vorhersage-Fehler: {fc_exc}"
 
 
 def _fmt_elev(elev_data, city_ids_for_elev):
@@ -2530,6 +2663,116 @@ def _interp_profile_at_km(
     return sampled_latlons[j][0], sampled_latlons[j][1], profile[-1][1]
 
 
+def _parse_gpx_stop_raw(data, stop_ele, stop_dt, nxt_start_dt):
+    """Turn one raw Open-Meteo response (narrow hourly set: temp/precip/wind)
+    into (stop_temp, stop_prcp, stop_wspd, night_data) for a GPX overnight
+    stop. Shared between the server-side fetch and the client-fallback parse
+    endpoint (the browser fetches the raw data, this parses it either way)."""
+    model_ele = data.get("elevation")
+    elev_corr = (stop_ele - model_ele) * 0.0065 if model_ele is not None else 0.0
+
+    def _tc(v):
+        return round(v - elev_corr, 1) if v is not None else None
+
+    htimes = data.get("hourly", {}).get("time", [])
+    htemp  = data.get("hourly", {}).get("temperature_2m", [])
+    hprcp  = data.get("hourly", {}).get("precipitation", [])
+    hwspd  = data.get("hourly", {}).get("windspeed_10m", [])
+    hw = {
+        t: {
+            "temp": htemp[i] if i < len(htemp) else None,
+            "prcp": hprcp[i] if i < len(hprcp) else None,
+            "wspd": hwspd[i] if i < len(hwspd) else None,
+        }
+        for i, t in enumerate(htimes)
+    }
+
+    def _nearest_hw(dt):
+        for delta in [0, 1, -1, 2, -2, 3, -3]:
+            key = (dt + timedelta(hours=delta)).strftime("%Y-%m-%dT%H:00")
+            if key in hw:
+                return hw[key]
+        return {}
+
+    sw = _nearest_hw(stop_dt)
+    stop_temp = _tc(sw.get("temp"))
+    stop_prcp = round(sw["prcp"], 2) if sw.get("prcp") is not None else None
+    stop_wspd = round(sw["wspd"], 1) if sw.get("wspd") is not None else None
+
+    night_data = []
+    slot = stop_dt
+    while slot < nxt_start_dt - timedelta(minutes=1):
+        slw = _nearest_hw(slot)
+        night_data.append({
+            "hour": slot.strftime("%H:%M"),
+            "date": slot.date().isoformat(),
+            "temp": _tc(slw.get("temp")),
+            "prcp": round(slw["prcp"], 2) if slw.get("prcp") is not None else None,
+            "wspd": round(slw["wspd"], 1) if slw.get("wspd") is not None else None,
+        })
+        slot = slot + timedelta(hours=3)
+    # Always include an explicit point at departure time so that
+    # interpNightMs(tNightEnd) and adjStartTemp on day N+1 are accurate.
+    slw_dep = _nearest_hw(nxt_start_dt)
+    night_data.append({
+        "hour": nxt_start_dt.strftime("%H:%M"),
+        "date": nxt_start_dt.date().isoformat(),
+        "temp": _tc(slw_dep.get("temp")),
+        "prcp": round(slw_dep["prcp"], 2) if slw_dep.get("prcp") is not None else None,
+        "wspd": round(slw_dep["wspd"], 1) if slw_dep.get("wspd") is not None else None,
+    })
+    return stop_temp, stop_prcp, stop_wspd, night_data
+
+
+def _gpx_stop_climate_night_series(s_city, stop_dt, nxt_start_dt, temperatures):
+    """Climate-normals estimate of (temp, prcp, wspd, night_data) for a GPX
+    overnight stop, used both for stops >15 days out and as an immediate
+    degraded placeholder when Open-Meteo is unreachable."""
+    stop_temp = stop_prcp = stop_wspd = None
+    try:
+        ws = get_interpolated_weather(s_city, stop_dt.timetuple().tm_yday, temperatures, 0.0)
+        s_tmin = ws[0] if ws[0] is not None else 5.0
+        s_tmax = ws[1] if ws[1] is not None else 15.0
+        s_mean = (s_tmin + s_tmax) / 2.0
+        s_amp = (s_tmax - s_tmin) / 2.0
+        s_hf = stop_dt.hour + stop_dt.minute / 60.0
+        stop_temp = round(s_mean + s_amp * math.cos(2 * math.pi * (s_hf - 14.0) / 24.0), 1)
+        s_prcp_day = ws[2] if len(ws) > 2 and ws[2] is not None else None
+        stop_prcp = round(s_prcp_day / 24.0, 2) if s_prcp_day is not None else None
+        stop_wspd = round(ws[3], 1) if len(ws) > 3 and ws[3] is not None else None
+    except Exception:
+        pass
+
+    def _climate_slot_entry(sl):
+        sl_doy = sl.timetuple().tm_yday
+        sl_hf = sl.hour + sl.minute / 60.0
+        sl_temp = sl_prcp = sl_wspd = None
+        try:
+            w2 = get_interpolated_weather(s_city, sl_doy, temperatures, 0.0)
+            sl_tmin = w2[0] if w2[0] is not None else 5.0
+            sl_tmax = w2[1] if w2[1] is not None else 15.0
+            sl_mean = (sl_tmin + sl_tmax) / 2.0
+            sl_amp = (sl_tmax - sl_tmin) / 2.0
+            sl_temp = round(sl_mean + sl_amp * math.cos(2 * math.pi * (sl_hf - 14.0) / 24.0), 1)
+            sl_prcp_day = w2[2] if len(w2) > 2 and w2[2] is not None else None
+            sl_prcp = round(sl_prcp_day / 24.0, 2) if sl_prcp_day is not None else None
+            sl_wspd = round(w2[3], 1) if len(w2) > 3 and w2[3] is not None else None
+        except Exception:
+            pass
+        return {"hour": sl.strftime("%H:%M"), "date": sl.date().isoformat(),
+                "temp": sl_temp, "prcp": sl_prcp, "wspd": sl_wspd}
+
+    night_data = []
+    slot = stop_dt
+    while slot < nxt_start_dt - timedelta(minutes=1):
+        night_data.append(_climate_slot_entry(slot))
+        slot = slot + timedelta(hours=3)
+    # Always include an explicit point at departure time so that
+    # interpNightMs(tNightEnd) and adjStartTemp on day N+1 are accurate.
+    night_data.append(_climate_slot_entry(nxt_start_dt))
+    return stop_temp, stop_prcp, stop_wspd, night_data
+
+
 def run_gpx_analysis(
     job_id: str,
     latlons: List[tuple],
@@ -2681,16 +2924,12 @@ def run_gpx_analysis(
                 "wspd": None, "wdir": None,
                 "cloud": None,
                 "isForecast": is_forecast,
+                "forecastPending": False,
             })
 
         done_count = [0]
-
-        # Hourly steps available from fetch_open_meteo_forecast
-        _HOUR_STEPS = [0, 6, 12, 18]
-
-        def _nearest_hour_key(hour_frac: float) -> str:
-            step = min(_HOUR_STEPS, key=lambda h: abs(hour_frac - h))
-            return str(step)
+        gpx_forecast_error = None
+        _nearest_hour_key = _nearest_gpx_hour_key
 
         # Store forecast point metadata so model switching can re-fetch later
         job["gpx_forecast_meta"] = {
@@ -2706,8 +2945,10 @@ def run_gpx_analysis(
                 job["forecast_done"] = done_count[0]
                 job["message"] = f"Vorhersage: {done_count[0]}/{job['forecast_total']} Punkte"
 
+            valid = list(enumerate(pts_for_meteo))
             try:
-                fdata = fetch_open_meteo_forecast(pts_for_meteo, on_progress=on_progress)
+                raw = request_open_meteo(build_open_meteo_params(valid, "best_match"))
+                fdata = parse_open_meteo_data(valid, raw)
                 for i, (pt_idx, arrival_hour_frac, _fp) in enumerate(forecast_pts):
                     pdata = fdata.get(i, {})
                     if pdata.get("ok", False):
@@ -2719,6 +2960,14 @@ def run_gpx_analysis(
                         weather_points[pt_idx]["wspd"] = h_data.get("wspd")
                         weather_points[pt_idx]["wdir"] = h_data.get("wdir")
                         weather_points[pt_idx]["cloud"] = h_data.get("cloud")
+                for _ in pts_for_meteo:
+                    on_progress()
+            except OpenMeteoUnreachableError:
+                gpx_forecast_error = CLIENT_FALLBACK_NEEDED
+                for pt_idx, _, _fp in forecast_pts:
+                    weather_points[pt_idx]["forecastPending"] = True
+                for _ in pts_for_meteo:
+                    on_progress()
             except Exception as exc:
                 print(f"[GPX Forecast] Exception: {exc}", flush=True)
 
@@ -2758,7 +3007,12 @@ def run_gpx_analysis(
             job["forecast_done"] = done_count[0]
             job["message"] = f"Klimadaten: {done_count[0]}/{len(weather_point_indices)} Punkte"
 
-        # Add stop weather points for day-change camps
+        # Add stop weather points for day-change camps.
+        # Forecast-eligible stops are gathered first and fetched in a single
+        # batched Open-Meteo call (instead of one request per stop), which
+        # both reduces load on the free-tier rate limit and lets us apply
+        # the same unreachable -> client-fallback handling as route points.
+        stops_needing_forecast = []
         if len(daily_configs) > 1:
             cum_stop_km = 0.0
             for stop_day_idx in range(len(daily_configs) - 1):
@@ -2781,144 +3035,17 @@ def run_gpx_analysis(
                 )
                 stop_is_forecast = (stop_dt.date() - today).days <= 15
                 s_city = find_nearest_city_id(stop_lat, stop_lon, city_graph)
+
                 stop_temp = stop_prcp = stop_wspd = None
                 night_data: list = []
-
-                if stop_is_forecast:
-                    # Use Open-Meteo forecast API (same source as route points)
-                    try:
-                        _resp = None
-                        for _attempt in range(4):
-                            if _attempt > 0:
-                                time.sleep(min(2 ** _attempt, 16))
-                            try:
-                                _resp = requests.get(
-                                    "https://api.open-meteo.com/v1/forecast",
-                                    params={
-                                        "latitude": stop_lat,
-                                        "longitude": stop_lon,
-                                        "hourly": "temperature_2m,precipitation,windspeed_10m",
-                                        "forecast_days": 16,
-                                        "timezone": "auto",
-                                    },
-                                    timeout=30,
-                                )
-                                _resp.raise_for_status()
-                                break
-                            except requests.exceptions.HTTPError as _he:
-                                _st = getattr(getattr(_he, "response", None), "status_code", None)
-                                if _st in (429, 500, 502, 503, 504):
-                                    print(f"[GPX Stop Forecast] retry {_attempt+1} (HTTP {_st})", flush=True)
-                                    continue
-                                raise
-                            except requests.exceptions.Timeout:
-                                print(f"[GPX Stop Forecast] timeout, retry {_attempt+1}", flush=True)
-                                continue
-                        else:
-                            raise RuntimeError("Open-Meteo nach 4 Versuchen nicht erreichbar")
-                        _resp.raise_for_status()
-                        _fd = _resp.json()
-
-                        # Elevation correction: actual stop elevation vs. model terrain elevation
-                        _model_ele = _fd.get("elevation")
-                        _elev_corr = (stop_ele - _model_ele) * 0.0065 if _model_ele is not None else 0.0
-
-                        def _tc_stop(v):
-                            return round(v - _elev_corr, 1) if v is not None else None
-
-                        _htimes = _fd.get("hourly", {}).get("time", [])
-                        _htemp  = _fd.get("hourly", {}).get("temperature_2m", [])
-                        _hprcp  = _fd.get("hourly", {}).get("precipitation", [])
-                        _hwspd  = _fd.get("hourly", {}).get("windspeed_10m", [])
-                        _hw = {
-                            t: {
-                                "temp": _htemp[i] if i < len(_htemp) else None,
-                                "prcp": _hprcp[i] if i < len(_hprcp) else None,
-                                "wspd": _hwspd[i] if i < len(_hwspd) else None,
-                            }
-                            for i, t in enumerate(_htimes)
-                        }
-
-                        def _nearest_hw(dt):
-                            for delta in [0, 1, -1, 2, -2, 3, -3]:
-                                key = (dt + timedelta(hours=delta)).strftime("%Y-%m-%dT%H:00")
-                                if key in _hw:
-                                    return _hw[key]
-                            return {}
-
-                        _sw = _nearest_hw(stop_dt)
-                        stop_temp = _tc_stop(_sw.get("temp"))
-                        stop_prcp = round(_sw["prcp"], 2) if _sw.get("prcp") is not None else None
-                        stop_wspd = round(_sw["wspd"], 1) if _sw.get("wspd") is not None else None
-
-                        slot = stop_dt
-                        while slot < nxt_start_dt - timedelta(minutes=1):
-                            _slw = _nearest_hw(slot)
-                            night_data.append({
-                                "hour": slot.strftime("%H:%M"),
-                                "date": slot.date().isoformat(),
-                                "temp": _tc_stop(_slw.get("temp")),
-                                "prcp": round(_slw["prcp"], 2) if _slw.get("prcp") is not None else None,
-                                "wspd": round(_slw["wspd"], 1) if _slw.get("wspd") is not None else None,
-                            })
-                            slot = slot + timedelta(hours=3)
-                        # Always include an explicit point at departure time so that
-                        # interpNightMs(tNightEnd) and adjStartTemp on day N+1 are accurate.
-                        _slw_dep = _nearest_hw(nxt_start_dt)
-                        night_data.append({
-                            "hour": nxt_start_dt.strftime("%H:%M"),
-                            "date": nxt_start_dt.date().isoformat(),
-                            "temp": _tc_stop(_slw_dep.get("temp")),
-                            "prcp": round(_slw_dep["prcp"], 2) if _slw_dep.get("prcp") is not None else None,
-                            "wspd": round(_slw_dep["wspd"], 1) if _slw_dep.get("wspd") is not None else None,
-                        })
-                    except Exception as _exc:
-                        print(f"[GPX Stop Forecast] Failed: {_exc}", flush=True)
-                        stop_is_forecast = False
-
                 if not stop_is_forecast and s_city:
-                    # Climate normals fallback for stops > 15 days away
-                    try:
-                        ws = get_interpolated_weather(s_city, stop_dt.timetuple().tm_yday, temperatures, 0.0)
-                        s_tmin = ws[0] if ws[0] is not None else 5.0
-                        s_tmax = ws[1] if ws[1] is not None else 15.0
-                        s_mean = (s_tmin + s_tmax) / 2.0
-                        s_amp = (s_tmax - s_tmin) / 2.0
-                        s_hf = stop_dt.hour + stop_dt.minute / 60.0
-                        stop_temp = round(s_mean + s_amp * math.cos(2 * math.pi * (s_hf - 14.0) / 24.0), 1)
-                        s_prcp_day = ws[2] if len(ws) > 2 and ws[2] is not None else None
-                        stop_prcp = round(s_prcp_day / 24.0, 2) if s_prcp_day is not None else None
-                        stop_wspd = round(ws[3], 1) if len(ws) > 3 and ws[3] is not None else None
-                    except Exception:
-                        pass
-                    def _climate_slot_entry(sl):
-                        _sl_doy = sl.timetuple().tm_yday
-                        _sl_hf  = sl.hour + sl.minute / 60.0
-                        _sl_temp = _sl_prcp = _sl_wspd = None
-                        try:
-                            w2 = get_interpolated_weather(s_city, _sl_doy, temperatures, 0.0)
-                            sl_tmin = w2[0] if w2[0] is not None else 5.0
-                            sl_tmax = w2[1] if w2[1] is not None else 15.0
-                            sl_mean = (sl_tmin + sl_tmax) / 2.0
-                            sl_amp  = (sl_tmax - sl_tmin) / 2.0
-                            _sl_temp = round(sl_mean + sl_amp * math.cos(2 * math.pi * (_sl_hf - 14.0) / 24.0), 1)
-                            sl_prcp_day = w2[2] if len(w2) > 2 and w2[2] is not None else None
-                            _sl_prcp = round(sl_prcp_day / 24.0, 2) if sl_prcp_day is not None else None
-                            _sl_wspd = round(w2[3], 1) if len(w2) > 3 and w2[3] is not None else None
-                        except Exception:
-                            pass
-                        return {"hour": sl.strftime("%H:%M"), "date": sl.date().isoformat(),
-                                "temp": _sl_temp, "prcp": _sl_prcp, "wspd": _sl_wspd}
-
-                    slot = stop_dt
-                    while slot < nxt_start_dt - timedelta(minutes=1):
-                        night_data.append(_climate_slot_entry(slot))
-                        slot = slot + timedelta(hours=3)
-                    # Always include an explicit point at departure time so that
-                    # interpNightMs(tNightEnd) and adjStartTemp on day N+1 are accurate.
-                    night_data.append(_climate_slot_entry(nxt_start_dt))
+                    stop_temp, stop_prcp, stop_wspd, night_data = _gpx_stop_climate_night_series(
+                        s_city, stop_dt, nxt_start_dt, temperatures
+                    )
                 night_temps_arr = [d["temp"] for d in night_data if d["temp"] is not None]
                 night_low = round(min(night_temps_arr), 1) if night_temps_arr else None
+
+                weather_idx = len(weather_points)
                 weather_points.append({
                     "km": round(stop_km, 2),
                     "lat": round(stop_lat, 5),
@@ -2932,12 +3059,61 @@ def run_gpx_analysis(
                     "wdir": None,
                     "cloud": None,
                     "isForecast": stop_is_forecast,
+                    "forecastPending": False,
                     "dayNumber": stop_day_idx + 1,
                     "stopTime": stop_dt.isoformat(),
                     "nextStartTime": nxt_start_dt.isoformat(),
                     "nightData": night_data,
                     "nightLow": night_low,
                 })
+
+                if stop_is_forecast:
+                    stops_needing_forecast.append({
+                        "weather_idx": weather_idx, "lat": stop_lat, "lon": stop_lon,
+                        "ele": stop_ele, "stop_dt": stop_dt, "nxt_start_dt": nxt_start_dt,
+                        "s_city": s_city,
+                    })
+
+        if stops_needing_forecast:
+            stop_params = {
+                "latitude": ",".join(str(s["lat"]) for s in stops_needing_forecast),
+                "longitude": ",".join(str(s["lon"]) for s in stops_needing_forecast),
+                "hourly": "temperature_2m,precipitation,windspeed_10m",
+                "forecast_days": 16,
+                "timezone": "auto",
+            }
+            try:
+                raw_stops = request_open_meteo(stop_params)
+                if isinstance(raw_stops, dict):
+                    raw_stops = [raw_stops]
+                for s, data in zip(stops_needing_forecast, raw_stops):
+                    wp = weather_points[s["weather_idx"]]
+                    try:
+                        temp, prcp, wspd, night_data = _parse_gpx_stop_raw(
+                            data, s["ele"], s["stop_dt"], s["nxt_start_dt"]
+                        )
+                        wp["temp"], wp["prcp"], wp["wspd"] = temp, prcp, wspd
+                        wp["nightData"] = night_data
+                        night_temps = [d["temp"] for d in night_data if d["temp"] is not None]
+                        wp["nightLow"] = round(min(night_temps), 1) if night_temps else None
+                    except Exception as exc:
+                        print(f"[GPX Stop Forecast] Point failed: {exc}", flush=True)
+            except OpenMeteoUnreachableError:
+                gpx_forecast_error = CLIENT_FALLBACK_NEEDED
+                # Immediate graceful degradation (as before) while flagging the
+                # point so the frontend can silently replace it with a real
+                # forecast once the browser-side retry succeeds.
+                for s in stops_needing_forecast:
+                    wp = weather_points[s["weather_idx"]]
+                    wp["forecastPending"] = True
+                    if s["s_city"]:
+                        temp, prcp, wspd, night_data = _gpx_stop_climate_night_series(
+                            s["s_city"], s["stop_dt"], s["nxt_start_dt"], temperatures
+                        )
+                        wp["temp"], wp["prcp"], wp["wspd"] = temp, prcp, wspd
+                        wp["nightData"] = night_data
+                        night_temps = [d["temp"] for d in night_data if d["temp"] is not None]
+                        wp["nightLow"] = round(min(night_temps), 1) if night_temps else None
 
         # Build elevation result
         total_ascent = sum(
@@ -2973,6 +3149,7 @@ def run_gpx_analysis(
                 for c in daily_configs
             ],
             "trackPoints": [[round(lat, 5), round(lon, 5)] for lat, lon in track_pts],
+            "forecastError": gpx_forecast_error,
         }
         job["status"] = "done"
         update("forecast", "Fertig!")
@@ -3002,7 +3179,8 @@ def run_restore_job(job_id: str, saved_data: dict):
     job["status"] = "preview"
     meta = saved_data.get("forecastMeta")
     if meta and meta.get("elev_data"):
-        fresh_forecast, _ = _build_forecast(
+        job["forecast_meta"] = meta
+        fresh_forecast, forecast_error = _build_forecast(
             meta["elev_data"],
             meta["start_day"],
             meta["osrm_distances"],
@@ -3013,7 +3191,7 @@ def run_restore_job(job_id: str, saved_data: dict):
             job,
         )
         if fresh_forecast:
-            job["result"] = {**job["result"], "forecast": fresh_forecast}
+            job["result"] = {**job["result"], "forecast": fresh_forecast, "forecastError": forecast_error}
     job["status"] = "done"
 
 

@@ -194,6 +194,8 @@ const de = {
     saved: "Gespeichert",
     saveFailed: "Route konnte nicht gespeichert werden.",
     forecastUpdating: "Vorhersage wird aktualisiert...",
+    forecastFallbackLoading: "Wetterdienst über den Server nicht erreichbar – Wetterdaten werden über deinen Browser geladen...",
+    forecastFallbackFailed: "Wetterdaten konnten weder über den Server noch über deinen Browser geladen werden.",
     editSettings: "Route ändern",
   },
   savedRoutes: {
@@ -650,6 +652,8 @@ const en = {
     saved: "Saved",
     saveFailed: "Could not save route.",
     forecastUpdating: "Updating forecast...",
+    forecastFallbackLoading: "Weather service unreachable from the server – loading weather data via your browser instead...",
+    forecastFallbackFailed: "Could not load weather data via the server or your browser.",
     editSettings: "Change route",
   },
   savedRoutes: {

@@ -8,7 +8,8 @@ import type {
   ForecastData,
   ForecastPointData,
 } from "@/api/types";
-import { getModelForecast } from "@/api/client";
+import { CLIENT_FALLBACK_NEEDED } from "@/api/types";
+import { getModelForecast, fetchForecastViaBrowser } from "@/api/client";
 
 interface ResultsState {
   segments: RouteSegment[];
@@ -23,6 +24,7 @@ interface ResultsState {
   totalDays: number;
   forecast: ForecastData | null;
   forecastError: string | null;
+  forecastFallbackStatus: "idle" | "loading" | "failed";
   desiredHigh: number;
   desiredLow: number;
 
@@ -73,6 +75,7 @@ interface ResultsState {
   setHoveredModelKmRange: (range: [number, number] | null) => void;
   setJobId: (jobId: string) => void;
   selectModel: (model: string) => Promise<void>;
+  retryForecastViaBrowser: () => Promise<void>;
   reset: () => void;
 }
 
@@ -89,6 +92,7 @@ const initialState = {
   totalDays: 0,
   forecast: null as ForecastData | null,
   forecastError: null as string | null,
+  forecastFallbackStatus: "idle" as "idle" | "loading" | "failed",
   desiredHigh: 25,
   desiredLow: 15,
   activeTab: "map",
@@ -117,6 +121,7 @@ export const useResultsStore = create<ResultsState>()((set, get) => ({
     modelLoading: false,
     pendingModel: null,
     modelError: null,
+    forecastFallbackStatus: "idle",
   }),
 
   updateElevation: (data) => set(data),
@@ -153,7 +158,43 @@ export const useResultsStore = create<ResultsState>()((set, get) => ({
         forecast: state.forecast ? { ...state.forecast, data: result.data } : null,
       }));
     } catch (e) {
+      // Server couldn't reach Open-Meteo (e.g. rate-limited outbound IP) -
+      // fetch it directly from the browser instead and parse it server-side.
+      if (e instanceof Error && e.message === CLIENT_FALLBACK_NEEDED && forecast) {
+        try {
+          const data = await fetchForecastViaBrowser(forecast.points, model);
+          set((state) => ({
+            selectedModel: model,
+            modelLoading: false,
+            pendingModel: null,
+            modelDataCache: { ...state.modelDataCache, [model]: data },
+            forecast: state.forecast ? { ...state.forecast, data } : null,
+          }));
+          return;
+        } catch (e2) {
+          set({ modelLoading: false, pendingModel: null, modelError: String(e2) });
+          return;
+        }
+      }
       set({ modelLoading: false, pendingModel: null, modelError: String(e) });
+    }
+  },
+
+  retryForecastViaBrowser: async () => {
+    const { forecast, forecastError, forecastFallbackStatus, selectedModel } = get();
+    if (forecastError !== CLIENT_FALLBACK_NEEDED || !forecast || forecastFallbackStatus === "loading") return;
+    set({ forecastFallbackStatus: "loading" });
+    try {
+      const data = await fetchForecastViaBrowser(forecast.points, selectedModel);
+      set((state) => ({
+        forecast: state.forecast ? { ...state.forecast, data } : null,
+        forecastError: null,
+        forecastFallbackStatus: "idle",
+        modelDataCache: { ...state.modelDataCache, [selectedModel]: data },
+      }));
+    } catch (e) {
+      console.error("Client-side forecast fallback failed:", e);
+      set({ forecastFallbackStatus: "failed" });
     }
   },
 

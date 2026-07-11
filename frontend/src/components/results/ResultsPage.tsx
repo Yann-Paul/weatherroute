@@ -20,6 +20,7 @@ import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
 import { dayOfYearToDate } from "@/utils/constants";
 import type { JobResults } from "@/api/types";
+import { CLIENT_FALLBACK_NEEDED } from "@/api/types";
 
 function buildRouteName(results: JobResults, lang: "de" | "en"): string {
   const cities = results.route.map((s) => s.cityName);
@@ -36,9 +37,11 @@ function buildRouteName(results: JobResults, lang: "de" | "en"): string {
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
-  const { setResults, updateElevation, activeTab, setActiveTab, setJobId } = useResultsStore();
+  const { setResults, updateElevation, activeTab, setActiveTab, setJobId, retryForecastViaBrowser } = useResultsStore();
   const elevationComplete = useResultsStore((s) => s.elevationComplete);
   const forecast = useResultsStore((s) => s.forecast);
+  const forecastError = useResultsStore((s) => s.forecastError);
+  const forecastFallbackStatus = useResultsStore((s) => s.forecastFallbackStatus);
   const elevation = useResultsStore((s) => s.elevation);
   const route = useResultsStore((s) => s.route);
   const startDay = useResultsStore((s) => s.startDay);
@@ -76,6 +79,15 @@ export function ResultsPage() {
 
     fetchResults();
   }, [jobId, setResults]);
+
+  // Server couldn't reach Open-Meteo (e.g. rate-limited outbound IP) - fetch
+  // the forecast directly from the browser instead and hand the raw result
+  // back to the backend to be parsed the same way as a normal fetch.
+  useEffect(() => {
+    if (forecastError === CLIENT_FALLBACK_NEEDED && forecastFallbackStatus === "idle") {
+      retryForecastViaBrowser();
+    }
+  }, [forecastError, forecastFallbackStatus, retryForecastViaBrowser]);
 
   // Poll for forecast refresh (when restoring saved routes)
   useEffect(() => {
@@ -242,6 +254,19 @@ export function ResultsPage() {
         <div aria-live="polite" className="rounded-lg border border-chart-1/30 bg-chart-1/10 px-3 py-2 text-xs text-foreground">
           {t.results.elevationLoading}
         </div>
+      )}
+
+      {forecastError === CLIENT_FALLBACK_NEEDED && forecastFallbackStatus === "loading" && (
+        <div aria-live="polite" className="rounded-lg border border-chart-1/30 bg-chart-1/10 px-3 py-2 text-xs text-foreground">
+          {t.results.forecastFallbackLoading}
+        </div>
+      )}
+
+      {forecastFallbackStatus === "failed" && (
+        <Alert variant="destructive">
+          <AlertTitle>{t.results.errorTitle}</AlertTitle>
+          <AlertDescription>{t.results.forecastFallbackFailed}</AlertDescription>
+        </Alert>
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
