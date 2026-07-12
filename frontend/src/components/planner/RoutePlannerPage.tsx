@@ -748,7 +748,11 @@ export function RoutePlannerPage() {
           onRemovePoint={handleRemovePoint}
         />
 
-        <div className="pointer-events-none absolute inset-y-3 left-3 z-20 w-[380px] max-w-[92vw]">
+        <div
+          className={`pointer-events-none absolute left-3 z-20 w-[380px] max-w-[92vw] ${
+            collapsed ? "top-3" : "inset-y-3"
+          }`}
+        >
           <div className="pointer-events-auto h-full">
             <ControlsPanel
               onBack={() => navigate("/")}
