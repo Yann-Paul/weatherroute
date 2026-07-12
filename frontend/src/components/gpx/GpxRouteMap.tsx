@@ -277,7 +277,7 @@ function WxSymIcon({ type, color, size = 12 }: { type: WxType; color: string; si
 
 // ─── GpxMarkers (inside MapView) ──────────────────────────────────────────────
 
-function GpxMarkers({
+export function GpxMarkers({
   weatherPoints,
   trackPoints,
 }: {

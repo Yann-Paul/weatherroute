@@ -16,6 +16,8 @@ import type {
   GpxStopParsePoint,
   GpxStopParseResult,
   ForecastPointData,
+  RoutePlannerPoint,
+  RoutePreviewResult,
 } from "./types";
 
 const BASE = "/api";
@@ -84,6 +86,28 @@ export async function submitGpxJob(
 
 export async function getGpxResults(jobId: string): Promise<GpxJobResults> {
   return request(`/jobs/${jobId}/results`);
+}
+
+export async function previewRoutePlan(
+  points: RoutePlannerPoint[],
+  profile: string
+): Promise<RoutePreviewResult> {
+  return request("/route-planner/preview", {
+    method: "POST",
+    body: JSON.stringify({ points, profile }),
+  });
+}
+
+export async function submitRoutePlannerJob(
+  points: RoutePlannerPoint[],
+  profile: string,
+  startDate: string,
+  dailyConfigs: GpxDayConfig[]
+): Promise<{ jobId: string }> {
+  return request("/route-planner/jobs", {
+    method: "POST",
+    body: JSON.stringify({ points, profile, startDate, dailyConfigs }),
+  });
 }
 
 export async function getSavedRoutes(): Promise<SavedRouteSummary[]> {

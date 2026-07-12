@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import { MapPin, Plus, FileUp, Moon, Sun } from "lucide-react";
+import { MapPin, Plus, FileUp, Route, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLangStore } from "@/i18n/store";
 import { useT } from "@/i18n/useT";
@@ -9,6 +9,7 @@ export function TopBar() {
   const location = useLocation();
   const showNewRoute = location.pathname !== "/";
   const showGpx = !location.pathname.startsWith("/gpx");
+  const showRoutePlanner = location.pathname !== "/route-planner";
   const { lang, setLang } = useLangStore();
   const t = useT();
   const { setMode } = useThemeStore();
@@ -59,6 +60,14 @@ export function TopBar() {
               EN
             </button>
           </div>
+          {showRoutePlanner && (
+            <Button variant="secondary" size="sm" asChild>
+              <Link to="/route-planner" aria-label={t.nav.routePlanner}>
+                <Route className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">{t.nav.routePlanner}</span>
+              </Link>
+            </Button>
+          )}
           {showGpx && (
             <Button variant="secondary" size="sm" asChild>
               <Link to="/gpx" aria-label={t.nav.gpx}>

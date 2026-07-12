@@ -318,6 +318,21 @@ export interface GpxJobResults {
   forecastError: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Route planner (classic BRouter point-to-point planning)
+// ---------------------------------------------------------------------------
+
+export interface RoutePlannerPoint {
+  lat: number;
+  lon: number;
+}
+
+export interface RoutePreviewResult {
+  coordinates: RoutePlannerPoint[];
+  distanceKm: number | null;
+  ascentM: number | null;
+}
+
 export interface SavedRouteSummary {
   id: string;
   name: string;
