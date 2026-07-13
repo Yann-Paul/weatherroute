@@ -109,19 +109,25 @@ export async function previewRoutePlan(
 
 export async function fetchRoutePois(
   points: RoutePlannerPoint[],
-  categories: PoiCategory[]
+  categories: PoiCategory[],
+  signal?: AbortSignal
 ): Promise<MapPoi[]> {
   const result = await request<{ pois: MapPoi[] }>("/route-planner/pois", {
     method: "POST",
     body: JSON.stringify({ points, categories }),
+    signal,
   });
   return result.pois;
 }
 
-export async function fetchWindShelter(points: RoutePlannerPoint[]): Promise<WindShelterResult> {
+export async function fetchWindShelter(
+  points: RoutePlannerPoint[],
+  signal?: AbortSignal
+): Promise<WindShelterResult> {
   return request("/route-planner/wind-shelter", {
     method: "POST",
     body: JSON.stringify({ points }),
+    signal,
   });
 }
 

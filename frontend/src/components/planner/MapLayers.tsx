@@ -41,18 +41,35 @@ export const TOPO_STYLES = { light: TOPO_STYLE, dark: TOPO_STYLE };
 
 export type BaseLayer = "standard" | "topo";
 
-export interface OverlayState {
-  shelter: boolean;
-  picnic: boolean;
-  water: boolean;
+// Order also defines the layer-menu row order.
+export const POI_CATEGORIES = [
+  "shelter",
+  "picnic",
+  "water",
+  "toilets",
+  "fuel",
+  "supermarket",
+  "food",
+  "bakery",
+  "cafe",
+  "camping",
+  "atm",
+  "bike_repair",
+  "bike_tube",
+  "train",
+  "park",
+  "beach",
+  "attraction",
+  "pass",
+] as const satisfies readonly PoiCategory[];
+
+export type OverlayState = Record<PoiCategory, boolean> & {
   forest: boolean;
   wind: boolean;
-}
+};
 
 export const NO_OVERLAYS: OverlayState = {
-  shelter: false,
-  picnic: false,
-  water: false,
+  ...(Object.fromEntries(POI_CATEGORIES.map((c) => [c, false])) as Record<PoiCategory, boolean>),
   forest: false,
   wind: false,
 };
@@ -61,6 +78,21 @@ export const POI_COLORS: Record<PoiCategory, string> = {
   shelter: "#8b5cf6",
   picnic: "#f97316",
   water: "#0ea5e9",
+  toilets: "#64748b",
+  fuel: "#ef4444",
+  supermarket: "#eab308",
+  food: "#ec4899",
+  bakery: "#a16207",
+  cafe: "#14b8a6",
+  camping: "#84cc16",
+  atm: "#10b981",
+  bike_repair: "#3b82f6",
+  bike_tube: "#1e40af",
+  train: "#6366f1",
+  park: "#22c55e",
+  beach: "#fbbf24",
+  attraction: "#d946ef",
+  pass: "#78716c",
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -202,7 +234,7 @@ export function LayersMenu({
   ) {
     const id = `layer-${key}`;
     return (
-      <div className="flex items-center gap-2">
+      <div key={key} className="flex items-center gap-2">
         <Checkbox
           id={id}
           checked={overlays[key]}
@@ -240,7 +272,11 @@ export function LayersMenu({
           <Layers className="h-5 w-5" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={8} className="w-60 p-3">
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        className="max-h-[min(70vh,560px)] w-60 overflow-y-auto p-3"
+      >
         <div className="space-y-3">
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-muted-foreground">{ly.baseHeading}</p>
@@ -254,21 +290,13 @@ export function LayersMenu({
 
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground">{ly.overlaysHeading}</p>
-            {overlayRow("shelter", ly.shelter, {
-              dot: POI_COLORS.shelter,
-              disabled: !routeReady,
-              loading: overlays.shelter && poisLoading,
-            })}
-            {overlayRow("picnic", ly.picnic, {
-              dot: POI_COLORS.picnic,
-              disabled: !routeReady,
-              loading: overlays.picnic && poisLoading,
-            })}
-            {overlayRow("water", ly.water, {
-              dot: POI_COLORS.water,
-              disabled: !routeReady,
-              loading: overlays.water && poisLoading,
-            })}
+            {POI_CATEGORIES.map((cat) =>
+              overlayRow(cat, ly[cat], {
+                dot: POI_COLORS[cat],
+                disabled: !routeReady,
+                loading: overlays[cat] && poisLoading,
+              })
+            )}
             {overlayRow("forest", ly.forest, {
               dot: "#16a34a",
               disabled: !routeReady,

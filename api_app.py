@@ -1300,10 +1300,17 @@ def submit_route_planner_job(data: RoutePlannerJobRequest):
 # Route planner map features — Overpass POIs + wind-shelter analysis
 # ---------------------------------------------------------------------------
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# Public Overpass instances, queried in order — the main instance rate-limits
+# concurrent queries per IP (the planner fires POIs + wind-shelter together),
+# so a mirror serves as fallback.
+OVERPASS_URLS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+]
 _overpass_cache: dict[str, tuple[float, Any]] = {}  # query-hash -> (timestamp, parsed json)
 _OVERPASS_CACHE_TTL = 1800  # 30 min
 _overpass_lock = threading.Lock()
+_overpass_http_lock = threading.Lock()  # serialize outbound queries (rate limit)
 
 # POI radius around the route (m) — wide enough to catch a detour-worthy
 # shelter, narrow enough to keep Overpass results relevant.
@@ -1328,31 +1335,88 @@ def _around_polyline(points: List[tuple], radius_m: int) -> str:
 
 
 def _overpass_query(query: str) -> dict:
-    """POST a query to Overpass, with a small in-memory TTL cache."""
+    """POST a query to Overpass, with a small in-memory TTL cache.
+
+    Only one outbound query runs at a time and busy/rate-limited instances
+    fall through to the next mirror — otherwise the POI + wind-shelter pair
+    the frontend fires per route change trips the per-IP limit."""
     key = hashlib.sha256(query.encode()).hexdigest()
-    now = time.time()
-    with _overpass_lock:
-        cached = _overpass_cache.get(key)
-        if cached and (now - cached[0]) < _OVERPASS_CACHE_TTL:
-            return cached[1]
-        # opportunistic cleanup of expired entries
-        for k in [k for k, (ts, _) in _overpass_cache.items() if (now - ts) >= _OVERPASS_CACHE_TTL]:
-            del _overpass_cache[k]
 
-    resp = requests.post(
-        OVERPASS_URL,
-        data={"data": query},
-        timeout=90,
-        headers={"User-Agent": "WeatherRoute/1.0"},
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    with _overpass_lock:
-        _overpass_cache[key] = (time.time(), data)
-    return data
+    def _cached() -> Optional[dict]:
+        now = time.time()
+        with _overpass_lock:
+            cached = _overpass_cache.get(key)
+            if cached and (now - cached[0]) < _OVERPASS_CACHE_TTL:
+                return cached[1]
+            # opportunistic cleanup of expired entries
+            for k in [k for k, (ts, _) in _overpass_cache.items() if (now - ts) >= _OVERPASS_CACHE_TTL]:
+                del _overpass_cache[k]
+        return None
+
+    data = _cached()
+    if data is not None:
+        return data
+
+    with _overpass_http_lock:
+        # a request queued behind us may have fetched the same query already
+        data = _cached()
+        if data is not None:
+            return data
+
+        last_error: Optional[requests.RequestException] = None
+        for url in OVERPASS_URLS:
+            try:
+                # short-ish (connect, read) timeout: a hanging instance must
+                # fail fast so the fallback still feels interactive
+                resp = requests.post(
+                    url,
+                    data={"data": query},
+                    timeout=(10, 35),
+                    headers={"User-Agent": "WeatherRoute/1.0"},
+                )
+                if resp.status_code in (429, 502, 504):  # busy / rate-limited
+                    last_error = requests.RequestException(f"Overpass {resp.status_code} ({url})")
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+            except requests.RequestException as e:
+                last_error = e
+                continue
+            except ValueError as e:
+                last_error = requests.RequestException(f"Ungültige Overpass-Antwort ({url}): {e}")
+                continue
+            with _overpass_lock:
+                _overpass_cache[key] = (time.time(), data)
+            return data
+
+    raise last_error
 
 
-_POI_CATEGORIES = {"shelter", "picnic", "water"}
+# category -> OSM tag matchers as (tag key, tag value, node_only, list_value).
+# node_only skips ways/relations where the feature is practically always a
+# single node — keeps the Overpass query cheaper. list_value marks tags whose
+# value may be a semicolon-separated list (e.g. vending=bicycle_tube;drinks).
+_POI_SELECTORS: dict[str, List[tuple]] = {
+    "shelter": [("amenity", "shelter", False, False)],
+    "picnic": [("tourism", "picnic_site", False, False), ("leisure", "picnic_table", True, False)],
+    "water": [("amenity", "drinking_water", True, False)],
+    "toilets": [("amenity", "toilets", False, False)],
+    "fuel": [("amenity", "fuel", False, False)],
+    "supermarket": [("shop", "supermarket", False, False), ("shop", "convenience", False, False)],
+    "food": [("amenity", "restaurant", False, False), ("amenity", "fast_food", False, False)],
+    "bakery": [("shop", "bakery", False, False)],
+    "cafe": [("amenity", "cafe", False, False)],
+    "camping": [("tourism", "camp_site", False, False)],
+    "atm": [("amenity", "atm", True, False)],
+    "bike_repair": [("shop", "bicycle", False, False), ("amenity", "bicycle_repair_station", True, False)],
+    "bike_tube": [("vending", "bicycle_tube", True, True)],
+    "train": [("railway", "station", False, False), ("railway", "halt", False, False)],
+    "park": [("leisure", "park", False, False)],
+    "beach": [("natural", "beach", False, False)],
+    "attraction": [("tourism", "attraction", False, False), ("tourism", "viewpoint", False, False)],
+    "pass": [("mountain_pass", "yes", True, False)],
+}
+_POI_CATEGORIES = set(_POI_SELECTORS)
 
 # OSM tags worth surfacing in the POI hover tooltip (whitelist — everything
 # else stays server-side so untrusted tag soup never reaches the client).
@@ -1360,16 +1424,21 @@ _POI_DETAIL_TAGS = (
     "shelter_type", "covered", "fee", "access", "capacity", "fireplace",
     "bench", "table", "drinking_water", "bottle", "seasonal",
     "opening_hours", "operator", "description",
+    "cuisine", "brand", "wheelchair", "ele",
 )
 
 
-def _poi_category(tags: dict) -> Optional[str]:
-    if tags.get("amenity") == "shelter":
-        return "shelter"
-    if tags.get("tourism") == "picnic_site" or tags.get("leisure") == "picnic_table":
-        return "picnic"
-    if tags.get("amenity") == "drinking_water":
-        return "water"
+def _poi_category(tags: dict, categories: List[str]) -> Optional[str]:
+    for cat in categories:
+        for key, value, _node_only, list_value in _POI_SELECTORS[cat]:
+            tag = tags.get(key)
+            if tag is None:
+                continue
+            if list_value:
+                if value in (part.strip() for part in tag.split(";")):
+                    return cat
+            elif tag == value:
+                return cat
     return None
 
 
@@ -1380,8 +1449,9 @@ class MapPoisRequest(BaseModel):
 
 @app.post("/api/route-planner/pois")
 def route_planner_pois(data: MapPoisRequest):
-    """POIs (shelters, picnic sites, drinking water) in a corridor around the
-    planned route, fetched from OpenStreetMap via Overpass."""
+    """POIs (see _POI_SELECTORS: shelters, drinking water, fuel stations,
+    supermarkets, campsites, train stations, sights, mountain passes, …) in a
+    corridor around the planned route, fetched from OpenStreetMap via Overpass."""
     if len(data.points) < 2:
         raise HTTPException(400, "Mindestens 2 Punkte nötig")
     categories = [c for c in data.categories if c in _POI_CATEGORIES]
@@ -1390,14 +1460,13 @@ def route_planner_pois(data: MapPoisRequest):
 
     around = _around_polyline([(p.lat, p.lon) for p in data.points], _POI_RADIUS_M)
     selectors = []
-    if "shelter" in categories:
-        selectors.append(f'nwr["amenity"="shelter"]{around};')
-    if "picnic" in categories:
-        selectors.append(f'nwr["tourism"="picnic_site"]{around};')
-        selectors.append(f'node["leisure"="picnic_table"]{around};')
-    if "water" in categories:
-        selectors.append(f'node["amenity"="drinking_water"]{around};')
-    query = f'[out:json][timeout:40];({"".join(selectors)});out center 1500;'
+    for cat in categories:
+        for key, value, node_only, list_value in _POI_SELECTORS[cat]:
+            element = "node" if node_only else "nwr"
+            # list-valued tags need a substring regex instead of an exact match
+            match = f'["{key}"~"{value}"]' if list_value else f'["{key}"="{value}"]'
+            selectors.append(f"{element}{match}{around};")
+    query = f'[out:json][timeout:30];({"".join(selectors)});out center 3000;'
 
     try:
         raw = _overpass_query(query)
@@ -1407,8 +1476,8 @@ def route_planner_pois(data: MapPoisRequest):
     pois = []
     for el in raw.get("elements", []):
         tags = el.get("tags", {})
-        category = _poi_category(tags)
-        if category is None or category not in categories:
+        category = _poi_category(tags, categories)
+        if category is None:
             continue
         if "lat" in el:
             lat, lon = el["lat"], el["lon"]
@@ -1482,7 +1551,7 @@ def route_planner_wind_shelter(data: WindShelterRequest):
 
     around = _around_polyline(latlons, _LANDCOVER_RADIUS_M)
     query = (
-        '[out:json][timeout:60];('
+        '[out:json][timeout:30];('
         f'way["natural"="wood"]{around};'
         f'way["landuse"~"^(forest|residential|industrial)$"]{around};'
         ');out geom 1500;'

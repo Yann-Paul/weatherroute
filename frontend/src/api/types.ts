@@ -333,7 +333,25 @@ export interface RoutePreviewResult {
   ascentM: number | null;
 }
 
-export type PoiCategory = "shelter" | "picnic" | "water";
+export type PoiCategory =
+  | "shelter"
+  | "picnic"
+  | "water"
+  | "toilets"
+  | "fuel"
+  | "supermarket"
+  | "food"
+  | "bakery"
+  | "cafe"
+  | "camping"
+  | "atm"
+  | "bike_repair"
+  | "bike_tube"
+  | "train"
+  | "park"
+  | "beach"
+  | "attraction"
+  | "pass";
 
 export interface MapPoi {
   lat: number;

@@ -46,6 +46,7 @@ import type {
   GpxDayConfig,
   GpxJobResults,
   MapPoi,
+  PoiCategory,
   RoutePlannerPoint,
   WindShelterResult,
 } from "@/api/types";
@@ -73,6 +74,7 @@ import {
   LayersMenu,
   NO_OVERLAYS,
   PoiLayer,
+  POI_CATEGORIES,
   POI_COLORS,
   simplifyPoints,
   TOPO_STYLES,
@@ -248,14 +250,14 @@ function RouteMapView({
       ? previewCoords.map((p) => [p.lon, p.lat])
       : points.map((p) => [p.lon, p.lat]);
 
-  const poisByCategory = useMemo(
-    () => ({
-      shelter: pois?.filter((p) => p.category === "shelter") ?? [],
-      picnic: pois?.filter((p) => p.category === "picnic") ?? [],
-      water: pois?.filter((p) => p.category === "water") ?? [],
-    }),
-    [pois]
-  );
+  const poisByCategory = useMemo(() => {
+    const byCat = Object.fromEntries(POI_CATEGORIES.map((c) => [c, [] as MapPoi[]])) as Record<
+      PoiCategory,
+      MapPoi[]
+    >;
+    for (const p of pois ?? []) byCat[p.category]?.push(p);
+    return byCat;
+  }, [pois]);
 
   return (
     <Map
@@ -277,15 +279,9 @@ function RouteMapView({
           weatherPoints={weatherResult.weatherPoints}
         />
       )}
-      {overlays.shelter && (
-        <PoiLayer pois={poisByCategory.shelter} color={POI_COLORS.shelter} label={rp.layers.shelter} />
-      )}
-      {overlays.picnic && (
-        <PoiLayer pois={poisByCategory.picnic} color={POI_COLORS.picnic} label={rp.layers.picnic} />
-      )}
-      {overlays.water && (
-        <PoiLayer pois={poisByCategory.water} color={POI_COLORS.water} label={rp.layers.water} />
-      )}
+      {POI_CATEGORIES.filter((cat) => overlays[cat]).map((cat) => (
+        <PoiLayer key={cat} pois={poisByCategory[cat]} color={POI_COLORS[cat]} label={rp.layers[cat]} />
+      ))}
       {weatherResult && (
         <GpxMarkers weatherPoints={weatherResult.weatherPoints} trackPoints={weatherResult.trackPoints} />
       )}
@@ -779,36 +775,44 @@ export function RoutePlannerPage() {
     return () => clearTimeout(handle);
   }, [points, profile]);
 
-  // ── map overlay data: POIs (Overpass corridor query, cached by signature)
-  const anyPoiOverlay = overlays.shelter || overlays.picnic || overlays.water;
+  // ── map overlay data: POIs (Overpass corridor query, cached by signature).
+  // Debounced, and superseded requests are aborted — Overpass queries can run
+  // long, and stale ones piling up starve the browser's per-host connection
+  // pool (blocking even the route preview).
+  const anyPoiOverlay = POI_CATEGORIES.some((cat) => overlays[cat]);
   useEffect(() => {
     if (!anyPoiOverlay || previewCoords.length < 2) return;
     const simplified = simplifyPoints(previewCoords);
     const sig = JSON.stringify(simplified);
     if (sig === poisSigRef.current) return;
-    poisSigRef.current = sig;
-    setPoisLoading(true);
+    const controller = new AbortController();
     let cancelled = false;
-    fetchRoutePois(simplified, ["shelter", "picnic", "water"])
-      .then((result) => {
-        if (!cancelled) setPois(result);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          poisSigRef.current = null;
-          toast.error(rp.layers.poiError);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setPoisLoading(false);
-      });
+    const handle = setTimeout(() => {
+      poisSigRef.current = sig;
+      setPoisLoading(true);
+      fetchRoutePois(simplified, [...POI_CATEGORIES], controller.signal)
+        .then((result) => {
+          if (!cancelled) setPois(result);
+        })
+        .catch(() => {
+          // forget the failed/aborted signature so the next change retries
+          if (poisSigRef.current === sig) poisSigRef.current = null;
+          if (!cancelled) toast.error(rp.layers.poiError);
+        })
+        .finally(() => {
+          if (!cancelled) setPoisLoading(false);
+        });
+    }, 600);
     return () => {
       cancelled = true;
+      clearTimeout(handle);
+      controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anyPoiOverlay, previewCoords]);
 
-  // ── map overlay data: wind-shelter landcover analysis (forest + wind layers)
+  // ── map overlay data: wind-shelter landcover analysis (forest + wind layers).
+  // Same debounce/abort scheme as the POI query above.
   const needShelterData = overlays.forest || overlays.wind;
   useEffect(() => {
     if (!needShelterData || previewCoords.length < 2) return;
@@ -817,24 +821,27 @@ export function RoutePlannerPage() {
     const simplified = simplifyPoints(previewCoords, 2000);
     const sig = JSON.stringify(simplified);
     if (sig === shelterSigRef.current) return;
-    shelterSigRef.current = sig;
-    setShelterLoading(true);
+    const controller = new AbortController();
     let cancelled = false;
-    fetchWindShelter(simplified)
-      .then((result) => {
-        if (!cancelled) setWindShelter(result);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          shelterSigRef.current = null;
-          toast.error(rp.layers.shelterError);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setShelterLoading(false);
-      });
+    const handle = setTimeout(() => {
+      shelterSigRef.current = sig;
+      setShelterLoading(true);
+      fetchWindShelter(simplified, controller.signal)
+        .then((result) => {
+          if (!cancelled) setWindShelter(result);
+        })
+        .catch(() => {
+          if (shelterSigRef.current === sig) shelterSigRef.current = null;
+          if (!cancelled) toast.error(rp.layers.shelterError);
+        })
+        .finally(() => {
+          if (!cancelled) setShelterLoading(false);
+        });
+    }, 600);
     return () => {
       cancelled = true;
+      clearTimeout(handle);
+      controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needShelterData, previewCoords]);

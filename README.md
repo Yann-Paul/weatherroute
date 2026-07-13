@@ -188,9 +188,12 @@ Interaktive Punkt-für-Punkt-Routenplanung mit BRouter — die Karte füllt das 
 
 **Kartenebenen (Layer-Menü oben rechts)**
 - **Basiskarte**: Standard (Carto hell/dunkel, folgt dem App-Theme) oder Topographisch (OpenTopoMap mit Höhenlinien)
-- **POI-Overlays** entlang eines Korridors um die geroutete Strecke (OpenStreetMap via Overpass):
-  - Schutzhütten (violett), Picknickplätze (orange), Trinkwasser (blau)
-  - Beim **Hovern** über einen POI erscheint ein Tooltip mit Name, Kategorie und weiteren OSM-Details (z. B. überdacht, Gebühr, Sitzbank, Feuerstelle, Öffnungszeiten, Betreiber, Beschreibung); auf Touch-Geräten öffnet ein Tipp auf den Punkt dasselbe Popup
+- **POI-Overlays** entlang eines Korridors um die geroutete Strecke (OpenStreetMap via Overpass), einzeln zuschaltbar mit eigener Punktfarbe:
+  - Schutzhütten, Picknickplätze, Trinkwasser, Toiletten
+  - Tankstellen, Supermärkte (inkl. Convenience-Läden), Restaurants & Imbisse, Bäckereien, Cafés
+  - Campingplätze, Geldautomaten, Fahrradreparatur (Läden + Reparaturstationen), Schlauchautomaten
+  - Bahnhöfe, Parks, Strände, Sehenswürdigkeiten (inkl. Aussichtspunkte), Pässe
+  - Beim **Hovern** über einen POI erscheint ein Tooltip mit Name, Kategorie und weiteren OSM-Details (z. B. überdacht, Gebühr, Öffnungszeiten, Küche, Rollstuhlgerecht, Höhe bei Pässen); auf Touch-Geräten öffnet ein Tipp auf den Punkt dasselbe Popup
 - **Wald-Overlay**: halbtransparente Waldflächen aus dem Korridor um die Route (Grundlage der Windschutz-Analyse)
 - **Windexposition**: färbt die Route segmentweise nach effektivem Wind — kombiniert die Windvorhersage (Geschwindigkeit + Richtung relativ zur Fahrtrichtung: Gegenwind zählt voll, Rückenwind kaum) mit der Landbedeckung (Wald/Bebauung dämpfen den Wind); Legende grün/gelb/rot (geschützt / mäßig / stark exponiert). Benötigt geladene Wetterdaten
 - Alle Overlays setzen eine berechnete Route voraus; Ergebnisse werden pro Streckensignatur gecacht, damit Overpass nicht bei jedem Toggle erneut abgefragt wird
@@ -706,7 +709,7 @@ Rückgabe: beste 5 Routen als [{ 'cities': [(city_id, day), ...], 'score': float
 | [OpenTopoData](https://api.opentopodata.org) | ASTER-Höhendaten (Polarregionen bis 83°N) |
 | [Nominatim](https://nominatim.openstreetmap.org) | Geocoding für Städte außerhalb des Graphen |
 | [Photon](https://photon.komoot.io) | Adress-/Ortssuche im Streckenplaner (Autocomplete inkl. Hausnummern) |
-| [Overpass](https://overpass-api.de) | OSM-Abfragen für Streckenplaner-Overlays: POIs (Schutzhütten, Picknick, Trinkwasser) und Wald-/Landbedeckung für die Windexposition |
+| [Overpass](https://overpass-api.de) | OSM-Abfragen für Streckenplaner-Overlays: POIs (Schutzhütten, Trinkwasser, Tankstellen, Supermärkte, Bahnhöfe, Sehenswürdigkeiten, Pässe u. v. m.) und Wald-/Landbedeckung für die Windexposition |
 | [BRouter](https://brouter.de) | Fahrrad-/Trekking-Routing im Streckenplaner (alternativ [lokale Instanz](#starten)) |
 | [OpenTopoMap](https://opentopomap.org) | Topographische Basiskarten-Kacheln im Streckenplaner |
 | [Open-Meteo](https://api.open-meteo.com) | Live-Wettervorhersage (16 Tage) mit wählbarem Modell (`best_match`, ECMWF, ICON, GFS, …) |
@@ -848,7 +851,7 @@ weatherroute/
 | `POST` | `/api/destination-jobs` | Zielsuche starten |
 | `POST` | `/api/gpx/jobs` | GPX-Analyse starten |
 | `POST` | `/api/route-planner/preview` | Streckenplaner: Live-Routenvorschau (BRouter) |
-| `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (Schutzhütten, Picknick, Trinkwasser) im Routenkorridor (Overpass) |
+| `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (18 Kategorien: Schutzhütten, Trinkwasser, Tankstellen, Supermärkte, Bahnhöfe, Pässe, …) im Routenkorridor (Overpass) |
 | `POST` | `/api/route-planner/wind-shelter` | Streckenplaner: Waldflächen + Windschutz-Samples für Wald-/Windexpositions-Overlay (Overpass) |
 | `POST` | `/api/route-planner/jobs` | Streckenplaner: Route + Wetteranalyse starten |
 | `GET` | `/api/saved-routes` | Gespeicherte Routen auflisten |
