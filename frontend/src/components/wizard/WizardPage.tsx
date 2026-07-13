@@ -17,6 +17,7 @@ import {
   HelpCircle,
   Compass,
   Target,
+  PenLine,
 } from "lucide-react";
 import beispielImg from "@/pictures/routenplaner_beispiel.png";
 import {
@@ -1229,11 +1230,26 @@ export function WizardPage() {
             </div>
           </button>
 
+          {/* Route planner option */}
+          <button
+            type="button"
+            onClick={() => navigate("/route-planner")}
+            className="flex flex-col gap-4 rounded-2xl border-2 border-border bg-card p-6 text-left transition-all hover:border-primary/50 hover:shadow-sm"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <PenLine className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold">{w.plannerTitle}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{w.plannerDesc}</p>
+            </div>
+          </button>
+
           {/* GPX option */}
           <button
             type="button"
             onClick={() => navigate("/gpx/wizard")}
-            className="flex flex-col gap-4 rounded-2xl border-2 border-border bg-card p-6 text-left transition-all hover:border-primary/50 hover:shadow-sm sm:col-span-2"
+            className="flex flex-col gap-4 rounded-2xl border-2 border-border bg-card p-6 text-left transition-all hover:border-primary/50 hover:shadow-sm"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
               <FileUp className="h-5 w-5" />

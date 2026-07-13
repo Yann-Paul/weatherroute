@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { useIsDark } from "@/stores/themeStore";
 import { Sun, Moon, CloudRain, Cloud, Wind, ChevronDown, ChevronUp, Play, Pause } from "lucide-react";
 import maplibregl from "maplibre-gl";
@@ -13,10 +14,44 @@ import {
 } from "@/components/ui/map";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import type { ElevationProfile, GpxDayConfig, GpxJobResults, GpxNightHour, GpxWeatherPoint } from "@/api/types";
+import { toast } from "sonner";
+import { fetchRoutePois, fetchWindShelter, previewRoutePlan, submitGpxJob } from "@/api/client";
+import type {
+  ElevationProfile,
+  GpxDayConfig,
+  GpxJobResults,
+  GpxNightHour,
+  GpxWeatherPoint,
+  MapPoi,
+  PoiCategory,
+  RoutePlannerPoint,
+  WindShelterResult,
+} from "@/api/types";
 import { tempToRgb } from "@/utils/tempColor";
 import { windDegreesToDirection } from "@/utils/constants";
+import { buildGpx } from "@/utils/gpxExport";
+import { useJobStore } from "@/stores/jobStore";
 import { useT } from "@/i18n/useT";
+import {
+  ForestLayer,
+  LayersMenu,
+  NO_OVERLAYS,
+  PoiLayer,
+  POI_CATEGORIES,
+  POI_COLORS,
+  simplifyPoints,
+  TOPO_STYLES,
+  WindExposureLayer,
+  type BaseLayer,
+  type OverlayState,
+} from "@/components/planner/MapLayers";
+import {
+  EMPTY_EDIT_SELECTION,
+  GpxEditMapElements,
+  GpxEditPanel,
+  type EditProfile,
+  type GpxEditSelection,
+} from "./GpxRouteEditor";
 
 // ─── Geo helpers ──────────────────────────────────────────────────────────────
 
@@ -1367,7 +1402,7 @@ function RainRadarPanel({
     : "–";
 
   return (
-    <div className="absolute top-2 left-2 z-10 w-56 max-w-[calc(100%-1rem)] rounded-md border border-border bg-background/95 p-2.5 shadow-sm backdrop-blur-sm">
+    <div className="w-full rounded-md border border-border bg-background/95 p-2.5 shadow-sm backdrop-blur-sm">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium">
           <CloudRain className="size-3.5 shrink-0 text-blue-400" />
@@ -1497,6 +1532,168 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
   const [elevExpanded, setElevExpanded] = useState(true);
   const isDark = useIsDark();
   const t = useT();
+  const navigate = useNavigate();
+  const setJobId = useJobStore((s) => s.setJobId);
+
+  // ── map layers (base map + POI/forest/wind overlays, shared with planner)
+  const [baseLayer, setBaseLayer] = useState<BaseLayer>("standard");
+  const [overlays, setOverlays] = useState<OverlayState>(NO_OVERLAYS);
+  const [pois, setPois] = useState<MapPoi[] | null>(null);
+  const [poisLoading, setPoisLoading] = useState(false);
+  const poisLoadedRef = useRef(false);
+  const [windShelter, setWindShelter] = useState<WindShelterResult | null>(null);
+  const [shelterLoading, setShelterLoading] = useState(false);
+  const shelterLoadedRef = useRef(false);
+
+  const routePoints = useMemo<RoutePlannerPoint[]>(
+    () => results.trackPoints.map(([lat, lon]) => ({ lat, lon })),
+    [results.trackPoints]
+  );
+
+  // The GPX track is static, so each corridor query only needs to run once.
+  const anyPoiOverlay = POI_CATEGORIES.some((cat) => overlays[cat]);
+  useEffect(() => {
+    if (!anyPoiOverlay || routePoints.length < 2 || poisLoadedRef.current) return;
+    poisLoadedRef.current = true;
+    const controller = new AbortController();
+    let cancelled = false;
+    setPoisLoading(true);
+    fetchRoutePois(simplifyPoints(routePoints), [...POI_CATEGORIES], controller.signal)
+      .then((result) => {
+        if (!cancelled) setPois(result);
+      })
+      .catch(() => {
+        poisLoadedRef.current = false;
+        if (!cancelled) toast.error(t.routePlanner.layers.poiError);
+      })
+      .finally(() => {
+        if (!cancelled) setPoisLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anyPoiOverlay, routePoints]);
+
+  const needShelterData = overlays.forest || overlays.wind;
+  useEffect(() => {
+    if (!needShelterData || routePoints.length < 2 || shelterLoadedRef.current) return;
+    shelterLoadedRef.current = true;
+    const controller = new AbortController();
+    let cancelled = false;
+    setShelterLoading(true);
+    fetchWindShelter(simplifyPoints(routePoints, 2000), controller.signal)
+      .then((result) => {
+        if (!cancelled) setWindShelter(result);
+      })
+      .catch(() => {
+        shelterLoadedRef.current = false;
+        if (!cancelled) toast.error(t.routePlanner.layers.shelterError);
+      })
+      .finally(() => {
+        if (!cancelled) setShelterLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needShelterData, routePoints]);
+
+  const poisByCategory = useMemo(() => {
+    const byCat = Object.fromEntries(POI_CATEGORIES.map((c) => [c, [] as MapPoi[]])) as Record<
+      PoiCategory,
+      MapPoi[]
+    >;
+    for (const p of pois ?? []) byCat[p.category]?.push(p);
+    return byCat;
+  }, [pois]);
+
+  // ── route editing (replace a section of the track via a new via point)
+  const [editActive, setEditActive] = useState(false);
+  const [editSel, setEditSel] = useState<GpxEditSelection>(EMPTY_EDIT_SELECTION);
+  const [editProfile, setEditProfile] = useState<EditProfile>("trekking");
+  const [editPreview, setEditPreview] = useState<RoutePlannerPoint[]>([]);
+  const [editPreviewLoading, setEditPreviewLoading] = useState(false);
+  const [editPreviewError, setEditPreviewError] = useState(false);
+  const [editApplying, setEditApplying] = useState(false);
+  const editReqRef = useRef(0);
+
+  function handleEditMapClick(lat: number, lon: number) {
+    setEditSel((sel) => {
+      if (sel.startIdx == null) {
+        return { ...sel, startIdx: findNearestTrackIdx(results.trackPoints, lat, lon) };
+      }
+      if (sel.endIdx == null) {
+        const idx = findNearestTrackIdx(results.trackPoints, lat, lon);
+        if (idx === sel.startIdx) return sel;
+        return idx < sel.startIdx
+          ? { startIdx: idx, endIdx: sel.startIdx, via: null }
+          : { ...sel, endIdx: idx };
+      }
+      return { ...sel, via: { lat, lon } };
+    });
+  }
+
+  // BRouter preview for the replacement section (debounced like the planner)
+  useEffect(() => {
+    const { startIdx, endIdx, via } = editSel;
+    if (!editActive || startIdx == null || endIdx == null || via == null) {
+      editReqRef.current++;
+      setEditPreview([]);
+      setEditPreviewError(false);
+      setEditPreviewLoading(false);
+      return;
+    }
+    const [sLat, sLon] = results.trackPoints[startIdx];
+    const [eLat, eLon] = results.trackPoints[endIdx];
+    const myId = ++editReqRef.current;
+    setEditPreviewLoading(true);
+    setEditPreviewError(false);
+    const handle = setTimeout(async () => {
+      try {
+        const res = await previewRoutePlan(
+          [{ lat: sLat, lon: sLon }, via, { lat: eLat, lon: eLon }],
+          editProfile
+        );
+        if (editReqRef.current !== myId) return;
+        setEditPreview(res.coordinates);
+      } catch {
+        if (editReqRef.current !== myId) return;
+        setEditPreview([]);
+        setEditPreviewError(true);
+      } finally {
+        if (editReqRef.current === myId) setEditPreviewLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [editActive, editSel, editProfile, results.trackPoints]);
+
+  async function handleApplyEdit() {
+    const { startIdx, endIdx } = editSel;
+    if (startIdx == null || endIdx == null || editPreview.length < 2) return;
+    const newTrack: RoutePlannerPoint[] = [
+      ...results.trackPoints.slice(0, startIdx).map(([lat, lon]) => ({ lat, lon })),
+      ...editPreview,
+      ...results.trackPoints.slice(endIdx + 1).map(([lat, lon]) => ({ lat, lon })),
+    ];
+    const name = `weatherroute-edited-${results.startDate || "route"}`;
+    const file = new File([buildGpx(newTrack, name)], `${name}.gpx`, {
+      type: "application/gpx+xml",
+    });
+    setEditApplying(true);
+    try {
+      const { jobId } = await submitGpxJob(file, results.startDate, results.dailyConfigs);
+      setJobId(jobId);
+      navigate(`/progress/${jobId}`);
+    } catch (err) {
+      toast.error(
+        t.gpx.results.edit.applyError + (err instanceof Error ? `: ${err.message}` : "")
+      );
+      setEditApplying(false);
+    }
+  }
 
   const [radarOn, setRadarOn] = useState(false);
   const [radarOpacity, setRadarOpacity] = useState(0.7);
@@ -1605,10 +1802,16 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
     )
   );
 
+  const editSegmentKm: [number, number] | null =
+    editSel.startIdx != null && editSel.endIdx != null && trackPolyline.length > 0
+      ? [trackPolyline[editSel.startIdx][0], trackPolyline[editSel.endIdx][0]]
+      : null;
+
   return (
     <div className="space-y-3">
       <MapView
         theme={isDark ? "dark" : "light"}
+        styles={baseLayer === "topo" ? TOPO_STYLES : undefined}
         center={initCenter}
         zoom={8}
         className="h-[500px] w-full rounded-lg lg:h-[600px]"
@@ -1616,25 +1819,58 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
         <MapControls showFullscreen showLocate onLocate={setUserLocation} />
         {userLocation && <UserLocationMarker longitude={userLocation.longitude} latitude={userLocation.latitude} />}
         {radarOn && radarTileUrl && <RainRadarLayer tileUrl={radarTileUrl} opacity={radarOpacity} />}
-        <RainRadarPanel
-          frames={radarFrames}
-          loadError={radarError}
-          enabled={radarOn}
-          onToggleEnabled={setRadarOn}
-          opacity={radarOpacity}
-          onOpacityChange={setRadarOpacity}
-          frameIdx={radarFrameIdx}
-          onFrameIdxChange={setRadarFrameIdx}
-          followLive={radarFollowLive}
-          onManualScrub={(v) => {
-            setRadarFollowLive(false);
-            setRadarFrameIdx(v);
-          }}
-          onJumpToLive={() => {
-            setRadarFollowLive(true);
-            setRadarFrameIdx(radarFrames.length - 1);
-          }}
-        />
+        {overlays.forest && windShelter && <ForestLayer data={windShelter.forest} />}
+        <div className="absolute top-2 left-2 z-10 flex w-56 max-w-[calc(100%-1rem)] flex-col gap-2">
+          <RainRadarPanel
+            frames={radarFrames}
+            loadError={radarError}
+            enabled={radarOn}
+            onToggleEnabled={setRadarOn}
+            opacity={radarOpacity}
+            onOpacityChange={setRadarOpacity}
+            frameIdx={radarFrameIdx}
+            onFrameIdxChange={setRadarFrameIdx}
+            followLive={radarFollowLive}
+            onManualScrub={(v) => {
+              setRadarFollowLive(false);
+              setRadarFrameIdx(v);
+            }}
+            onJumpToLive={() => {
+              setRadarFollowLive(true);
+              setRadarFrameIdx(radarFrames.length - 1);
+            }}
+          />
+          <GpxEditPanel
+            active={editActive}
+            selection={editSel}
+            segmentKm={editSegmentKm}
+            profile={editProfile}
+            onProfileChange={setEditProfile}
+            previewLoading={editPreviewLoading}
+            previewError={editPreviewError}
+            canApply={editPreview.length > 1 && !editPreviewLoading}
+            applying={editApplying}
+            onActivate={() => setEditActive(true)}
+            onCancel={() => {
+              setEditActive(false);
+              setEditSel(EMPTY_EDIT_SELECTION);
+            }}
+            onReset={() => setEditSel(EMPTY_EDIT_SELECTION)}
+            onApply={handleApplyEdit}
+          />
+        </div>
+        <div className="absolute top-2 right-2 z-10">
+          <LayersMenu
+            base={baseLayer}
+            onBaseChange={setBaseLayer}
+            overlays={overlays}
+            onToggleOverlay={(key) => setOverlays((o) => ({ ...o, [key]: !o[key] }))}
+            routeReady={trackCoords.length > 1}
+            windReady={results.weatherPoints.length > 0}
+            poisLoading={poisLoading}
+            shelterLoading={shelterLoading}
+          />
+        </div>
         <FitTrack coordinates={trackCoords} />
         {trackCoords.length > 1 && (
           <MapRoute
@@ -1645,6 +1881,17 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
             interactive={false}
           />
         )}
+        {overlays.wind && windShelter && (
+          <WindExposureLayer samples={windShelter.samples} weatherPoints={results.weatherPoints} />
+        )}
+        {POI_CATEGORIES.filter((cat) => overlays[cat]).map((cat) => (
+          <PoiLayer
+            key={cat}
+            pois={poisByCategory[cat]}
+            color={POI_COLORS[cat]}
+            label={t.routePlanner.layers[cat]}
+          />
+        ))}
         <GpxMarkers weatherPoints={results.weatherPoints} trackPoints={results.trackPoints} />
         <GpxBoundsTracker
           trackPolyline={trackPolyline}
@@ -1652,6 +1899,15 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
           onRangeChange={setVisibleKmRange}
         />
         <GpxHoverDot hoveredKm={hoveredKm} trackPolyline={trackPolyline} />
+        {editActive && (
+          <GpxEditMapElements
+            selection={editSel}
+            trackPoints={results.trackPoints}
+            previewCoords={editPreview}
+            onMapClick={handleEditMapClick}
+            onViaDrag={(lat, lon) => setEditSel((sel) => ({ ...sel, via: { lat, lon } }))}
+          />
+        )}
 
         {isFullscreen && results.elevation && (
           <div className="absolute bottom-0 left-0 right-0 z-10">

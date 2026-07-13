@@ -434,7 +434,7 @@ function ControlsPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-2xl border bg-card/95 shadow-lg backdrop-blur-sm">
-      <div className="flex shrink-0 items-center justify-between gap-2 px-4 py-2.5">
+      <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <button
             type="button"
@@ -463,7 +463,7 @@ function ControlsPanel({
 
       {!collapsed && (
         <div className="relative min-h-0 flex-1 border-t border-border">
-          <div className="h-full space-y-3 overflow-y-auto px-4 py-3">
+          <div className="h-full space-y-2.5 overflow-y-auto px-3 py-2.5 sm:space-y-3 sm:px-4 sm:py-3 max-sm:[&_input]:h-8 max-sm:[&_input]:text-xs max-sm:[&_[role=combobox]]:h-8 max-sm:[&_[role=combobox]]:text-xs max-sm:[&_label]:text-xs">
           {/* address / place search */}
           <AddressSearch onSelect={onAddressSelect} />
 
@@ -558,12 +558,17 @@ function ControlsPanel({
                 variant="outline"
                 onClick={onDownloadGpx}
                 disabled={gpxDisabled}
-                className="gap-1.5"
+                className="gap-1.5 max-sm:h-8 max-sm:px-3 max-sm:text-xs"
               >
                 <Download className="h-4 w-4" />
                 {rp.downloadGpx}
               </Button>
-              <Button type="button" onClick={onFinalize} disabled={actionsDisabled || finalizeBusy} className="gap-1.5">
+              <Button
+                type="button"
+                onClick={onFinalize}
+                disabled={actionsDisabled || finalizeBusy}
+                className="gap-1.5 max-sm:h-8 max-sm:px-3 max-sm:text-xs"
+              >
                 {finalizeBusy ? w.gpxAnalyzing : w.gpxAnalyze}
               </Button>
             </div>
@@ -1094,8 +1099,8 @@ export function RoutePlannerPage() {
         </div>
 
         <div
-          className={`pointer-events-none absolute left-3 z-20 w-[380px] max-w-[92vw] ${
-            collapsed ? "top-3" : "inset-y-3"
+          className={`pointer-events-none absolute left-3 z-20 w-[380px] max-w-[min(92vw,calc(100vw-4.75rem))] ${
+            collapsed ? "top-3" : "top-3 bottom-[32vh] sm:bottom-3"
           }`}
         >
           <div className="pointer-events-auto h-full">

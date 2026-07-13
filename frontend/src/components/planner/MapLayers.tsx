@@ -1,7 +1,7 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import type { FeatureCollection, LineString } from "geojson";
-import { Layers, Loader2 } from "lucide-react";
+import { ChevronRight, Layers, Loader2 } from "lucide-react";
 import { useMap } from "@/components/ui/map";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -41,27 +41,20 @@ export const TOPO_STYLES = { light: TOPO_STYLE, dark: TOPO_STYLE };
 
 export type BaseLayer = "standard" | "topo";
 
-// Order also defines the layer-menu row order.
-export const POI_CATEGORIES = [
-  "shelter",
-  "picnic",
-  "water",
-  "toilets",
-  "fuel",
-  "supermarket",
-  "food",
-  "bakery",
-  "cafe",
-  "camping",
-  "atm",
-  "bike_repair",
-  "bike_tube",
-  "train",
-  "park",
-  "beach",
-  "attraction",
-  "pass",
-] as const satisfies readonly PoiCategory[];
+// Thematic groups for the layer menu; group and category order also defines
+// the menu row order.
+export const POI_GROUPS = [
+  { id: "supplies", categories: ["water", "supermarket", "food", "bakery", "cafe"] },
+  { id: "rest", categories: ["shelter", "picnic", "toilets", "camping"] },
+  { id: "services", categories: ["fuel", "atm", "bike_repair", "bike_tube", "train"] },
+  { id: "sights", categories: ["park", "beach", "attraction", "pass"] },
+] as const satisfies readonly { id: string; categories: readonly PoiCategory[] }[];
+
+export type PoiGroupId = (typeof POI_GROUPS)[number]["id"];
+
+export const POI_CATEGORIES: readonly PoiCategory[] = POI_GROUPS.flatMap(
+  (g) => g.categories
+);
 
 export type OverlayState = Record<PoiCategory, boolean> & {
   forest: boolean;
@@ -209,6 +202,13 @@ export function LayersMenu({
 }) {
   const t = useT();
   const ly = t.routePlanner.layers;
+  // Groups with an active overlay start expanded; the rest stay collapsed.
+  const [openGroups, setOpenGroups] = useState<Record<PoiGroupId, boolean>>(
+    () =>
+      Object.fromEntries(
+        POI_GROUPS.map((g) => [g.id, g.categories.some((c) => overlays[c])])
+      ) as Record<PoiGroupId, boolean>
+  );
 
   function baseButton(value: BaseLayer, label: string) {
     return (
@@ -290,13 +290,48 @@ export function LayersMenu({
 
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground">{ly.overlaysHeading}</p>
-            {POI_CATEGORIES.map((cat) =>
-              overlayRow(cat, ly[cat], {
-                dot: POI_COLORS[cat],
-                disabled: !routeReady,
-                loading: overlays[cat] && poisLoading,
-              })
-            )}
+            {POI_GROUPS.map((group) => {
+              const activeCount = group.categories.filter((c) => overlays[c]).length;
+              const open = openGroups[group.id];
+              return (
+                <div key={group.id} className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenGroups((s) => ({ ...s, [group.id]: !s[group.id] }))
+                    }
+                    className="flex w-full items-center gap-1.5 text-xs font-medium transition-colors hover:text-foreground"
+                  >
+                    <ChevronRight
+                      className={[
+                        "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                        open ? "rotate-90" : "",
+                      ].join(" ")}
+                    />
+                    <span className="flex-1 text-left">{ly.groups[group.id]}</span>
+                    {!open && activeCount > 0 && poisLoading && (
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    )}
+                    {activeCount > 0 && (
+                      <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary">
+                        {activeCount}
+                      </span>
+                    )}
+                  </button>
+                  {open && (
+                    <div className="space-y-2 pl-5">
+                      {group.categories.map((cat) =>
+                        overlayRow(cat, ly[cat], {
+                          dot: POI_COLORS[cat],
+                          disabled: !routeReady,
+                          loading: overlays[cat] && poisLoading,
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             {overlayRow("forest", ly.forest, {
               dot: "#16a34a",
               disabled: !routeReady,
