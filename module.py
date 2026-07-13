@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from itertools import permutations, product as itertools_product
 import time
 import random
+import os
 from sklearn.cluster import AgglomerativeClustering
 import numpy as np
 
@@ -20,6 +21,10 @@ OSRM_BASE      = "https://router.project-osrm.org"
 VALHALLA_BASE  = "https://valhalla1.openstreetmap.de"
 OPEN_ELEV_SRTM = "https://api.opentopodata.org/v1/srtm30m"        # SRTM: 60°S–60°N
 OPEN_ELEV_ASTER= "https://api.opentopodata.org/v1/aster30m"       # ASTER: global to 83°N
+
+# Public BRouter endpoint by default; point BROUTER_URL at a self-hosted
+# instance (see docker-compose.brouter.yml) for development/testing.
+BROUTER_URL = os.environ.get("BROUTER_URL", "https://brouter.de/brouter")
 
 # Wind / rain scoring constants
 # These relate weather units to temperature-equivalent units so that
@@ -1903,7 +1908,7 @@ def get_osrm_route(route_locations, skip_segments=None, routing_mode='car', prog
                 profile = _brouter_profiles.get(profile_key, 'trekking')
                 lonlats = f"{start[1]},{start[0]}|{end[1]},{end[0]}"
                 resp = requests.get(
-                    "https://brouter.de/brouter",
+                    BROUTER_URL,
                     params={
                         "lonlats": lonlats,
                         "profile": profile,
@@ -1962,6 +1967,62 @@ def get_osrm_route(route_locations, skip_segments=None, routing_mode='car', prog
 
     print(f"[Routing] Fertig — {len(road_chunks)} Chunks gesamt", flush=True)
     return road_chunks
+
+
+def brouter_route_multi(points, profile='trekking', timeout=60):
+    """
+    Query BRouter for a single route through an arbitrary number of
+    waypoints (start, any number of via-points, end) — used by the
+    interactive route planner, as opposed to get_osrm_route() which only
+    fetches per-segment geometry between already-fixed waypoints.
+
+    points: list of (lat, lon) tuples, at least 2.
+    Returns: {
+        "coordinates": [(lat, lon), ...],
+        "distance_km": float,
+        "ascent_m": float | None,
+    }
+    Raises requests.RequestException / ValueError on failure.
+    """
+    if len(points) < 2:
+        raise ValueError("BRouter benötigt mindestens 2 Punkte")
+
+    lonlats = "|".join(f"{lon},{lat}" for lat, lon in points)
+    resp = requests.get(
+        BROUTER_URL,
+        params={
+            "lonlats": lonlats,
+            "profile": profile,
+            "alternativeidx": "0",
+            "format": "geojson",
+        },
+        timeout=timeout,
+        headers={"User-Agent": "WeatherRoute/1.0"},
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    features = data.get("features", [])
+    if not features:
+        raise ValueError("BRouter fand keine Route für diese Punkte")
+
+    props = features[0].get("properties", {})
+
+    def _num(key):
+        try:
+            return float(props[key])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    distance_m = _num("track-length")
+    coords = features[0]["geometry"]["coordinates"]
+    # BRouter returns [lon, lat] — convert to (lat, lon)
+    latlons = [(c[1], c[0]) for c in coords]
+
+    return {
+        "coordinates": latlons,
+        "distance_km": round(distance_m / 1000.0, 2) if distance_m is not None else None,
+        "ascent_m": _num("filtered ascend"),
+    }
 
 
 def sample_chunk_fixed_density(chunk, points_per_km):

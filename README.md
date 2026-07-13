@@ -171,6 +171,46 @@ Für bereits geplante Routen (z. B. aus Wanderungs- oder Radfahrplanern):
 - Höhenprofil
 - Wettertabelle nach Etappen
 - Wettermodell-Umschalter (`best_match`, `ECMWF`, `ICON`, `GFS`) — neben der Tab-Leiste, aktualisiert alle vier Ansichten; gecacht wie in der Routenplaner-Ansicht
+- **Regenradar-Overlay (Prototyp)** — Panel oben links auf der Karte:
+  - Ein/Aus-Schalter, Zeit-Slider mit Play/Pause-Animation über die letzten 2h (10-Min-Schritte) und Deckkraft-Regler
+  - Folgt automatisch dem neuesten Radar-Frame ("Live"), springt per Klick zurück, sobald man manuell in die Vergangenheit scrubbt
+  - Standort-Button in den Kartensteuerelementen (unten rechts) zeigt die aktuelle Position als pulsierenden Marker — praktisch zur Prüfung, ob es gerade über einem selbst regnet
+  - Datenquelle: [RainViewer](https://www.rainviewer.com/api.html), **nur privat/nicht-kommerziell nutzbar**, max. Zoomstufe 7, keine Vorhersage (nur Vergangenheitsdaten)
+
+### Streckenplaner (`/route-planner`)
+
+Interaktive Punkt-für-Punkt-Routenplanung mit BRouter — die Karte füllt das gesamte Browserfenster, alle Einstellungen liegen als schwebende Panels darüber:
+
+**Karte (füllt das Fenster)**
+- Start-/Via-/Zielpunkte per Klick setzen, per Drag & Drop verschieben, per Klick auf einen Punkt entfernen
+- Sobald bereits eine Strecke existiert (≥ 2 Punkte), öffnet ein Kartenklick ein Popup mit der Wahl **„Ans Ende anhängen"** oder **„In Strecke einfügen"** — beim Einfügen wird der Punkt automatisch in das nächstgelegene Segment der gerouteten Strecke eingesetzt (Projektion auf die Vorschaulinie; ohne Vorschau dient die Luftlinie zwischen den Wegpunkten als Fallback)
+- Live-Routenvorschau (BRouter) mit Distanz/Höhenmetern, debounced bei jeder Änderung
+
+**Kartenebenen (Layer-Menü oben rechts)**
+- **Basiskarte**: Standard (Carto hell/dunkel, folgt dem App-Theme) oder Topographisch (OpenTopoMap mit Höhenlinien)
+- **POI-Overlays** entlang eines Korridors um die geroutete Strecke (OpenStreetMap via Overpass):
+  - Schutzhütten (violett), Picknickplätze (orange), Trinkwasser (blau)
+  - Beim **Hovern** über einen POI erscheint ein Tooltip mit Name, Kategorie und weiteren OSM-Details (z. B. überdacht, Gebühr, Sitzbank, Feuerstelle, Öffnungszeiten, Betreiber, Beschreibung); auf Touch-Geräten öffnet ein Tipp auf den Punkt dasselbe Popup
+- **Wald-Overlay**: halbtransparente Waldflächen aus dem Korridor um die Route (Grundlage der Windschutz-Analyse)
+- **Windexposition**: färbt die Route segmentweise nach effektivem Wind — kombiniert die Windvorhersage (Geschwindigkeit + Richtung relativ zur Fahrtrichtung: Gegenwind zählt voll, Rückenwind kaum) mit der Landbedeckung (Wald/Bebauung dämpfen den Wind); Legende grün/gelb/rot (geschützt / mäßig / stark exponiert). Benötigt geladene Wetterdaten
+- Alle Overlays setzen eine berechnete Route voraus; Ergebnisse werden pro Streckensignatur gecacht, damit Overpass nicht bei jedem Toggle erneut abgefragt wird
+
+**Einstellungs-Panel (oben links, einklappbar)**
+- **Adresssuche**: Suchfeld mit Autovervollständigung für Adressen und Orte (inkl. Hausnummern, Photon-Geocoder). Bei Auswahl fliegt die Karte zum Treffer; der Ort wird als Wegpunkt angehängt bzw. bei bestehender Strecke erscheint dieselbe Anhängen/Einfügen-Wahl wie beim Kartenklick
+- Profilwahl (Trekking/Rennrad/MTB/Safety)
+- Startdatum sowie Tagesplanung (Startzeit, Geschwindigkeit, km/Tag) — wahlweise einheitlich für alle Tage oder individuell pro Etappe, bereits beim Zeichnen der Route einstellbar
+- „Route analysieren" schickt die fertige Strecke durch dieselbe Wetter-Pipeline wie die GPX-Analyse und landet auf der GPX-Ergebnisseite
+
+**Höhenprofil & Wetter (unten links)**
+- Sobald Route und Einstellungen einen gültigen Stand erreichen, wird automatisch (debounced, ohne Klick) eine Wettervorschau berechnet — derselbe Job wie bei der finalen Analyse, nur ohne Weiterleitung
+- Zeigt dieselbe farbcodierte Höhenprofil-Ansicht wie die GPX-Ergebnisse (Temperaturverlauf, Etappenmarkierungen); bleibt bei einer neuen Berechnung sichtbar und wird erst bei Erfolg ersetzt, mit Hinweis „veraltet" bei zwischenzeitlichen Änderungen
+- Manueller „Aktualisieren"-Button für Wiederholungsversuche
+- Klickt man danach auf „Route analysieren" ohne die Route zu ändern, wird der bereits berechnete Job wiederverwendet statt neu zu rechnen
+
+**Wetterpunkte auf der Karte**
+- Sobald eine Wettervorschau vorliegt, erscheinen dieselben Wetter-Marker wie in der GPX-Kartenansicht direkt auf der Route (Temperatur, Sonne/Wolken/Regen-Symbol, Windpfeile, Niederschlagsmenge, Klick für Details)
+
+Siehe [Lokale BRouter-Instanz](#starten) für den optionalen Eigenbetrieb der Routing-Engine.
 
 ---
 
@@ -665,6 +705,10 @@ Rückgabe: beste 5 Routen als [{ 'cities': [(city_id, day), ...], 'score': float
 | [Open-Elevation](https://api.open-elevation.com) | SRTM-Höhendaten (56°S–60°N) |
 | [OpenTopoData](https://api.opentopodata.org) | ASTER-Höhendaten (Polarregionen bis 83°N) |
 | [Nominatim](https://nominatim.openstreetmap.org) | Geocoding für Städte außerhalb des Graphen |
+| [Photon](https://photon.komoot.io) | Adress-/Ortssuche im Streckenplaner (Autocomplete inkl. Hausnummern) |
+| [Overpass](https://overpass-api.de) | OSM-Abfragen für Streckenplaner-Overlays: POIs (Schutzhütten, Picknick, Trinkwasser) und Wald-/Landbedeckung für die Windexposition |
+| [BRouter](https://brouter.de) | Fahrrad-/Trekking-Routing im Streckenplaner (alternativ [lokale Instanz](#starten)) |
+| [OpenTopoMap](https://opentopomap.org) | Topographische Basiskarten-Kacheln im Streckenplaner |
 | [Open-Meteo](https://api.open-meteo.com) | Live-Wettervorhersage (16 Tage) mit wählbarem Modell (`best_match`, ECMWF, ICON, GFS, …) |
 
 ### Client-seitiger Fallback für Open-Meteo
@@ -692,6 +736,21 @@ Dieser Mechanismus greift für die Hauptrouten-, Zielsuche- und GPX-Jobs sowie f
 Modellwechsel-Button; für die einmalige Abfrage historischer Klimanormalwerte
 (`archive-api.open-meteo.com`, nur beim erstmaligen Hinzufügen neuer Städte) ist er nicht
 implementiert, da dieser Pfad selten aufgerufen wird und nicht zeitkritisch ist.
+
+### Regenradar (RainViewer, rein client-seitig)
+
+Anders als die Wetter-APIs oben läuft das Regenradar-Overlay in den GPX-Ergebnissen **nie über den
+Server** — sowohl die Frame-Liste (`api.rainviewer.com/public/weather-maps.json`) als auch die
+Kachelbilder selbst (`tilecache.rainviewer.com`) werden direkt vom Browser der Nutzerin/des
+Nutzers geladen (`GpxRouteMap.tsx`). Das hat zwei Konsequenzen:
+
+- Das Rate-Limit von RainViewer (100 Requests/IP/Minute) gilt pro Besucher, nicht aggregiert über
+  alle App-Nutzer.
+- Bei RainViewer erscheint die öffentliche IP des jeweiligen Endgeräts, nicht die des Servers.
+
+RainViewers kostenlose API ist laut Nutzungsbedingungen nur für **private/nicht-kommerzielle**
+Nutzung freigegeben; seit der API-Umstellung Anfang 2026 gibt es außerdem nur noch
+Vergangenheitsdaten (letzte 2h) und eine auf Zoomstufe 7 begrenzte Auflösung.
 
 ---
 
@@ -724,7 +783,10 @@ weatherroute/
 │       │   │   ├── CityCombobox.tsx    # Stadtsuche mit Autocomplete
 │       │   │   ├── AdvancedPanel.tsx   # Erweiterte Einstellungen
 │       │   │   ├── ConnectionList.tsx  # Direktverbindungen
-│       │   │   └── SavedRoutesList.tsx # Gespeicherte Routen
+│       │   │   ├── SavedRoutesList.tsx # Gespeicherte Routen
+│       │   │   ├── RoutePlannerPage.tsx # Streckenplaner (BRouter, Vollbild-Karte)
+│       │   │   ├── MapLayers.tsx       # Layer-Menü + POI-/Wald-/Windexpositions-Overlays
+│       │   │   └── AddressSearch.tsx   # Adress-/Ortssuche (Photon)
 │       │   ├── progress/
 │       │   │   ├── ProgressPage.tsx    # Fortschrittsanzeige
 │       │   │   ├── PreviewMap.tsx      # Vorschaukarte
@@ -774,6 +836,7 @@ weatherroute/
 | Methode | Pfad | Beschreibung |
 |---|---|---|
 | `GET` | `/api/cities/search` | Stadtsuche mit Autocomplete |
+| `GET` | `/api/geocode/search` | Adress-/Ortssuche (Photon) für den Streckenplaner |
 | `GET` | `/api/countries/search` | Ländersuche |
 | `POST` | `/api/jobs` | Routenberechnung starten |
 | `GET` | `/api/jobs/{id}/status` | Berechnungsfortschritt abfragen |
@@ -784,6 +847,10 @@ weatherroute/
 | `POST` | `/api/forecast/parse-gpx-stops` | [Client-Fallback](#client-seitiger-fallback-für-open-meteo): vom Browser geholte Open-Meteo-Rohdaten serverseitig parsen (GPX-Übernachtungsstopps) |
 | `POST` | `/api/destination-jobs` | Zielsuche starten |
 | `POST` | `/api/gpx/jobs` | GPX-Analyse starten |
+| `POST` | `/api/route-planner/preview` | Streckenplaner: Live-Routenvorschau (BRouter) |
+| `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (Schutzhütten, Picknick, Trinkwasser) im Routenkorridor (Overpass) |
+| `POST` | `/api/route-planner/wind-shelter` | Streckenplaner: Waldflächen + Windschutz-Samples für Wald-/Windexpositions-Overlay (Overpass) |
+| `POST` | `/api/route-planner/jobs` | Streckenplaner: Route + Wetteranalyse starten |
 | `GET` | `/api/saved-routes` | Gespeicherte Routen auflisten |
 | `POST` | `/api/saved-routes` | Route speichern |
 | `DELETE` | `/api/saved-routes/{id}` | Route löschen |
@@ -841,3 +908,31 @@ Frontend wird gebaut und über FastAPI auf Port `8000` ausgeliefert.
 docker build -t weatherroute .
 docker run -p 8000:8000 weatherroute
 ```
+
+**Lokale BRouter-Instanz (für den Streckenplaner)**
+
+Der Streckenplaner (`/route-planner`) nutzt standardmäßig den öffentlichen `brouter.de`-Endpunkt. Für Entwicklung/Tests lässt sich stattdessen eine eigene BRouter-Instanz mit Kartendaten für Deutschland/Österreich/Schweiz betreiben:
+
+```bash
+# 1. BRouter-Quellcode klonen (einmalig)
+git clone --depth 1 https://github.com/abrensch/brouter.git brouter-src
+
+# 2. Kartensegmente für DACH herunterladen (einmalig, ~1-2 GB)
+scripts/download-brouter-segments.sh      # Linux/macOS
+scripts\download-brouter-segments.bat     # Windows
+
+# 3. Instanz starten (baut das Image beim ersten Mal)
+docker compose -f docker-compose.brouter.yml up -d --build
+# Ältere Docker-Installationen ohne "docker compose"-Plugin (Docker < 20.10):
+docker-compose -f docker-compose.brouter.yml up -d --build
+```
+
+Läuft danach auf `http://localhost:17777`. Test: `curl "http://localhost:17777/brouter?lonlats=13.4,52.5|13.5,52.5&profile=trekking&format=geojson"`.
+
+Backend per Umgebungsvariable auf die lokale Instanz umstellen:
+
+```bash
+BROUTER_URL=http://localhost:17777/brouter uvicorn api_app:app --reload
+```
+
+Ohne gesetzte Variable nutzt das Backend weiterhin den öffentlichen `brouter.de`-Endpunkt (Standard in Produktion).

@@ -18,6 +18,10 @@ import type {
   ForecastPointData,
   RoutePlannerPoint,
   RoutePreviewResult,
+  GeocodeResult,
+  MapPoi,
+  PoiCategory,
+  WindShelterResult,
 } from "./types";
 
 const BASE = "/api";
@@ -37,6 +41,11 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export async function searchCities(query: string): Promise<CitySearchResult[]> {
   if (query.length < 2) return [];
   return request(`/cities/search?q=${encodeURIComponent(query)}`);
+}
+
+export async function searchAddresses(query: string, lang: string): Promise<GeocodeResult[]> {
+  if (query.trim().length < 3) return [];
+  return request(`/geocode/search?q=${encodeURIComponent(query)}&lang=${encodeURIComponent(lang)}`);
 }
 
 export async function searchCountries(query: string): Promise<CountrySearchResult[]> {
@@ -95,6 +104,24 @@ export async function previewRoutePlan(
   return request("/route-planner/preview", {
     method: "POST",
     body: JSON.stringify({ points, profile }),
+  });
+}
+
+export async function fetchRoutePois(
+  points: RoutePlannerPoint[],
+  categories: PoiCategory[]
+): Promise<MapPoi[]> {
+  const result = await request<{ pois: MapPoi[] }>("/route-planner/pois", {
+    method: "POST",
+    body: JSON.stringify({ points, categories }),
+  });
+  return result.pois;
+}
+
+export async function fetchWindShelter(points: RoutePlannerPoint[]): Promise<WindShelterResult> {
+  return request("/route-planner/wind-shelter", {
+    method: "POST",
+    body: JSON.stringify({ points }),
   });
 }
 

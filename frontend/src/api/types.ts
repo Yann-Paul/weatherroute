@@ -333,6 +333,46 @@ export interface RoutePreviewResult {
   ascentM: number | null;
 }
 
+export type PoiCategory = "shelter" | "picnic" | "water";
+
+export interface MapPoi {
+  lat: number;
+  lon: number;
+  category: PoiCategory;
+  name: string | null;
+  subtype: string | null;
+  /** Whitelisted OSM detail tags (fee, covered, opening_hours, …). */
+  tags?: Record<string, string>;
+}
+
+export interface GeocodeResult {
+  label: string;
+  lat: number;
+  lon: number;
+  type?: string | null;
+}
+
+export interface WindShelterSample {
+  lat: number;
+  lon: number;
+  km: number;
+  sheltered: boolean;
+}
+
+export interface ForestGeoJson {
+  type: "FeatureCollection";
+  features: {
+    type: "Feature";
+    properties: Record<string, unknown>;
+    geometry: { type: "Polygon"; coordinates: number[][][] };
+  }[];
+}
+
+export interface WindShelterResult {
+  samples: WindShelterSample[];
+  forest: ForestGeoJson;
+}
+
 export interface SavedRouteSummary {
   id: string;
   name: string;

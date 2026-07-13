@@ -16,6 +16,7 @@ from datetime import date, datetime, timedelta, time as _time_cls
 from pathlib import Path
 
 import difflib
+import hashlib
 import math
 import time
 import xml.etree.ElementTree as ET
@@ -38,6 +39,7 @@ from module import (
     check_route_feasibility,
     calculate_temperature_score,
     get_osrm_route,
+    brouter_route_multi,
     compute_distances_from_chunks,
     build_combined_elevation_profile,
     sample_chunk_fixed_density,
@@ -615,6 +617,67 @@ def search_cities(q: str = Query("", min_length=0)):
     return results
 
 
+_geocode_cache: dict[str, tuple[float, list]] = {}  # "lang:query" -> (timestamp, results)
+_GEOCODE_CACHE_TTL = 3600  # 1 hour
+
+
+@app.get("/api/geocode/search")
+def geocode_search(q: str = Query("", min_length=0), lang: str = Query("en")):
+    """Free-text address/place search (Photon) for the route planner."""
+    query = q.strip()
+    if len(query) < 3:
+        return []
+    if lang not in ("de", "en", "fr"):
+        lang = "en"
+    cache_key = f"{lang}:{query.lower()}"
+    cached = _geocode_cache.get(cache_key)
+    if cached and (time.time() - cached[0]) < _GEOCODE_CACHE_TTL:
+        return cached[1]
+    try:
+        resp = requests.get(
+            "https://photon.komoot.io/api/",
+            params={"q": query, "limit": 6, "lang": lang},
+            headers={"User-Agent": "WeatherRoute/1.0"},
+            timeout=5,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        print(f"[Geocode/Photon] Fehler: {exc}", flush=True)
+        raise HTTPException(502, "Adresssuche derzeit nicht erreichbar")
+
+    results = []
+    seen_labels: set[str] = set()
+    for feature in resp.json().get("features", []):
+        props = feature.get("properties", {})
+        coords = feature.get("geometry", {}).get("coordinates") or []
+        if len(coords) < 2:
+            continue
+        name = props.get("name")
+        street = props.get("street")
+        if street and props.get("housenumber"):
+            street = f"{street} {props['housenumber']}"
+        if not name:
+            name, street = street, None
+        elif street == name:
+            street = None
+        city = props.get("city")
+        if city and props.get("postcode"):
+            city = f"{props['postcode']} {city}"
+        parts = [name, street, city, props.get("country")]
+        label = ", ".join(str(p) for p in parts if p)
+        if not label or label.lower() in seen_labels:
+            continue
+        seen_labels.add(label.lower())
+        results.append({
+            "label": label,
+            "lat": float(coords[1]),
+            "lon": float(coords[0]),
+            "type": props.get("osm_value"),
+        })
+    _geocode_cache[cache_key] = (time.time(), results)
+    return results
+
+
 @app.get("/api/countries/search")
 def search_countries(q: str = Query("", min_length=0)):
     query = q.lower()
@@ -1133,6 +1196,340 @@ async def submit_gpx_job(
     )
     t.start()
     return {"jobId": job_id}
+
+
+# ---------------------------------------------------------------------------
+# Route planner — classic BRouter point-to-point planning with weather overlay
+# ---------------------------------------------------------------------------
+
+# BRouter profile name mapping (store key -> BRouter API name), same mapping
+# used for get_osrm_route()'s brouter_* routing modes.
+_ROUTE_PLANNER_PROFILES = {
+    'trekking': 'trekking',
+    'fastbike': 'fastbike',
+    'mtb': 'MTB',
+    'safety': 'safety',
+}
+
+
+def _resolve_brouter_profile(profile_key: str) -> str:
+    return _ROUTE_PLANNER_PROFILES.get(profile_key, 'trekking')
+
+
+class RoutePlannerPoint(BaseModel):
+    lat: float
+    lon: float
+
+
+class RoutePlannerPreviewRequest(BaseModel):
+    points: List[RoutePlannerPoint]
+    profile: str = "trekking"
+
+
+@app.post("/api/route-planner/preview")
+def route_planner_preview(data: RoutePlannerPreviewRequest):
+    """Live route preview while the user places/drags waypoints on the map."""
+    if len(data.points) < 2:
+        raise HTTPException(400, "Mindestens 2 Punkte nötig")
+    points = [(p.lat, p.lon) for p in data.points]
+    profile = _resolve_brouter_profile(data.profile)
+    try:
+        result = brouter_route_multi(points, profile)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except requests.RequestException as e:
+        raise HTTPException(502, f"BRouter nicht erreichbar: {e}")
+    return {
+        "coordinates": [{"lat": lat, "lon": lon} for lat, lon in result["coordinates"]],
+        "distanceKm": result["distance_km"],
+        "ascentM": result["ascent_m"],
+    }
+
+
+class RoutePlannerJobRequest(BaseModel):
+    points: List[RoutePlannerPoint]
+    profile: str = "trekking"
+    startDate: str
+    dailyConfigs: List[dict] = []
+
+
+@app.post("/api/route-planner/jobs")
+def submit_route_planner_job(data: RoutePlannerJobRequest):
+    """Re-fetch the final route from BRouter server-side, then run it through
+    the same weather-analysis pipeline as an uploaded GPX track."""
+    if len(data.points) < 2:
+        raise HTTPException(400, "Mindestens 2 Punkte nötig")
+    points = [(p.lat, p.lon) for p in data.points]
+    profile = _resolve_brouter_profile(data.profile)
+    try:
+        result = brouter_route_multi(points, profile)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except requests.RequestException as e:
+        raise HTTPException(502, f"BRouter nicht erreichbar: {e}")
+
+    configs = data.dailyConfigs or [{"startTime": "09:00", "speed": 15.0, "dailyKm": 90.0}]
+
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {
+        "status": "pending",
+        "step": "elevation",
+        "message": "Starte Analyse...",
+        "jobType": "gpx",
+        "osrm_done": 0,
+        "osrm_total": 0,
+        "rough_map": None,
+        "result": None,
+        "error": None,
+        "elevation_batch_done": 0,
+        "elevation_batch_total": 0,
+        "forecast_done": 0,
+        "forecast_total": 0,
+        "warnings": [],
+    }
+    t = threading.Thread(
+        target=run_gpx_analysis,
+        args=(job_id, result["coordinates"], data.startDate, configs),
+        daemon=True,
+    )
+    t.start()
+    return {"jobId": job_id}
+
+
+# ---------------------------------------------------------------------------
+# Route planner map features — Overpass POIs + wind-shelter analysis
+# ---------------------------------------------------------------------------
+
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+_overpass_cache: dict[str, tuple[float, Any]] = {}  # query-hash -> (timestamp, parsed json)
+_OVERPASS_CACHE_TTL = 1800  # 30 min
+_overpass_lock = threading.Lock()
+
+# POI radius around the route (m) — wide enough to catch a detour-worthy
+# shelter, narrow enough to keep Overpass results relevant.
+_POI_RADIUS_M = 2000
+# Landcover polygons only matter right at the track for the shelter test;
+# the wider margin is for the forest overlay to not look clipped.
+_LANDCOVER_RADIUS_M = 800
+_SHELTER_SAMPLE_KM = 0.25
+
+
+def _simplify_latlons(points: List[tuple], max_points: int = 60) -> List[tuple]:
+    """Thin a polyline to at most max_points, always keeping the endpoints."""
+    if len(points) <= max_points:
+        return points
+    step = (len(points) - 1) / (max_points - 1)
+    return [points[round(i * step)] for i in range(max_points)]
+
+
+def _around_polyline(points: List[tuple], radius_m: int) -> str:
+    coords = ",".join(f"{lat:.5f},{lon:.5f}" for lat, lon in _simplify_latlons(points))
+    return f"(around:{radius_m},{coords})"
+
+
+def _overpass_query(query: str) -> dict:
+    """POST a query to Overpass, with a small in-memory TTL cache."""
+    key = hashlib.sha256(query.encode()).hexdigest()
+    now = time.time()
+    with _overpass_lock:
+        cached = _overpass_cache.get(key)
+        if cached and (now - cached[0]) < _OVERPASS_CACHE_TTL:
+            return cached[1]
+        # opportunistic cleanup of expired entries
+        for k in [k for k, (ts, _) in _overpass_cache.items() if (now - ts) >= _OVERPASS_CACHE_TTL]:
+            del _overpass_cache[k]
+
+    resp = requests.post(
+        OVERPASS_URL,
+        data={"data": query},
+        timeout=90,
+        headers={"User-Agent": "WeatherRoute/1.0"},
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    with _overpass_lock:
+        _overpass_cache[key] = (time.time(), data)
+    return data
+
+
+_POI_CATEGORIES = {"shelter", "picnic", "water"}
+
+# OSM tags worth surfacing in the POI hover tooltip (whitelist — everything
+# else stays server-side so untrusted tag soup never reaches the client).
+_POI_DETAIL_TAGS = (
+    "shelter_type", "covered", "fee", "access", "capacity", "fireplace",
+    "bench", "table", "drinking_water", "bottle", "seasonal",
+    "opening_hours", "operator", "description",
+)
+
+
+def _poi_category(tags: dict) -> Optional[str]:
+    if tags.get("amenity") == "shelter":
+        return "shelter"
+    if tags.get("tourism") == "picnic_site" or tags.get("leisure") == "picnic_table":
+        return "picnic"
+    if tags.get("amenity") == "drinking_water":
+        return "water"
+    return None
+
+
+class MapPoisRequest(BaseModel):
+    points: List[RoutePlannerPoint]
+    categories: List[str]
+
+
+@app.post("/api/route-planner/pois")
+def route_planner_pois(data: MapPoisRequest):
+    """POIs (shelters, picnic sites, drinking water) in a corridor around the
+    planned route, fetched from OpenStreetMap via Overpass."""
+    if len(data.points) < 2:
+        raise HTTPException(400, "Mindestens 2 Punkte nötig")
+    categories = [c for c in data.categories if c in _POI_CATEGORIES]
+    if not categories:
+        raise HTTPException(400, "Keine gültige Kategorie angegeben")
+
+    around = _around_polyline([(p.lat, p.lon) for p in data.points], _POI_RADIUS_M)
+    selectors = []
+    if "shelter" in categories:
+        selectors.append(f'nwr["amenity"="shelter"]{around};')
+    if "picnic" in categories:
+        selectors.append(f'nwr["tourism"="picnic_site"]{around};')
+        selectors.append(f'node["leisure"="picnic_table"]{around};')
+    if "water" in categories:
+        selectors.append(f'node["amenity"="drinking_water"]{around};')
+    query = f'[out:json][timeout:40];({"".join(selectors)});out center 1500;'
+
+    try:
+        raw = _overpass_query(query)
+    except requests.RequestException as e:
+        raise HTTPException(502, f"Overpass nicht erreichbar: {e}")
+
+    pois = []
+    for el in raw.get("elements", []):
+        tags = el.get("tags", {})
+        category = _poi_category(tags)
+        if category is None or category not in categories:
+            continue
+        if "lat" in el:
+            lat, lon = el["lat"], el["lon"]
+        elif "center" in el:
+            lat, lon = el["center"]["lat"], el["center"]["lon"]
+        else:
+            continue
+        pois.append({
+            "lat": lat,
+            "lon": lon,
+            "category": category,
+            "name": tags.get("name"),
+            "subtype": tags.get("shelter_type"),
+            "tags": {k: str(tags[k]) for k in _POI_DETAIL_TAGS if tags.get(k)},
+        })
+    return {"pois": pois}
+
+
+def _point_in_ring(lat: float, lon: float, ring: List[tuple]) -> bool:
+    """Ray-casting point-in-polygon test; ring is a list of (lat, lon)."""
+    inside = False
+    n = len(ring)
+    j = n - 1
+    for i in range(n):
+        lat_i, lon_i = ring[i]
+        lat_j, lon_j = ring[j]
+        if (lat_i > lat) != (lat_j > lat):
+            x = (lon_j - lon_i) * (lat - lat_i) / (lat_j - lat_i) + lon_i
+            if lon < x:
+                inside = not inside
+        j = i
+    return inside
+
+
+def _sample_polyline(points: List[tuple], step_km: float) -> List[tuple]:
+    """Pick vertices along a polyline roughly every step_km.
+    Returns (lat, lon, cum_km) tuples; always includes both endpoints."""
+    samples = [(points[0][0], points[0][1], 0.0)]
+    cum = 0.0
+    since_last = 0.0
+    for prev, cur in zip(points, points[1:]):
+        d = _haversine_km(prev[0], prev[1], cur[0], cur[1])
+        cum += d
+        since_last += d
+        if since_last >= step_km:
+            samples.append((cur[0], cur[1], round(cum, 3)))
+            since_last = 0.0
+    last = (points[-1][0], points[-1][1], round(cum, 3))
+    if samples[-1][:2] != last[:2]:
+        samples.append(last)
+    return samples
+
+
+class WindShelterRequest(BaseModel):
+    points: List[RoutePlannerPoint]
+
+
+@app.post("/api/route-planner/wind-shelter")
+def route_planner_wind_shelter(data: WindShelterRequest):
+    """Landcover-based wind-shelter analysis: fetches forest and built-up
+    polygons around the route from Overpass, then flags evenly spaced route
+    samples as sheltered (inside forest/settlement) or exposed (open land).
+    The forest polygons are also returned as GeoJSON for the map overlay.
+
+    Note: only OSM ways are evaluated (no multipolygon relations) — large
+    forests mapped as relations may be missed, which errs towards 'exposed'.
+    """
+    if len(data.points) < 2:
+        raise HTTPException(400, "Mindestens 2 Punkte nötig")
+    latlons = [(p.lat, p.lon) for p in data.points]
+
+    around = _around_polyline(latlons, _LANDCOVER_RADIUS_M)
+    query = (
+        '[out:json][timeout:60];('
+        f'way["natural"="wood"]{around};'
+        f'way["landuse"~"^(forest|residential|industrial)$"]{around};'
+        ');out geom 1500;'
+    )
+    try:
+        raw = _overpass_query(query)
+    except requests.RequestException as e:
+        raise HTTPException(502, f"Overpass nicht erreichbar: {e}")
+
+    # (kind, bbox, ring) — bbox as (min_lat, min_lon, max_lat, max_lon)
+    polygons = []
+    forest_features = []
+    for el in raw.get("elements", []):
+        geom = el.get("geometry")
+        if not geom or len(geom) < 4:
+            continue
+        tags = el.get("tags", {})
+        kind = "forest" if tags.get("natural") == "wood" or tags.get("landuse") == "forest" else "urban"
+        ring = [(g["lat"], g["lon"]) for g in geom]
+        lats = [g[0] for g in ring]
+        lons = [g[1] for g in ring]
+        polygons.append((kind, (min(lats), min(lons), max(lats), max(lons)), ring))
+        if kind == "forest":
+            forest_features.append({
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[g["lon"], g["lat"]] for g in geom]],
+                },
+            })
+
+    samples = []
+    for lat, lon, km in _sample_polyline(latlons, _SHELTER_SAMPLE_KM):
+        sheltered = False
+        for _, (min_lat, min_lon, max_lat, max_lon), ring in polygons:
+            if not (min_lat <= lat <= max_lat and min_lon <= lon <= max_lon):
+                continue
+            if _point_in_ring(lat, lon, ring):
+                sheltered = True
+                break
+        samples.append({"lat": lat, "lon": lon, "km": km, "sheltered": sheltered})
+
+    return {
+        "samples": samples,
+        "forest": {"type": "FeatureCollection", "features": forest_features},
+    }
 
 
 # ---------------------------------------------------------------------------

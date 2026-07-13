@@ -4,3 +4,7 @@ __pycache__/
 .env
 venv/
 .venv/
+
+# Local self-hosted BRouter instance (cloned source + downloaded map data)
+/brouter-src/
+/brouter-data/

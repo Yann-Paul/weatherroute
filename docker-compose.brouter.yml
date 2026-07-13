@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  brouter:
+    build:
+      context: ./brouter-src
+    image: weatherroute-brouter:local
+    container_name: weatherroute-brouter
+    ports:
+      - "17777:17777"
+    volumes:
+      - ./brouter-data/segments4:/segments4
+      # Default routing profiles (trekking/fastbike/MTB/safety/...) are baked
+      # into the image by the Dockerfile. Only mount ./brouter-data/profiles2
+      # here if you want to override them with custom profiles — an empty
+      # or partial mount shadows the built-in ones and breaks routing.
+    restart: unless-stopped

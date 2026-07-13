@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import maplibregl from "maplibre-gl";
 import {
   ArrowLeft,
   ChevronDown,
   ChevronUp,
+  Download,
   Loader2,
   Mountain,
   RefreshCw,
@@ -13,6 +14,7 @@ import {
   Map,
   MapControls,
   MapMarker,
+  MapPopup,
   MarkerContent,
   MarkerPopup,
   MapRoute,
@@ -36,8 +38,18 @@ import {
   submitRoutePlannerJob,
   getJobStatus,
   getGpxResults,
+  fetchRoutePois,
+  fetchWindShelter,
 } from "@/api/client";
-import type { GpxDayConfig, GpxJobResults, RoutePlannerPoint } from "@/api/types";
+import type {
+  GeocodeResult,
+  GpxDayConfig,
+  GpxJobResults,
+  MapPoi,
+  RoutePlannerPoint,
+  WindShelterResult,
+} from "@/api/types";
+import { AddressSearch } from "@/components/planner/AddressSearch";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
 import { useJobStore } from "@/stores/jobStore";
@@ -55,6 +67,19 @@ import {
   type DayConfig,
   type Param,
 } from "@/components/wizard/dayConfig";
+import { downloadGpx } from "@/utils/gpxExport";
+import {
+  ForestLayer,
+  LayersMenu,
+  NO_OVERLAYS,
+  PoiLayer,
+  POI_COLORS,
+  simplifyPoints,
+  TOPO_STYLES,
+  WindExposureLayer,
+  type BaseLayer,
+  type OverlayState,
+} from "@/components/planner/MapLayers";
 
 const PROFILES = ["trekking", "fastbike", "mtb", "safety"] as const;
 type Profile = (typeof PROFILES)[number];
@@ -80,6 +105,89 @@ function ClickCapture({ onMapClick }: { onMapClick: (lat: number, lon: number) =
     };
   }, [map, isLoaded]);
   return null;
+}
+
+/** Fly the map to a target whenever a new one is set (address search hits). */
+function FlyTo({ target }: { target: { lat: number; lon: number } | null }) {
+  const { map, isLoaded } = useMap();
+  useEffect(() => {
+    if (!map || !isLoaded || !target) return;
+    map.flyTo({
+      center: [target.lon, target.lat],
+      zoom: Math.max(map.getZoom(), 13),
+      duration: 1200,
+    });
+  }, [map, isLoaded, target]);
+  return null;
+}
+
+// ─── waypoint insertion heuristic ────────────────────────────────────────────
+
+/** Squared planar distance in degree-space with latitude-corrected longitude —
+ * only used for nearest-neighbour comparisons, so units don't matter. */
+function sqDist(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const kx = Math.cos((((aLat + bLat) / 2) * Math.PI) / 180);
+  const dx = (aLon - bLon) * kx;
+  const dy = aLat - bLat;
+  return dx * dx + dy * dy;
+}
+
+function sqDistToSegment(p: RoutePlannerPoint, a: RoutePlannerPoint, b: RoutePlannerPoint): number {
+  const kx = Math.cos((p.lat * Math.PI) / 180);
+  const ax = a.lon * kx, ay = a.lat;
+  const bx = b.lon * kx, by = b.lat;
+  const px = p.lon * kx, py = p.lat;
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  const t = lenSq === 0 ? 0 : Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+  const cx = ax + t * dx, cy = ay + t * dy;
+  return (px - cx) * (px - cx) + (py - cy) * (py - cy);
+}
+
+/** Waypoint index at which a clicked point should be inserted so it lands in
+ * the leg of the routed track it is closest to. Falls back to straight-line
+ * segments between waypoints when no routed preview exists yet. */
+function bestInsertIndex(
+  points: RoutePlannerPoint[],
+  previewCoords: RoutePlannerPoint[],
+  pt: RoutePlannerPoint
+): number {
+  if (points.length < 2) return points.length;
+
+  if (previewCoords.length > 1) {
+    const nearestTo = (target: RoutePlannerPoint) => {
+      let idx = 0;
+      let best = Infinity;
+      for (let i = 0; i < previewCoords.length; i++) {
+        const d = sqDist(target.lat, target.lon, previewCoords[i].lat, previewCoords[i].lon);
+        if (d < best) {
+          best = d;
+          idx = i;
+        }
+      }
+      return idx;
+    };
+    const clickIdx = nearestTo(pt);
+    // Anchor each waypoint on the routed track, kept monotonic so loops in
+    // the geometry can't produce an out-of-order insertion.
+    const anchors = points.map(nearestTo);
+    for (let k = 1; k < anchors.length; k++) anchors[k] = Math.max(anchors[k], anchors[k - 1]);
+    for (let k = 0; k < anchors.length - 1; k++) {
+      if (clickIdx <= anchors[k + 1]) return k + 1;
+    }
+    return points.length - 1;
+  }
+
+  let bestIdx = 1;
+  let best = Infinity;
+  for (let i = 0; i < points.length - 1; i++) {
+    const d = sqDistToSegment(pt, points[i], points[i + 1]);
+    if (d < best) {
+      best = d;
+      bestIdx = i + 1;
+    }
+  }
+  return bestIdx;
 }
 
 function FitOnce({ coordinates }: { coordinates: [number, number][] }) {
@@ -108,6 +216,14 @@ function RouteMapView({
   onMapClick,
   onDragPoint,
   onRemovePoint,
+  baseLayer,
+  overlays,
+  pois,
+  windShelter,
+  pendingPoint,
+  onConfirmPending,
+  onCancelPending,
+  focusTarget,
 }: {
   points: RoutePlannerPoint[];
   previewCoords: RoutePlannerPoint[];
@@ -115,6 +231,14 @@ function RouteMapView({
   onMapClick: (lat: number, lon: number) => void;
   onDragPoint: (i: number, lat: number, lon: number) => void;
   onRemovePoint: (i: number) => void;
+  baseLayer: BaseLayer;
+  overlays: OverlayState;
+  pois: MapPoi[] | null;
+  windShelter: WindShelterResult | null;
+  pendingPoint: RoutePlannerPoint | null;
+  onConfirmPending: (mode: "append" | "insert") => void;
+  onCancelPending: () => void;
+  focusTarget: { lat: number; lon: number } | null;
 }) {
   const t = useT();
   const rp = t.routePlanner;
@@ -124,12 +248,43 @@ function RouteMapView({
       ? previewCoords.map((p) => [p.lon, p.lat])
       : points.map((p) => [p.lon, p.lat]);
 
+  const poisByCategory = useMemo(
+    () => ({
+      shelter: pois?.filter((p) => p.category === "shelter") ?? [],
+      picnic: pois?.filter((p) => p.category === "picnic") ?? [],
+      water: pois?.filter((p) => p.category === "water") ?? [],
+    }),
+    [pois]
+  );
+
   return (
-    <Map center={GERMANY_CENTER} zoom={6} className="h-full w-full">
+    <Map
+      center={GERMANY_CENTER}
+      zoom={6}
+      className="h-full w-full"
+      styles={baseLayer === "topo" ? TOPO_STYLES : undefined}
+    >
       <ClickCapture onMapClick={onMapClick} />
       <FitOnce coordinates={points.map((p) => [p.lon, p.lat])} />
+      <FlyTo target={focusTarget} />
+      {overlays.forest && windShelter && <ForestLayer data={windShelter.forest} />}
       {routeLine.length > 1 && (
         <MapRoute coordinates={routeLine} color="hsl(var(--primary))" width={4} opacity={0.85} />
+      )}
+      {overlays.wind && windShelter && weatherResult && (
+        <WindExposureLayer
+          samples={windShelter.samples}
+          weatherPoints={weatherResult.weatherPoints}
+        />
+      )}
+      {overlays.shelter && (
+        <PoiLayer pois={poisByCategory.shelter} color={POI_COLORS.shelter} label={rp.layers.shelter} />
+      )}
+      {overlays.picnic && (
+        <PoiLayer pois={poisByCategory.picnic} color={POI_COLORS.picnic} label={rp.layers.picnic} />
+      )}
+      {overlays.water && (
+        <PoiLayer pois={poisByCategory.water} color={POI_COLORS.water} label={rp.layers.water} />
       )}
       {weatherResult && (
         <GpxMarkers weatherPoints={weatherResult.weatherPoints} trackPoints={weatherResult.trackPoints} />
@@ -168,6 +323,35 @@ function RouteMapView({
           </MapMarker>
         );
       })}
+      {pendingPoint && (
+        <MapPopup
+          longitude={pendingPoint.lon}
+          latitude={pendingPoint.lat}
+          closeOnClick={false}
+          closeButton
+          onClose={onCancelPending}
+        >
+          <div className="min-w-[160px] space-y-2 pr-4 text-xs">
+            <p className="font-semibold">{rp.addPoint.title}</p>
+            <p className="text-muted-foreground">
+              {pendingPoint.lat.toFixed(5)}, {pendingPoint.lon.toFixed(5)}
+            </p>
+            <div className="flex flex-col gap-1.5">
+              <Button type="button" size="sm" onClick={() => onConfirmPending("append")}>
+                {rp.addPoint.append}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => onConfirmPending("insert")}
+              >
+                {rp.addPoint.insert}
+              </Button>
+            </div>
+          </div>
+        </MapPopup>
+      )}
       <MapControls position="bottom-right" showLocate />
     </Map>
   );
@@ -179,6 +363,7 @@ function ControlsPanel({
   onBack,
   profile,
   onProfileChange,
+  onAddressSelect,
   points,
   distanceKm,
   ascentM,
@@ -203,10 +388,13 @@ function ControlsPanel({
   actionsDisabledHint,
   onFinalize,
   finalizeBusy,
+  onDownloadGpx,
+  gpxDisabled,
 }: {
   onBack: () => void;
   profile: Profile;
   onProfileChange: (p: Profile) => void;
+  onAddressSelect: (r: GeocodeResult) => void;
   points: RoutePlannerPoint[];
   distanceKm: number | null;
   ascentM: number | null;
@@ -231,6 +419,8 @@ function ControlsPanel({
   actionsDisabledHint?: string;
   onFinalize: () => void;
   finalizeBusy: boolean;
+  onDownloadGpx: () => void;
+  gpxDisabled: boolean;
 }) {
   const t = useT();
   const rp = t.routePlanner;
@@ -278,6 +468,9 @@ function ControlsPanel({
       {!collapsed && (
         <div className="relative min-h-0 flex-1 border-t border-border">
           <div className="h-full space-y-3 overflow-y-auto px-4 py-3">
+          {/* address / place search */}
+          <AddressSearch onSelect={onAddressSelect} />
+
           {/* profile + distance/ascent (mobile) + clear */}
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-[160px] flex-1 space-y-1.5">
@@ -363,7 +556,17 @@ function ControlsPanel({
             {actionsDisabled && actionsDisabledHint && (
               <p className="text-center text-xs text-muted-foreground">{actionsDisabledHint}</p>
             )}
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onDownloadGpx}
+                disabled={gpxDisabled}
+                className="gap-1.5"
+              >
+                <Download className="h-4 w-4" />
+                {rp.downloadGpx}
+              </Button>
               <Button type="button" onClick={onFinalize} disabled={actionsDisabled || finalizeBusy} className="gap-1.5">
                 {finalizeBusy ? w.gpxAnalyzing : w.gpxAnalyze}
               </Button>
@@ -503,6 +706,10 @@ export function RoutePlannerPage() {
   const [previewError, setPreviewError] = useState(false);
   const reqIdRef = useRef(0);
 
+  // ── pending waypoint (append-vs-insert choice) + map focus target
+  const [pendingPoint, setPendingPoint] = useState<RoutePlannerPoint | null>(null);
+  const [focusTarget, setFocusTarget] = useState<{ lat: number; lon: number } | null>(null);
+
   // ── date state
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
 
@@ -515,6 +722,16 @@ export function RoutePlannerPage() {
   const [collapsed, setCollapsed] = useState(false);
   const [weatherCollapsed, setWeatherCollapsed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // ── map layer state
+  const [baseLayer, setBaseLayer] = useState<BaseLayer>("standard");
+  const [overlays, setOverlays] = useState<OverlayState>(NO_OVERLAYS);
+  const [pois, setPois] = useState<MapPoi[] | null>(null);
+  const [poisLoading, setPoisLoading] = useState(false);
+  const poisSigRef = useRef<string | null>(null);
+  const [windShelter, setWindShelter] = useState<WindShelterResult | null>(null);
+  const [shelterLoading, setShelterLoading] = useState(false);
+  const shelterSigRef = useRef<string | null>(null);
 
   // ── weather preview state
   const [weatherStatus, setWeatherStatus] = useState<WeatherStatus>("idle");
@@ -562,9 +779,102 @@ export function RoutePlannerPage() {
     return () => clearTimeout(handle);
   }, [points, profile]);
 
+  // ── map overlay data: POIs (Overpass corridor query, cached by signature)
+  const anyPoiOverlay = overlays.shelter || overlays.picnic || overlays.water;
+  useEffect(() => {
+    if (!anyPoiOverlay || previewCoords.length < 2) return;
+    const simplified = simplifyPoints(previewCoords);
+    const sig = JSON.stringify(simplified);
+    if (sig === poisSigRef.current) return;
+    poisSigRef.current = sig;
+    setPoisLoading(true);
+    let cancelled = false;
+    fetchRoutePois(simplified, ["shelter", "picnic", "water"])
+      .then((result) => {
+        if (!cancelled) setPois(result);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          poisSigRef.current = null;
+          toast.error(rp.layers.poiError);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPoisLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anyPoiOverlay, previewCoords]);
+
+  // ── map overlay data: wind-shelter landcover analysis (forest + wind layers)
+  const needShelterData = overlays.forest || overlays.wind;
+  useEffect(() => {
+    if (!needShelterData || previewCoords.length < 2) return;
+    // Keep enough vertices that the 250 m shelter sampling stays on the track
+    // (the backend thins the polyline again for the Overpass corridor itself).
+    const simplified = simplifyPoints(previewCoords, 2000);
+    const sig = JSON.stringify(simplified);
+    if (sig === shelterSigRef.current) return;
+    shelterSigRef.current = sig;
+    setShelterLoading(true);
+    let cancelled = false;
+    fetchWindShelter(simplified)
+      .then((result) => {
+        if (!cancelled) setWindShelter(result);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          shelterSigRef.current = null;
+          toast.error(rp.layers.shelterError);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setShelterLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needShelterData, previewCoords]);
+
+  function handleToggleOverlay(key: keyof OverlayState) {
+    setOverlays((o) => ({ ...o, [key]: !o[key] }));
+  }
+
   // ── point handling
   function handleMapClick(lat: number, lon: number) {
-    setPoints((p) => [...p, { lat, lon }]);
+    // With an existing route, let the user decide where the point goes;
+    // while building the first leg, clicks append directly.
+    if (points.length < 2) {
+      setPoints((p) => [...p, { lat, lon }]);
+      return;
+    }
+    setPendingPoint({ lat, lon });
+  }
+
+  function handleConfirmPending(mode: "append" | "insert") {
+    const pt = pendingPoint;
+    if (!pt) return;
+    setPendingPoint(null);
+    if (mode === "append") {
+      setPoints((p) => [...p, pt]);
+      return;
+    }
+    setPoints((p) => {
+      const idx = bestInsertIndex(p, previewCoords, pt);
+      return [...p.slice(0, idx), pt, ...p.slice(idx)];
+    });
+  }
+
+  function handleAddressSelect(r: GeocodeResult) {
+    setFocusTarget({ lat: r.lat, lon: r.lon });
+    if (points.length < 2) {
+      setPoints((p) => [...p, { lat: r.lat, lon: r.lon }]);
+      return;
+    }
+    setPendingPoint({ lat: r.lat, lon: r.lon });
   }
 
   function handleDragPoint(i: number, lat: number, lon: number) {
@@ -577,6 +887,7 @@ export function RoutePlannerPage() {
 
   function handleClearPoints() {
     setPoints([]);
+    setPendingPoint(null);
   }
 
   // ── planning config changes
@@ -710,6 +1021,12 @@ export function RoutePlannerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, profile, startDate, distanceKm, useGlobal, globalConfig, dayConfigs]);
 
+  // ── GPX export of the routed preview track
+  function handleDownloadGpx() {
+    if (previewCoords.length < 2) return;
+    downloadGpx(previewCoords, `weatherroute-${startDate || "route"}`);
+  }
+
   // ── final submit: reuse an up-to-date weather preview job if one exists
   async function handleFinalize() {
     if (points.length < 2) { toast.error(rp.errors.minPoints); return; }
@@ -746,7 +1063,28 @@ export function RoutePlannerPage() {
           onMapClick={handleMapClick}
           onDragPoint={handleDragPoint}
           onRemovePoint={handleRemovePoint}
+          baseLayer={baseLayer}
+          overlays={overlays}
+          pois={pois}
+          windShelter={windShelter}
+          pendingPoint={pendingPoint}
+          onConfirmPending={handleConfirmPending}
+          onCancelPending={() => setPendingPoint(null)}
+          focusTarget={focusTarget}
         />
+
+        <div className="absolute right-3 top-3 z-20">
+          <LayersMenu
+            base={baseLayer}
+            onBaseChange={setBaseLayer}
+            overlays={overlays}
+            onToggleOverlay={handleToggleOverlay}
+            routeReady={previewCoords.length > 1}
+            windReady={weatherResult != null}
+            poisLoading={poisLoading}
+            shelterLoading={shelterLoading}
+          />
+        </div>
 
         <div
           className={`pointer-events-none absolute left-3 z-20 w-[380px] max-w-[92vw] ${
@@ -758,6 +1096,7 @@ export function RoutePlannerPage() {
               onBack={() => navigate("/")}
               profile={profile}
               onProfileChange={setProfile}
+              onAddressSelect={handleAddressSelect}
               points={points}
               distanceKm={distanceKm}
               ascentM={ascentM}
@@ -782,6 +1121,8 @@ export function RoutePlannerPage() {
               actionsDisabledHint={actionsDisabled ? rp.needPointsHint : undefined}
               onFinalize={handleFinalize}
               finalizeBusy={submitting}
+              onDownloadGpx={handleDownloadGpx}
+              gpxDisabled={previewCoords.length < 2 || previewLoading}
             />
           </div>
         </div>
