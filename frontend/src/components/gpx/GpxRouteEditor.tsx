@@ -46,7 +46,21 @@ function EditClickCapture({ onClick }: { onClick: (lat: number, lon: number) => 
 
   useEffect(() => {
     if (!map || !isLoaded) return;
-    const handler = (e: maplibregl.MapMouseEvent) => cbRef.current(e.lngLat.lat, e.lngLat.lng);
+    const handler = (e: maplibregl.MapMouseEvent) => {
+      // Tapping a POI marker shows its info popup (see PoiLayer) — it
+      // shouldn't also register as the via-point selection click.
+      const poiLayerIds = map
+        .getStyle()
+        .layers?.filter((l) => l.id.startsWith("poi-layer-"))
+        .map((l) => l.id);
+      if (
+        poiLayerIds?.length &&
+        map.queryRenderedFeatures(e.point, { layers: poiLayerIds }).length > 0
+      ) {
+        return;
+      }
+      cbRef.current(e.lngLat.lat, e.lngLat.lng);
+    };
     map.on("click", handler);
     map.getCanvas().style.cursor = "crosshair";
     return () => {

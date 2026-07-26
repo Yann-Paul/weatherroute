@@ -15,15 +15,13 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
-import { fetchRoutePois, fetchWindShelter, previewRoutePlan, submitGpxJob } from "@/api/client";
+import { fetchWindShelter, previewRoutePlan, submitGpxJob } from "@/api/client";
 import type {
   ElevationProfile,
   GpxDayConfig,
   GpxJobResults,
   GpxNightHour,
   GpxWeatherPoint,
-  MapPoi,
-  PoiCategory,
   RoutePlannerPoint,
   WindShelterResult,
 } from "@/api/types";
@@ -41,6 +39,7 @@ import {
   POI_COLORS,
   simplifyPoints,
   TOPO_STYLES,
+  usePoiOverlay,
   WindExposureLayer,
   type BaseLayer,
   type OverlayState,
@@ -1538,9 +1537,6 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
   // ── map layers (base map + POI/forest/wind overlays, shared with planner)
   const [baseLayer, setBaseLayer] = useState<BaseLayer>("standard");
   const [overlays, setOverlays] = useState<OverlayState>(NO_OVERLAYS);
-  const [pois, setPois] = useState<MapPoi[] | null>(null);
-  const [poisLoading, setPoisLoading] = useState(false);
-  const poisLoadedRef = useRef(false);
   const [windShelter, setWindShelter] = useState<WindShelterResult | null>(null);
   const [shelterLoading, setShelterLoading] = useState(false);
   const shelterLoadedRef = useRef(false);
@@ -1550,31 +1546,7 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
     [results.trackPoints]
   );
 
-  // The GPX track is static, so each corridor query only needs to run once.
-  const anyPoiOverlay = POI_CATEGORIES.some((cat) => overlays[cat]);
-  useEffect(() => {
-    if (!anyPoiOverlay || routePoints.length < 2 || poisLoadedRef.current) return;
-    poisLoadedRef.current = true;
-    const controller = new AbortController();
-    let cancelled = false;
-    setPoisLoading(true);
-    fetchRoutePois(simplifyPoints(routePoints), [...POI_CATEGORIES], controller.signal)
-      .then((result) => {
-        if (!cancelled) setPois(result);
-      })
-      .catch(() => {
-        poisLoadedRef.current = false;
-        if (!cancelled) toast.error(t.routePlanner.layers.poiError);
-      })
-      .finally(() => {
-        if (!cancelled) setPoisLoading(false);
-      });
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anyPoiOverlay, routePoints]);
+  const { poisByCategory, poisLoading } = usePoiOverlay(routePoints, overlays);
 
   const needShelterData = overlays.forest || overlays.wind;
   useEffect(() => {
@@ -1600,15 +1572,6 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needShelterData, routePoints]);
-
-  const poisByCategory = useMemo(() => {
-    const byCat = Object.fromEntries(POI_CATEGORIES.map((c) => [c, [] as MapPoi[]])) as Record<
-      PoiCategory,
-      MapPoi[]
-    >;
-    for (const p of pois ?? []) byCat[p.category]?.push(p);
-    return byCat;
-  }, [pois]);
 
   // ── route editing (replace a section of the track via a new via point)
   const [editActive, setEditActive] = useState(false);

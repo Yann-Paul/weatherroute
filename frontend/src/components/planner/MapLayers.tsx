@@ -2,10 +2,12 @@ import { useEffect, useId, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import type { FeatureCollection, LineString } from "geojson";
 import { ChevronRight, Layers, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { useMap } from "@/components/ui/map";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useT } from "@/i18n/useT";
+import { fetchRoutePois } from "@/api/client";
 import type {
   ForestGeoJson,
   GpxWeatherPoint,
@@ -96,6 +98,86 @@ export function simplifyPoints(points: RoutePlannerPoint[], maxPoints = 60): Rou
   if (points.length <= maxPoints) return points;
   const step = (points.length - 1) / (maxPoints - 1);
   return Array.from({ length: maxPoints }, (_, i) => points[Math.round(i * step)]);
+}
+
+function emptyPoiMap(): Record<PoiCategory, MapPoi[]> {
+  return Object.fromEntries(POI_CATEGORIES.map((c) => [c, []])) as Record<PoiCategory, MapPoi[]>;
+}
+
+/**
+ * Fetches only the POI categories currently enabled, incrementally — turning
+ * on one more category fetches just that category instead of re-running one
+ * giant all-categories Overpass query. Already-fetched categories are cached
+ * until the route itself changes.
+ *
+ * Each category is fetched as its own independent API/Overpass call (never
+ * bundled with other categories into one query), even when several
+ * categories become "missing" at once (e.g. after a route edit with
+ * multiple layers enabled) — a category's markers can then appear as soon
+ * as its own request resolves instead of waiting on the slowest one in a
+ * shared batch. Trade-off: outbound Overpass calls are serialized
+ * server-side to respect the public instance's rate limit, so enabling N
+ * categories at once takes roughly N times as long in total as the
+ * previous single combined query did.
+ */
+export function usePoiOverlay(
+  points: RoutePlannerPoint[],
+  overlays: OverlayState
+): { poisByCategory: Record<PoiCategory, MapPoi[]>; poisLoading: boolean } {
+  const t = useT();
+  const [poisByCategory, setPoisByCategory] = useState<Record<PoiCategory, MapPoi[]>>(emptyPoiMap);
+  const [poisLoading, setPoisLoading] = useState(false);
+  const loadedRef = useRef<Set<PoiCategory>>(new Set());
+  const routeSigRef = useRef<string | null>(null);
+
+  const enabledCategories = POI_CATEGORIES.filter((c) => overlays[c]);
+  const enabledKey = enabledCategories.join(",");
+  const routeSig = points.length > 1 ? JSON.stringify(simplifyPoints(points)) : null;
+
+  useEffect(() => {
+    if (!routeSig || enabledCategories.length === 0) return;
+
+    if (routeSig !== routeSigRef.current) {
+      routeSigRef.current = routeSig;
+      loadedRef.current = new Set();
+      setPoisByCategory(emptyPoiMap());
+    }
+
+    const missing = enabledCategories.filter((c) => !loadedRef.current.has(c));
+    if (missing.length === 0) return;
+
+    const controller = new AbortController();
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      const simplified = simplifyPoints(points);
+      let inFlight = missing.length;
+      setPoisLoading(true);
+      for (const category of missing) {
+        fetchRoutePois(simplified, [category], controller.signal)
+          .then((result) => {
+            if (cancelled) return;
+            loadedRef.current.add(category);
+            setPoisByCategory((prev) => ({ ...prev, [category]: result }));
+          })
+          .catch(() => {
+            if (!cancelled) toast.error(t.routePlanner.layers.poiError);
+          })
+          .finally(() => {
+            inFlight -= 1;
+            if (!cancelled && inFlight === 0) setPoisLoading(false);
+          });
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeSig, enabledKey]);
+
+  return { poisByCategory, poisLoading };
 }
 
 // ─── wind exposure ───────────────────────────────────────────────────────────
@@ -398,8 +480,16 @@ export function PoiLayer({
   const t = useT();
   // Read translations through a ref so the (once-registered) map handlers
   // always render with the current language.
-  const uiRef = useRef({ label, details: t.routePlanner.layers.poiDetails });
-  uiRef.current = { label, details: t.routePlanner.layers.poiDetails };
+  const uiRef = useRef({
+    label,
+    details: t.routePlanner.layers.poiDetails,
+    googleMapsLabel: t.routePlanner.layers.openInGoogleMaps,
+  });
+  uiRef.current = {
+    label,
+    details: t.routePlanner.layers.poiDetails,
+    googleMapsLabel: t.routePlanner.layers.openInGoogleMaps,
+  };
 
   useEffect(() => {
     if (!map || !isLoaded) return;
@@ -421,15 +511,20 @@ export function PoiLayer({
       },
     });
 
+    // closeButton: touch has no hover to dismiss the popup with, so tapping
+    // a POI needs an explicit way to close it again.
     const popup = new maplibregl.Popup({
-      closeButton: false,
+      closeButton: true,
       closeOnClick: false,
       offset: 10,
       maxWidth: "260px",
     });
 
-    const buildContent = (feature: maplibregl.MapGeoJSONFeature) => {
-      const { label: catLabel, details } = uiRef.current;
+    const buildContent = (
+      feature: maplibregl.MapGeoJSONFeature,
+      coords: [number, number]
+    ) => {
+      const { label: catLabel, details, googleMapsLabel } = uiRef.current;
       const props = feature.properties as {
         name?: string | null;
         subtype?: string | null;
@@ -448,7 +543,11 @@ export function PoiLayer({
       }
 
       // Build popup DOM manually — OSM names/tags are untrusted input.
+      // The map strips maplibre's own popup background (globals.css), so
+      // this needs its own opaque card background or the text is unreadable
+      // against the map underneath it.
       const div = document.createElement("div");
+      div.className = "rounded-md border bg-popover p-3 text-popover-foreground shadow-md";
       div.style.fontSize = "12px";
       div.style.lineHeight = "1.45";
       const title = document.createElement("p");
@@ -489,6 +588,21 @@ export function PoiLayer({
         }
         div.appendChild(list);
       }
+      const [lon, lat] = coords;
+      const link = document.createElement("a");
+      link.href = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = googleMapsLabel;
+      link.style.display = "block";
+      link.style.marginTop = "8px";
+      link.style.color = "var(--primary)";
+      link.style.textDecoration = "underline";
+      // popup lives outside the click-to-place-point map handlers, but stop
+      // propagation anyway so a tap on the link can't also register as a
+      // map click on touch devices.
+      link.addEventListener("click", (ev) => ev.stopPropagation());
+      div.appendChild(link);
       return div;
     };
 
@@ -497,13 +611,13 @@ export function PoiLayer({
     ) => {
       const feature = e.features?.[0];
       if (!feature) return;
-      const coords =
+      const coords: [number, number] =
         feature.geometry.type === "Point"
           ? (feature.geometry.coordinates as [number, number])
           : [e.lngLat.lng, e.lngLat.lat];
       popup
-        .setLngLat(coords as [number, number])
-        .setDOMContent(buildContent(feature))
+        .setLngLat(coords)
+        .setDOMContent(buildContent(feature, coords))
         .addTo(map);
     };
 

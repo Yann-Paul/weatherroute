@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import maplibregl from "maplibre-gl";
 import {
@@ -38,7 +38,6 @@ import {
   submitRoutePlannerJob,
   getJobStatus,
   getGpxResults,
-  fetchRoutePois,
   fetchWindShelter,
 } from "@/api/client";
 import type {
@@ -78,6 +77,7 @@ import {
   POI_COLORS,
   simplifyPoints,
   TOPO_STYLES,
+  usePoiOverlay,
   WindExposureLayer,
   type BaseLayer,
   type OverlayState,
@@ -100,7 +100,22 @@ function ClickCapture({ onMapClick }: { onMapClick: (lat: number, lon: number) =
   }, [onMapClick]);
   useEffect(() => {
     if (!map || !isLoaded) return;
-    const handler = (e: maplibregl.MapMouseEvent) => cbRef.current(e.lngLat.lat, e.lngLat.lng);
+    const handler = (e: maplibregl.MapMouseEvent) => {
+      // Tapping a POI marker shows its info popup (see PoiLayer) — it
+      // shouldn't also drop a new route point underneath it. Touch has no
+      // hover to tell the two gestures apart, so hit-test explicitly here.
+      const poiLayerIds = map
+        .getStyle()
+        .layers?.filter((l) => l.id.startsWith("poi-layer-"))
+        .map((l) => l.id);
+      if (
+        poiLayerIds?.length &&
+        map.queryRenderedFeatures(e.point, { layers: poiLayerIds }).length > 0
+      ) {
+        return;
+      }
+      cbRef.current(e.lngLat.lat, e.lngLat.lng);
+    };
     map.on("click", handler);
     return () => {
       map.off("click", handler);
@@ -220,7 +235,7 @@ function RouteMapView({
   onRemovePoint,
   baseLayer,
   overlays,
-  pois,
+  poisByCategory,
   windShelter,
   pendingPoint,
   onConfirmPending,
@@ -235,7 +250,7 @@ function RouteMapView({
   onRemovePoint: (i: number) => void;
   baseLayer: BaseLayer;
   overlays: OverlayState;
-  pois: MapPoi[] | null;
+  poisByCategory: Record<PoiCategory, MapPoi[]>;
   windShelter: WindShelterResult | null;
   pendingPoint: RoutePlannerPoint | null;
   onConfirmPending: (mode: "append" | "insert") => void;
@@ -249,15 +264,6 @@ function RouteMapView({
     previewCoords.length > 1
       ? previewCoords.map((p) => [p.lon, p.lat])
       : points.map((p) => [p.lon, p.lat]);
-
-  const poisByCategory = useMemo(() => {
-    const byCat = Object.fromEntries(POI_CATEGORIES.map((c) => [c, [] as MapPoi[]])) as Record<
-      PoiCategory,
-      MapPoi[]
-    >;
-    for (const p of pois ?? []) byCat[p.category]?.push(p);
-    return byCat;
-  }, [pois]);
 
   return (
     <Map
@@ -727,9 +733,6 @@ export function RoutePlannerPage() {
   // ── map layer state
   const [baseLayer, setBaseLayer] = useState<BaseLayer>("standard");
   const [overlays, setOverlays] = useState<OverlayState>(NO_OVERLAYS);
-  const [pois, setPois] = useState<MapPoi[] | null>(null);
-  const [poisLoading, setPoisLoading] = useState(false);
-  const poisSigRef = useRef<string | null>(null);
   const [windShelter, setWindShelter] = useState<WindShelterResult | null>(null);
   const [shelterLoading, setShelterLoading] = useState(false);
   const shelterSigRef = useRef<string | null>(null);
@@ -780,41 +783,9 @@ export function RoutePlannerPage() {
     return () => clearTimeout(handle);
   }, [points, profile]);
 
-  // ── map overlay data: POIs (Overpass corridor query, cached by signature).
-  // Debounced, and superseded requests are aborted — Overpass queries can run
-  // long, and stale ones piling up starve the browser's per-host connection
-  // pool (blocking even the route preview).
-  const anyPoiOverlay = POI_CATEGORIES.some((cat) => overlays[cat]);
-  useEffect(() => {
-    if (!anyPoiOverlay || previewCoords.length < 2) return;
-    const simplified = simplifyPoints(previewCoords);
-    const sig = JSON.stringify(simplified);
-    if (sig === poisSigRef.current) return;
-    const controller = new AbortController();
-    let cancelled = false;
-    const handle = setTimeout(() => {
-      poisSigRef.current = sig;
-      setPoisLoading(true);
-      fetchRoutePois(simplified, [...POI_CATEGORIES], controller.signal)
-        .then((result) => {
-          if (!cancelled) setPois(result);
-        })
-        .catch(() => {
-          // forget the failed/aborted signature so the next change retries
-          if (poisSigRef.current === sig) poisSigRef.current = null;
-          if (!cancelled) toast.error(rp.layers.poiError);
-        })
-        .finally(() => {
-          if (!cancelled) setPoisLoading(false);
-        });
-    }, 600);
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
-      controller.abort();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anyPoiOverlay, previewCoords]);
+  // ── map overlay data: POIs (Overpass corridor query, one category at a
+  // time — see usePoiOverlay for why).
+  const { poisByCategory, poisLoading } = usePoiOverlay(previewCoords, overlays);
 
   // ── map overlay data: wind-shelter landcover analysis (forest + wind layers).
   // Same debounce/abort scheme as the POI query above.
@@ -1077,7 +1048,7 @@ export function RoutePlannerPage() {
           onRemovePoint={handleRemovePoint}
           baseLayer={baseLayer}
           overlays={overlays}
-          pois={pois}
+          poisByCategory={poisByCategory}
           windShelter={windShelter}
           pendingPoint={pendingPoint}
           onConfirmPending={handleConfirmPending}

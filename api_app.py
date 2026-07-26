@@ -15,6 +15,7 @@ import uuid
 from datetime import date, datetime, timedelta, time as _time_cls
 from pathlib import Path
 
+import concurrent.futures
 import difflib
 import hashlib
 import math
@@ -1310,7 +1311,13 @@ OVERPASS_URLS = [
 _overpass_cache: dict[str, tuple[float, Any]] = {}  # query-hash -> (timestamp, parsed json)
 _OVERPASS_CACHE_TTL = 1800  # 30 min
 _overpass_lock = threading.Lock()
-_overpass_http_lock = threading.Lock()  # serialize outbound queries (rate limit)
+_overpass_http_lock = threading.Lock()  # serialize outbound query *sessions* (rate limit)
+_overpass_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="overpass")
+# how long the primary mirror gets before we also fire the next one ("hedged
+# request") — short enough that a stalled instance no longer forces the full
+# (10s connect + 35s read) wait onto the caller, long enough that a merely
+# slow-but-fine response isn't abandoned for nothing.
+_OVERPASS_HEDGE_DELAY_S = 8.0
 
 # POI radius around the route (m) — wide enough to catch a detour-worthy
 # shelter, narrow enough to keep Overpass results relevant.
@@ -1319,6 +1326,12 @@ _POI_RADIUS_M = 2000
 # the wider margin is for the forest overlay to not look clipped.
 _LANDCOVER_RADIUS_M = 800
 _SHELTER_SAMPLE_KM = 0.25
+# Snap route points to this grid before querying/hashing — small route edits
+# (a dragged point, GPX resampling jitter) then produce a byte-identical
+# query and hit the cache instead of forcing a fresh Overpass round trip.
+# 0.001° is ~110 m (lat) / ~70-90 m (lon at mid-latitudes), well inside the
+# smaller (800 m) landcover radius so results don't visibly shift.
+_OVERPASS_GRID_DEG = 0.001
 
 
 def _simplify_latlons(points: List[tuple], max_points: int = 60) -> List[tuple]:
@@ -1329,17 +1342,50 @@ def _simplify_latlons(points: List[tuple], max_points: int = 60) -> List[tuple]:
     return [points[round(i * step)] for i in range(max_points)]
 
 
+def _snap_to_grid(value: float, step: float = _OVERPASS_GRID_DEG) -> float:
+    return round(round(value / step) * step, 6)
+
+
 def _around_polyline(points: List[tuple], radius_m: int) -> str:
-    coords = ",".join(f"{lat:.5f},{lon:.5f}" for lat, lon in _simplify_latlons(points))
+    """Build an Overpass 'around' filter from a thinned, grid-snapped
+    polyline. Snapping (see _OVERPASS_GRID_DEG) also collapses points that
+    land in the same cell, which keeps the query itself a bit shorter."""
+    snapped = [(_snap_to_grid(lat), _snap_to_grid(lon)) for lat, lon in _simplify_latlons(points)]
+    deduped = [p for i, p in enumerate(snapped) if i == 0 or p != snapped[i - 1]]
+    coords = ",".join(f"{lat:.5f},{lon:.5f}" for lat, lon in deduped)
     return f"(around:{radius_m},{coords})"
+
+
+def _fetch_overpass_mirror(url: str, query: str) -> dict:
+    # short-ish (connect, read) timeout: a hanging instance must fail fast
+    # so the hedge/fallback still feels interactive
+    resp = requests.post(
+        url,
+        data={"data": query},
+        timeout=(10, 35),
+        headers={"User-Agent": "WeatherRoute/1.0"},
+    )
+    if resp.status_code in (429, 502, 504):  # busy / rate-limited
+        raise requests.RequestException(f"Overpass {resp.status_code} ({url})")
+    resp.raise_for_status()
+    try:
+        return resp.json()
+    except ValueError as e:
+        raise requests.RequestException(f"Ungültige Overpass-Antwort ({url}): {e}") from e
 
 
 def _overpass_query(query: str) -> dict:
     """POST a query to Overpass, with a small in-memory TTL cache.
 
-    Only one outbound query runs at a time and busy/rate-limited instances
-    fall through to the next mirror — otherwise the POI + wind-shelter pair
-    the frontend fires per route change trips the per-IP limit."""
+    Query *sessions* (one call to this function) are still serialized via
+    _overpass_http_lock — the frontend fires a POI + wind-shelter pair per
+    route change, and running both at once would trip Overpass's per-IP
+    rate limit. Within one session, mirrors are raced instead of tried
+    sequentially: the primary mirror gets a _OVERPASS_HEDGE_DELAY_S head
+    start, and if it hasn't answered by then, the next mirror is fired
+    concurrently too. Whichever answers first (successfully) wins; a
+    straggler response is still cached opportunistically for the next call.
+    """
     key = hashlib.sha256(query.encode()).hexdigest()
 
     def _cached() -> Optional[dict]:
@@ -1363,33 +1409,45 @@ def _overpass_query(query: str) -> dict:
         if data is not None:
             return data
 
-        last_error: Optional[requests.RequestException] = None
-        for url in OVERPASS_URLS:
+        def _cache_result(fut: "concurrent.futures.Future[dict]") -> None:
             try:
-                # short-ish (connect, read) timeout: a hanging instance must
-                # fail fast so the fallback still feels interactive
-                resp = requests.post(
-                    url,
-                    data={"data": query},
-                    timeout=(10, 35),
-                    headers={"User-Agent": "WeatherRoute/1.0"},
-                )
-                if resp.status_code in (429, 502, 504):  # busy / rate-limited
-                    last_error = requests.RequestException(f"Overpass {resp.status_code} ({url})")
-                    continue
-                resp.raise_for_status()
-                data = resp.json()
-            except requests.RequestException as e:
-                last_error = e
-                continue
-            except ValueError as e:
-                last_error = requests.RequestException(f"Ungültige Overpass-Antwort ({url}): {e}")
-                continue
+                result = fut.result()
+            except Exception:
+                return
             with _overpass_lock:
-                _overpass_cache[key] = (time.time(), data)
-            return data
+                _overpass_cache[key] = (time.time(), result)
 
-    raise last_error
+        remaining = list(OVERPASS_URLS)
+        pending: dict[concurrent.futures.Future, str] = {}
+
+        def _launch_next() -> None:
+            url = remaining.pop(0)
+            fut = _overpass_executor.submit(_fetch_overpass_mirror, url, query)
+            fut.add_done_callback(_cache_result)
+            pending[fut] = url
+
+        _launch_next()
+        errors: list[Exception] = []
+        while pending:
+            timeout = _OVERPASS_HEDGE_DELAY_S if remaining else None
+            done, _ = concurrent.futures.wait(
+                pending, timeout=timeout, return_when=concurrent.futures.FIRST_COMPLETED
+            )
+            if not done:
+                _launch_next()  # primary is slow -> hedge with the next mirror
+                continue
+            for fut in done:
+                pending.pop(fut)
+                try:
+                    return fut.result()
+                except Exception as e:
+                    errors.append(e)
+                    if remaining:
+                        _launch_next()
+
+        raise errors[-1] if errors else requests.RequestException(
+            "Overpass: kein Spiegel-Server erreichbar"
+        )
 
 
 # category -> OSM tag matchers as (tag key, tag value, node_only, list_value).

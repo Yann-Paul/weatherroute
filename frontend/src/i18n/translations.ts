@@ -410,6 +410,7 @@ const de = {
       windLegendHigh: "stark exponiert",
       poiError: "Kartenpunkte (OSM) konnten nicht geladen werden.",
       shelterError: "Windschutz-Daten konnten nicht geladen werden.",
+      openInGoogleMaps: "In Google Maps öffnen",
       poiDetails: {
         yes: "Ja",
         no: "Nein",
@@ -1012,6 +1013,7 @@ const en = {
       windLegendHigh: "highly exposed",
       poiError: "Could not load map points (OSM).",
       shelterError: "Could not load wind-shelter data.",
+      openInGoogleMaps: "Open in Google Maps",
       poiDetails: {
         yes: "Yes",
         no: "No",
