@@ -101,7 +101,10 @@ export function simplifyPoints(points: RoutePlannerPoint[], maxPoints = 60): Rou
 }
 
 function emptyPoiMap(): Record<PoiCategory, MapPoi[]> {
-  return Object.fromEntries(POI_CATEGORIES.map((c) => [c, []])) as Record<PoiCategory, MapPoi[]>;
+  return POI_CATEGORIES.reduce((acc, c) => {
+    acc[c] = [];
+    return acc;
+  }, {} as Record<PoiCategory, MapPoi[]>);
 }
 
 /**
@@ -463,7 +466,11 @@ export function LayersMenu({
 // ─── map layer components (must live inside <Map>) ──────────────────────────
 
 /** POI markers as a circle layer with a hover tooltip (name, category and
- * whitelisted OSM detail tags). Click shows the same popup for touch devices. */
+ * whitelisted OSM detail tags). Clicking a marker pins the popup open (it no
+ * longer closes on mouseleave) so desktop users can reach the Google Maps
+ * link inside it; it closes via its close button or a click elsewhere on
+ * the map. On touch devices, which have no hover, this is also simply how
+ * the popup opens. */
 export function PoiLayer({
   pois,
   color,
@@ -606,6 +613,13 @@ export function PoiLayer({
       return div;
     };
 
+    // set while a marker is pinned open via click — hover no longer moves
+    // the popup around and mouseleave no longer closes it, so a desktop
+    // user can actually reach the link inside (moving the cursor off the
+    // small marker circle toward the popup would otherwise fire mouseleave
+    // and close it before the click lands).
+    let pinned = false;
+
     const showPopup = (
       e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }
     ) => {
@@ -621,26 +635,52 @@ export function PoiLayer({
         .addTo(map);
     };
 
+    const handleClick = (
+      e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }
+    ) => {
+      pinned = true;
+      showPopup(e);
+    };
     const handleEnter = (
       e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }
     ) => {
       map.getCanvas().style.cursor = "pointer";
-      showPopup(e);
+      if (!pinned) showPopup(e);
+    };
+    const handleHoverMove = (
+      e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }
+    ) => {
+      if (!pinned) showPopup(e);
     };
     const handleLeave = () => {
       map.getCanvas().style.cursor = "";
-      popup.remove();
+      if (!pinned) popup.remove();
     };
-    map.on("click", layerId, showPopup); // touch devices have no hover
+    // clicking anywhere that isn't this marker unpins/closes it again
+    const handleOutsideClick = (e: maplibregl.MapMouseEvent) => {
+      if (!pinned) return;
+      const hits = map.queryRenderedFeatures(e.point, { layers: [layerId] });
+      if (hits.length === 0) {
+        pinned = false;
+        popup.remove();
+      }
+    };
+    popup.on("close", () => {
+      pinned = false;
+    });
+
+    map.on("click", layerId, handleClick); // touch devices have no hover
     map.on("mouseenter", layerId, handleEnter);
-    map.on("mousemove", layerId, showPopup);
+    map.on("mousemove", layerId, handleHoverMove);
     map.on("mouseleave", layerId, handleLeave);
+    map.on("click", handleOutsideClick);
 
     return () => {
-      map.off("click", layerId, showPopup);
+      map.off("click", layerId, handleClick);
       map.off("mouseenter", layerId, handleEnter);
-      map.off("mousemove", layerId, showPopup);
+      map.off("mousemove", layerId, handleHoverMove);
       map.off("mouseleave", layerId, handleLeave);
+      map.off("click", handleOutsideClick);
       popup.remove();
       try {
         if (map.getLayer(layerId)) map.removeLayer(layerId);

@@ -193,10 +193,10 @@ Interaktive Punkt-für-Punkt-Routenplanung mit BRouter — die Karte füllt das 
   - Tankstellen, Supermärkte (inkl. Convenience-Läden), Restaurants & Imbisse, Bäckereien, Cafés
   - Campingplätze, Geldautomaten, Fahrradreparatur (Läden + Reparaturstationen), Schlauchautomaten
   - Bahnhöfe, Parks, Strände, Sehenswürdigkeiten (inkl. Aussichtspunkte), Pässe
-  - Beim **Hovern** über einen POI erscheint ein Tooltip mit Name, Kategorie und weiteren OSM-Details (z. B. überdacht, Gebühr, Öffnungszeiten, Küche, Rollstuhlgerecht, Höhe bei Pässen); auf Touch-Geräten öffnet ein Tipp auf den Punkt dasselbe Popup
+  - Beim **Hovern** über einen POI erscheint ein Tooltip mit Name, Kategorie und weiteren OSM-Details (z. B. überdacht, Gebühr, Öffnungszeiten, Küche, Rollstuhlgerecht, Höhe bei Pässen) sowie einem Link **„In Google Maps öffnen"** (öffnet die Koordinaten in neuem Tab, kein API-Key nötig); auf Touch-Geräten öffnet ein Tipp auf den Punkt dasselbe Popup
 - **Wald-Overlay**: halbtransparente Waldflächen aus dem Korridor um die Route (Grundlage der Windschutz-Analyse)
 - **Windexposition**: färbt die Route segmentweise nach effektivem Wind — kombiniert die Windvorhersage (Geschwindigkeit + Richtung relativ zur Fahrtrichtung: Gegenwind zählt voll, Rückenwind kaum) mit der Landbedeckung (Wald/Bebauung dämpfen den Wind); Legende grün/gelb/rot (geschützt / mäßig / stark exponiert). Benötigt geladene Wetterdaten
-- Alle Overlays setzen eine berechnete Route voraus; Ergebnisse werden pro Streckensignatur gecacht, damit Overpass nicht bei jedem Toggle erneut abgefragt wird
+- Alle Overlays setzen eine berechnete Route voraus. POI-Kategorien werden einzeln geladen — jede neu aktivierte, noch nicht geladene Kategorie löst ihre eigene Overpass-Anfrage aus (nicht gebündelt); bereits geladene Kategorien werden pro Streckensignatur gecacht, damit ein Toggle nicht erneut abfragt. Siehe [Overpass-Zuverlässigkeit](#overpass-zuverlässigkeit-streckenplaner-overlays) für Details zu Mirror-Racing und Query-Caching
 
 **Einstellungs-Panel (oben links, einklappbar)**
 - **Adresssuche**: Suchfeld mit Autovervollständigung für Adressen und Orte (inkl. Hausnummern, Photon-Geocoder). Bei Auswahl fliegt die Karte zum Treffer; der Ort wird als Wegpunkt angehängt bzw. bei bestehender Strecke erscheint dieselbe Anhängen/Einfügen-Wahl wie beim Kartenklick
@@ -739,6 +739,23 @@ Dieser Mechanismus greift für die Hauptrouten-, Zielsuche- und GPX-Jobs sowie f
 Modellwechsel-Button; für die einmalige Abfrage historischer Klimanormalwerte
 (`archive-api.open-meteo.com`, nur beim erstmaligen Hinzufügen neuer Städte) ist er nicht
 implementiert, da dieser Pfad selten aufgerufen wird und nicht zeitkritisch ist.
+
+### Overpass-Zuverlässigkeit (Streckenplaner-Overlays)
+
+POI- und Windschutz-Abfragen laufen über den öffentlichen Overpass-Dienst, der bei Überlastung
+langsam oder zeitweise unerreichbar sein kann. Um Wartezeiten zu begrenzen:
+
+- **Mirror-Racing**: Der primäre Server (`overpass-api.de`) bekommt 8s Vorsprung; antwortet er nicht
+  rechtzeitig, wird parallel ein zweiter Spiegel-Server (`maps.mail.ru`) angefragt ("hedged request")
+  — es gewinnt, wer zuerst erfolgreich antwortet, statt beide Server sequenziell mit vollem Timeout
+  (bis zu 45s je Server) durchzuprobieren.
+- **Grid-gerasterter Cache**: Routenpunkte werden vor dem Query-Bau auf ein ~110m-Gitter gerundet, so
+  dass kleine Routenänderungen oder GPX-Resampling-Jitter dieselbe Overpass-Query erzeugen und den
+  30-minütigen In-Memory-Cache (serverseitig, pro Query-Hash) treffen, statt einen neuen
+  Server-Roundtrip auszulösen.
+- POI- und Windschutz-Anfragen werden serverseitig serialisiert (globaler Lock), damit das
+  Per-IP-Rate-Limit des öffentlichen Overpass-Dienstes nicht durch gleichzeitige Anfragen desselben
+  Servers verletzt wird — das gilt auch, seit POI-Kategorien einzeln statt gebündelt abgefragt werden.
 
 ### Regenradar (RainViewer, rein client-seitig)
 
