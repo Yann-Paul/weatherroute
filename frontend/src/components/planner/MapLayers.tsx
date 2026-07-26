@@ -468,9 +468,8 @@ export function LayersMenu({
 /** POI markers as a circle layer with a hover tooltip (name, category and
  * whitelisted OSM detail tags). Clicking a marker pins the popup open (it no
  * longer closes on mouseleave) so desktop users can reach the Google Maps
- * link inside it; it closes via its close button or a click elsewhere on
- * the map. On touch devices, which have no hover, this is also simply how
- * the popup opens. */
+ * link inside it; it closes via its close button. On touch devices, which
+ * have no hover, this is also simply how the popup opens. */
 export function PoiLayer({
   pois,
   color,
@@ -656,15 +655,11 @@ export function PoiLayer({
       map.getCanvas().style.cursor = "";
       if (!pinned) popup.remove();
     };
-    // clicking anywhere that isn't this marker unpins/closes it again
-    const handleOutsideClick = (e: maplibregl.MapMouseEvent) => {
-      if (!pinned) return;
-      const hits = map.queryRenderedFeatures(e.point, { layers: [layerId] });
-      if (hits.length === 0) {
-        pinned = false;
-        popup.remove();
-      }
-    };
+    // Closing is via the popup's own close button only (not a click
+    // elsewhere on the map) — RoutePlannerPage's ClickCapture treats every
+    // map click that doesn't land on a POI marker as "place a route point
+    // here", so an outside-click-to-dismiss handler here would also drop an
+    // unwanted waypoint every time a user dismissed a pinned popup.
     popup.on("close", () => {
       pinned = false;
     });
@@ -673,14 +668,12 @@ export function PoiLayer({
     map.on("mouseenter", layerId, handleEnter);
     map.on("mousemove", layerId, handleHoverMove);
     map.on("mouseleave", layerId, handleLeave);
-    map.on("click", handleOutsideClick);
 
     return () => {
       map.off("click", layerId, handleClick);
       map.off("mouseenter", layerId, handleEnter);
       map.off("mousemove", layerId, handleHoverMove);
       map.off("mouseleave", layerId, handleLeave);
-      map.off("click", handleOutsideClick);
       popup.remove();
       try {
         if (map.getLayer(layerId)) map.removeLayer(layerId);
