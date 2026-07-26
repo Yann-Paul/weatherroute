@@ -628,10 +628,13 @@ export function PoiLayer({
         feature.geometry.type === "Point"
           ? (feature.geometry.coordinates as [number, number])
           : [e.lngLat.lng, e.lngLat.lat];
-      popup
-        .setLngLat(coords)
-        .setDOMContent(buildContent(feature, coords))
-        .addTo(map);
+      // Popup#addTo() closes-then-reopens (firing a "close" event) whenever
+      // the popup is already open, so calling it unconditionally on every
+      // hover/click made the "close" listener below immediately un-pin a
+      // marker right after handleClick had just pinned it. Only call addTo
+      // for the actual first open.
+      popup.setLngLat(coords).setDOMContent(buildContent(feature, coords));
+      if (!popup.isOpen()) popup.addTo(map);
     };
 
     const handleClick = (
