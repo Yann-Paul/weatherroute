@@ -1459,6 +1459,7 @@ _POI_SELECTORS: dict[str, List[tuple]] = {
     "picnic": [("tourism", "picnic_site", False, False), ("leisure", "picnic_table", True, False)],
     "water": [("amenity", "drinking_water", True, False)],
     "toilets": [("amenity", "toilets", False, False)],
+    "shower": [("amenity", "shower", False, False)],
     "fuel": [("amenity", "fuel", False, False)],
     "supermarket": [("shop", "supermarket", False, False), ("shop", "convenience", False, False)],
     "food": [("amenity", "restaurant", False, False), ("amenity", "fast_food", False, False)],
@@ -1480,7 +1481,7 @@ _POI_CATEGORIES = set(_POI_SELECTORS)
 # else stays server-side so untrusted tag soup never reaches the client).
 _POI_DETAIL_TAGS = (
     "shelter_type", "covered", "fee", "access", "capacity", "fireplace",
-    "bench", "table", "drinking_water", "bottle", "seasonal",
+    "bench", "table", "drinking_water", "bottle", "seasonal", "hot_water",
     "opening_hours", "operator", "description",
     "cuisine", "brand", "wheelchair", "ele",
 )

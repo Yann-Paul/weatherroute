@@ -47,7 +47,7 @@ export type BaseLayer = "standard" | "topo";
 // the menu row order.
 export const POI_GROUPS = [
   { id: "supplies", categories: ["water", "supermarket", "food", "bakery", "cafe"] },
-  { id: "rest", categories: ["shelter", "picnic", "toilets", "camping"] },
+  { id: "rest", categories: ["shelter", "picnic", "toilets", "shower", "camping"] },
   { id: "services", categories: ["fuel", "atm", "bike_repair", "bike_tube", "train"] },
   { id: "sights", categories: ["park", "beach", "attraction", "pass"] },
 ] as const satisfies readonly { id: string; categories: readonly PoiCategory[] }[];
@@ -74,6 +74,7 @@ export const POI_COLORS: Record<PoiCategory, string> = {
   picnic: "#f97316",
   water: "#0ea5e9",
   toilets: "#64748b",
+  shower: "#06b6d4",
   fuel: "#ef4444",
   supermarket: "#eab308",
   food: "#ec4899",

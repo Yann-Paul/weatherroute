@@ -189,7 +189,7 @@ Interaktive Punkt-für-Punkt-Routenplanung mit BRouter — die Karte füllt das 
 **Kartenebenen (Layer-Menü oben rechts)**
 - **Basiskarte**: Standard (Carto hell/dunkel, folgt dem App-Theme) oder Topographisch (OpenTopoMap mit Höhenlinien)
 - **POI-Overlays** entlang eines Korridors um die geroutete Strecke (OpenStreetMap via Overpass), einzeln zuschaltbar mit eigener Punktfarbe:
-  - Schutzhütten, Picknickplätze, Trinkwasser, Toiletten
+  - Schutzhütten, Picknickplätze, Trinkwasser, Toiletten, Duschen
   - Tankstellen, Supermärkte (inkl. Convenience-Läden), Restaurants & Imbisse, Bäckereien, Cafés
   - Campingplätze, Geldautomaten, Fahrradreparatur (Läden + Reparaturstationen), Schlauchautomaten
   - Bahnhöfe, Parks, Strände, Sehenswürdigkeiten (inkl. Aussichtspunkte), Pässe
@@ -868,7 +868,7 @@ weatherroute/
 | `POST` | `/api/destination-jobs` | Zielsuche starten |
 | `POST` | `/api/gpx/jobs` | GPX-Analyse starten |
 | `POST` | `/api/route-planner/preview` | Streckenplaner: Live-Routenvorschau (BRouter) |
-| `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (18 Kategorien: Schutzhütten, Trinkwasser, Tankstellen, Supermärkte, Bahnhöfe, Pässe, …) im Routenkorridor (Overpass) |
+| `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (19 Kategorien: Schutzhütten, Trinkwasser, Duschen, Tankstellen, Supermärkte, Bahnhöfe, Pässe, …) im Routenkorridor (Overpass) |
 | `POST` | `/api/route-planner/wind-shelter` | Streckenplaner: Waldflächen + Windschutz-Samples für Wald-/Windexpositions-Overlay (Overpass) |
 | `POST` | `/api/route-planner/jobs` | Streckenplaner: Route + Wetteranalyse starten |
 | `GET` | `/api/saved-routes` | Gespeicherte Routen auflisten |

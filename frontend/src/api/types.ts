@@ -338,6 +338,7 @@ export type PoiCategory =
   | "picnic"
   | "water"
   | "toilets"
+  | "shower"
   | "fuel"
   | "supermarket"
   | "food"
