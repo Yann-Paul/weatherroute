@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GpxElevationChart } from "@/components/gpx/GpxElevationChart";
 import { GpxMarkers } from "@/components/gpx/GpxRouteMap";
 import {
@@ -39,6 +40,7 @@ import {
   getJobStatus,
   getGpxResults,
   fetchWindShelter,
+  fetchRoadInfo,
 } from "@/api/client";
 import type {
   GeocodeResult,
@@ -46,6 +48,7 @@ import type {
   GpxJobResults,
   MapPoi,
   PoiCategory,
+  RoadInfoResult,
   RoutePlannerPoint,
   WindShelterResult,
 } from "@/api/types";
@@ -87,11 +90,19 @@ import {
   RainRadarPanel,
   useRainRadar,
 } from "@/components/planner/RainRadar";
+import {
+  RoadHighlightLayer,
+  RoadProfileBarChart,
+  roadCategoryColor,
+  type RoadDimension,
+} from "@/components/planner/RoadProfile";
 
 const PROFILES = ["trekking", "fastbike", "mtb", "safety"] as const;
 type Profile = (typeof PROFILES)[number];
 
 type WeatherStatus = "idle" | "pending" | "running" | "done" | "error";
+type ProfileTab = "weather" | "surface" | "roadType";
+type RoadHighlight = { dimension: RoadDimension; category: string } | null;
 
 const GERMANY_CENTER: [number, number] = [10.4515, 51.1657];
 
@@ -242,6 +253,8 @@ function RouteMapView({
   overlays,
   poisByCategory,
   windShelter,
+  roadInfo,
+  roadHighlight,
   pendingPoint,
   onConfirmPending,
   onCancelPending,
@@ -259,6 +272,8 @@ function RouteMapView({
   overlays: OverlayState;
   poisByCategory: Record<PoiCategory, MapPoi[]>;
   windShelter: WindShelterResult | null;
+  roadInfo: RoadInfoResult | null;
+  roadHighlight: RoadHighlight;
   pendingPoint: RoutePlannerPoint | null;
   onConfirmPending: (mode: "append" | "insert") => void;
   onCancelPending: () => void;
@@ -293,6 +308,14 @@ function RouteMapView({
         <WindExposureLayer
           samples={windShelter.samples}
           weatherPoints={weatherResult.weatherPoints}
+        />
+      )}
+      {roadInfo && roadHighlight && (
+        <RoadHighlightLayer
+          samples={roadInfo.samples}
+          dimension={roadHighlight.dimension}
+          category={roadHighlight.category}
+          color={roadCategoryColor(roadHighlight.dimension, roadHighlight.category)}
         />
       )}
       {POI_CATEGORIES.filter((cat) => overlays[cat]).map((cat) => (
@@ -608,6 +631,12 @@ function ProfileWindow({
   collapsed,
   onToggleCollapsed,
   onRefresh,
+  profileTab,
+  onProfileTabChange,
+  roadInfo,
+  roadInfoLoading,
+  roadHighlight,
+  onSelectRoadCategory,
 }: {
   status: WeatherStatus;
   message: string;
@@ -617,6 +646,12 @@ function ProfileWindow({
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onRefresh: () => void;
+  profileTab: ProfileTab;
+  onProfileTabChange: (tab: ProfileTab) => void;
+  roadInfo: RoadInfoResult | null;
+  roadInfoLoading: boolean;
+  roadHighlight: RoadHighlight;
+  onSelectRoadCategory: (dimension: RoadDimension, category: string | null) => void;
 }) {
   const t = useT();
   const rp = t.routePlanner;
@@ -634,7 +669,7 @@ function ProfileWindow({
           {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
         </div>
         <div className="flex items-center gap-3">
-          {(status === "done" || status === "error") && (
+          {profileTab === "weather" && (status === "done" || status === "error") && (
             <button
               type="button"
               onClick={onRefresh}
@@ -658,39 +693,69 @@ function ProfileWindow({
 
       {!collapsed && (
         <div className="max-h-[260px] overflow-y-auto border-t border-border px-4 py-3">
-          {busy && !result && (
-            <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <p>{message || rp.weatherButtonLoading}</p>
-            </div>
-          )}
+          <Tabs value={profileTab} onValueChange={(v) => onProfileTabChange(v as ProfileTab)}>
+            <TabsList className="mb-3">
+              <TabsTrigger value="weather">{rp.profileTabs.weather}</TabsTrigger>
+              <TabsTrigger value="surface">{rp.profileTabs.surface}</TabsTrigger>
+              <TabsTrigger value="roadType">{rp.profileTabs.roadType}</TabsTrigger>
+            </TabsList>
 
-          {status === "error" && !result && (
-            <Alert variant="destructive">
-              <AlertDescription>{error || rp.weatherErrorFallback}</AlertDescription>
-            </Alert>
-          )}
-
-          {result && (
-            <>
-              {status === "error" && (
-                <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-foreground">
-                  {error || rp.weatherErrorFallback}
+            <TabsContent value="weather">
+              {busy && !result && (
+                <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <p>{message || rp.weatherButtonLoading}</p>
                 </div>
               )}
-              {status === "done" && stale && (
-                <div className="mb-3 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-foreground">
-                  {rp.weatherStale}
-                </div>
+
+              {status === "error" && !result && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error || rp.weatherErrorFallback}</AlertDescription>
+                </Alert>
               )}
-              <GpxElevationChart
-                elevation={result.elevation}
-                weatherPoints={result.weatherPoints}
-                dailyConfigs={result.dailyConfigs}
-                startDate={result.startDate}
+
+              {result && (
+                <>
+                  {status === "error" && (
+                    <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-foreground">
+                      {error || rp.weatherErrorFallback}
+                    </div>
+                  )}
+                  {status === "done" && stale && (
+                    <div className="mb-3 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-foreground">
+                      {rp.weatherStale}
+                    </div>
+                  )}
+                  <GpxElevationChart
+                    elevation={result.elevation}
+                    weatherPoints={result.weatherPoints}
+                    dailyConfigs={result.dailyConfigs}
+                    startDate={result.startDate}
+                  />
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="surface">
+              <RoadProfileBarChart
+                samples={roadInfo?.samples}
+                dimension="surface"
+                selected={roadHighlight?.dimension === "surface" ? roadHighlight.category : null}
+                onSelect={(category) => onSelectRoadCategory("surface", category)}
+                loading={roadInfoLoading}
               />
-            </>
-          )}
+            </TabsContent>
+
+            <TabsContent value="roadType">
+              <RoadProfileBarChart
+                samples={roadInfo?.samples}
+                dimension="highway"
+                selected={roadHighlight?.dimension === "highway" ? roadHighlight.category : null}
+                onSelect={(category) => onSelectRoadCategory("highway", category)}
+                loading={roadInfoLoading}
+              />
+            </TabsContent>
+          </Tabs>
         </div>
       )}
     </div>
@@ -747,6 +812,22 @@ export function RoutePlannerPage() {
   const [windShelter, setWindShelter] = useState<WindShelterResult | null>(null);
   const [shelterLoading, setShelterLoading] = useState(false);
   const shelterSigRef = useRef<string | null>(null);
+
+  // ── profile window: weather / surface / road-type tabs
+  const [profileTab, setProfileTab] = useState<ProfileTab>("weather");
+  const [roadInfo, setRoadInfo] = useState<RoadInfoResult | null>(null);
+  const [roadInfoLoading, setRoadInfoLoading] = useState(false);
+  const roadInfoSigRef = useRef<string | null>(null);
+  const [roadHighlight, setRoadHighlight] = useState<RoadHighlight>(null);
+
+  function handleProfileTabChange(tab: ProfileTab) {
+    setProfileTab(tab);
+    setRoadHighlight(null);
+  }
+
+  function handleSelectRoadCategory(dimension: RoadDimension, category: string | null) {
+    setRoadHighlight(category ? { dimension, category } : null);
+  }
 
   // ── weather preview state
   const [weatherStatus, setWeatherStatus] = useState<WeatherStatus>("idle");
@@ -832,6 +913,40 @@ export function RoutePlannerPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needShelterData, previewCoords]);
+
+  // ── surface/road-type profile data: fetched lazily once one of the two
+  // new tabs is opened, and shared between both (one Overpass query covers
+  // both dimensions) — same debounce/signature-caching scheme as above.
+  const needRoadInfo = profileTab === "surface" || profileTab === "roadType";
+  useEffect(() => {
+    if (!needRoadInfo || previewCoords.length < 2) return;
+    const simplified = simplifyPoints(previewCoords, 2000);
+    const sig = JSON.stringify(simplified);
+    if (sig === roadInfoSigRef.current) return;
+    const controller = new AbortController();
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      roadInfoSigRef.current = sig;
+      setRoadInfoLoading(true);
+      fetchRoadInfo(simplified, controller.signal)
+        .then((result) => {
+          if (!cancelled) setRoadInfo(result);
+        })
+        .catch(() => {
+          if (roadInfoSigRef.current === sig) roadInfoSigRef.current = null;
+          if (!cancelled) toast.error(rp.layers.roadInfoError);
+        })
+        .finally(() => {
+          if (!cancelled) setRoadInfoLoading(false);
+        });
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needRoadInfo, previewCoords]);
 
   function handleToggleOverlay(key: keyof OverlayState) {
     setOverlays((o) => ({ ...o, [key]: !o[key] }));
@@ -1061,6 +1176,8 @@ export function RoutePlannerPage() {
           overlays={overlays}
           poisByCategory={poisByCategory}
           windShelter={windShelter}
+          roadInfo={roadInfo}
+          roadHighlight={roadHighlight}
           pendingPoint={pendingPoint}
           onConfirmPending={handleConfirmPending}
           onCancelPending={() => setPendingPoint(null)}
@@ -1138,6 +1255,12 @@ export function RoutePlannerPage() {
             collapsed={weatherCollapsed}
             onToggleCollapsed={() => setWeatherCollapsed((c) => !c)}
             onRefresh={handleRefreshWeather}
+            profileTab={profileTab}
+            onProfileTabChange={handleProfileTabChange}
+            roadInfo={roadInfo}
+            roadInfoLoading={roadInfoLoading}
+            roadHighlight={roadHighlight}
+            onSelectRoadCategory={handleSelectRoadCategory}
           />
         </div>
       )}

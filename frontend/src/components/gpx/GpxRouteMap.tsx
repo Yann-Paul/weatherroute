@@ -20,6 +20,7 @@ import type {
   GpxJobResults,
   GpxNightHour,
   GpxWeatherPoint,
+  RoadInfoResult,
   RoutePlannerPoint,
   WindShelterResult,
 } from "@/api/types";
@@ -54,6 +55,9 @@ import {
   type EditProfile,
   type GpxEditSelection,
 } from "./GpxRouteEditor";
+import { RoadHighlightLayer, roadCategoryColor, type RoadDimension } from "@/components/planner/RoadProfile";
+
+type RoadHighlight = { dimension: RoadDimension; category: string } | null;
 
 // ─── Geo helpers ──────────────────────────────────────────────────────────────
 
@@ -1308,7 +1312,15 @@ function UserLocationMarker({ longitude, latitude }: { longitude: number; latitu
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function GpxRouteMap({ results }: { results: GpxJobResults }) {
+export function GpxRouteMap({
+  results,
+  roadInfo,
+  roadHighlight,
+}: {
+  results: GpxJobResults;
+  roadInfo?: RoadInfoResult | null;
+  roadHighlight?: RoadHighlight;
+}) {
   const [visibleKmRange, setVisibleKmRange] = useState<[number, number] | null>(null);
   const [hoveredKm, setHoveredKm] = useState<number | null>(null);
   const [chartMode, setChartMode] = useState<"elevation" | "temperature">("elevation");
@@ -1594,6 +1606,14 @@ export function GpxRouteMap({ results }: { results: GpxJobResults }) {
         )}
         {overlays.wind && windShelter && (
           <WindExposureLayer samples={windShelter.samples} weatherPoints={results.weatherPoints} />
+        )}
+        {roadInfo && roadHighlight && (
+          <RoadHighlightLayer
+            samples={roadInfo.samples}
+            dimension={roadHighlight.dimension}
+            category={roadHighlight.category}
+            color={roadCategoryColor(roadHighlight.dimension, roadHighlight.category)}
+          />
         )}
         {POI_CATEGORIES.filter((cat) => overlays[cat]).map((cat) => (
           <PoiLayer

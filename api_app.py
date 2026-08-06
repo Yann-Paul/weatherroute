@@ -1667,6 +1667,147 @@ def route_planner_wind_shelter(data: WindShelterRequest):
 
 
 # ---------------------------------------------------------------------------
+# Route planner map features — surface & road-class profile
+# ---------------------------------------------------------------------------
+
+# Tight corridor: we want the way the route actually runs on, not a nearby
+# parallel road, so this is much narrower than the POI/landcover radii above.
+_ROAD_RADIUS_M = 50
+_ROAD_SAMPLE_KM = 0.1
+_ROAD_MATCH_THRESHOLD_M = 35
+
+_SURFACE_PAVED = {
+    "asphalt", "concrete", "concrete:plates", "concrete:lanes",
+    "paving_stones", "sett", "cobblestone", "metal", "wood", "paved",
+}
+_SURFACE_GRAVEL = {"gravel", "fine_gravel", "compacted", "pebblestone"}
+_SURFACE_UNPAVED = {
+    "dirt", "ground", "earth", "grass", "sand", "mud", "woodchips",
+    "unpaved", "clay", "ice", "snow",
+}
+
+
+def _surface_category(tags: dict) -> str:
+    surface = tags.get("surface")
+    if not surface:
+        return "unknown"
+    if surface in _SURFACE_PAVED:
+        return "paved"
+    if surface in _SURFACE_GRAVEL:
+        return "gravel"
+    if surface in _SURFACE_UNPAVED:
+        return "unpaved"
+    return "unknown"
+
+
+_HIGHWAY_CATEGORY = {
+    "motorway": "motorway", "motorway_link": "motorway",
+    "trunk": "motorway", "trunk_link": "motorway",
+    "primary": "primary", "primary_link": "primary",
+    "secondary": "secondary", "secondary_link": "secondary",
+    "tertiary": "tertiary", "tertiary_link": "tertiary",
+    "unclassified": "minor", "residential": "minor", "living_street": "minor",
+    "service": "service",
+    "track": "track",
+    "path": "path", "footway": "path", "cycleway": "path",
+    "bridleway": "path", "steps": "path", "pedestrian": "path",
+}
+
+
+def _road_category(tags: dict) -> str:
+    return _HIGHWAY_CATEGORY.get(tags.get("highway"), "other")
+
+
+def _point_seg_dist_m(
+    lat: float, lon: float, alat: float, alon: float, blat: float, blon: float
+) -> float:
+    """Point-to-segment distance in meters (planar approx, cos(lat)-corrected
+    like the frontend's sqDistToSegment — fine at road-matching scale)."""
+    kx = math.cos(math.radians(lat)) * 111_320.0
+    ky = 111_320.0
+    ax, ay = alon * kx, alat * ky
+    bx, by = blon * kx, blat * ky
+    px, py = lon * kx, lat * ky
+    dx, dy = bx - ax, by - ay
+    len_sq = dx * dx + dy * dy
+    t = 0.0 if len_sq == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / len_sq))
+    cx, cy = ax + t * dx, ay + t * dy
+    return math.hypot(px - cx, py - cy)
+
+
+class RoadInfoRequest(BaseModel):
+    points: List[RoutePlannerPoint]
+
+
+@app.post("/api/route-planner/road-info")
+def route_planner_road_info(data: RoadInfoRequest):
+    """Surface (asphalt/gravel/unpaved) and road-class (motorway/primary/...)
+    profile of the route, derived from OSM `surface`/`highway` tags on ways
+    near the route. Evenly spaced route samples are matched to the nearest
+    way within _ROAD_MATCH_THRESHOLD_M; unmatched samples are "unknown".
+    Both dimensions come from a single Overpass query/response so the two
+    frontend tabs (surface, road type) share one fetch.
+    """
+    if len(data.points) < 2:
+        raise HTTPException(400, "Mindestens 2 Punkte nötig")
+    latlons = [(p.lat, p.lon) for p in data.points]
+
+    around = _around_polyline(latlons, _ROAD_RADIUS_M)
+    query = f'[out:json][timeout:30];(way["highway"]{around};);out geom 3000;'
+    try:
+        raw = _overpass_query(query)
+    except requests.RequestException as e:
+        raise HTTPException(502, f"Overpass nicht erreichbar: {e}")
+
+    # (bbox, points, surface_cat, road_cat) — bbox as (min_lat, min_lon, max_lat, max_lon)
+    ways = []
+    for el in raw.get("elements", []):
+        geom = el.get("geometry")
+        if not geom or len(geom) < 2:
+            continue
+        tags = el.get("tags", {})
+        pts = [(g["lat"], g["lon"]) for g in geom]
+        lats = [p[0] for p in pts]
+        lons = [p[1] for p in pts]
+        ways.append((
+            (min(lats), min(lons), max(lats), max(lons)),
+            pts,
+            _surface_category(tags),
+            _road_category(tags),
+        ))
+
+    # padding for the bbox pre-filter, converted from meters to degrees
+    pad_lat = _ROAD_MATCH_THRESHOLD_M / 111_320.0
+
+    samples = []
+    for lat, lon, km in _sample_polyline(latlons, _ROAD_SAMPLE_KM):
+        pad_lon = pad_lat / max(0.1, math.cos(math.radians(lat)))
+        best_dist = math.inf
+        best_surface = "unknown"
+        best_road = "unknown"
+        for (min_lat, min_lon, max_lat, max_lon), pts, surface_cat, road_cat in ways:
+            if not (
+                min_lat - pad_lat <= lat <= max_lat + pad_lat
+                and min_lon - pad_lon <= lon <= max_lon + pad_lon
+            ):
+                continue
+            for a, b in zip(pts, pts[1:]):
+                d = _point_seg_dist_m(lat, lon, a[0], a[1], b[0], b[1])
+                if d < best_dist:
+                    best_dist = d
+                    best_surface = surface_cat
+                    best_road = road_cat
+        if best_dist > _ROAD_MATCH_THRESHOLD_M:
+            best_surface, best_road = "unknown", "unknown"
+        samples.append({
+            "lat": lat, "lon": lon, "km": km,
+            "surface": best_surface, "highway": best_road,
+        })
+
+    return {"samples": samples}
+
+
+# ---------------------------------------------------------------------------
 # Background calculation
 # ---------------------------------------------------------------------------
 

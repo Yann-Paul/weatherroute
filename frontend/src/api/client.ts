@@ -22,6 +22,7 @@ import type {
   MapPoi,
   PoiCategory,
   WindShelterResult,
+  RoadInfoResult,
 } from "./types";
 
 const BASE = "/api";
@@ -125,6 +126,17 @@ export async function fetchWindShelter(
   signal?: AbortSignal
 ): Promise<WindShelterResult> {
   return request("/route-planner/wind-shelter", {
+    method: "POST",
+    body: JSON.stringify({ points }),
+    signal,
+  });
+}
+
+export async function fetchRoadInfo(
+  points: RoutePlannerPoint[],
+  signal?: AbortSignal
+): Promise<RoadInfoResult> {
+  return request("/route-planner/road-info", {
     method: "POST",
     body: JSON.stringify({ points }),
     signal,

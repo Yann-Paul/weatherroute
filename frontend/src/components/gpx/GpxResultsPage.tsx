@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams } from "react-router";
+import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -9,8 +10,9 @@ import {
   getGpxModelForecast,
   fetchForecastViaBrowser,
   fetchGpxStopsViaBrowser,
+  fetchRoadInfo,
 } from "@/api/client";
-import type { GpxJobResults, GpxWeatherPoint } from "@/api/types";
+import type { GpxJobResults, GpxWeatherPoint, RoadInfoResult } from "@/api/types";
 import { CLIENT_FALLBACK_NEEDED } from "@/api/types";
 import { useT } from "@/i18n/useT";
 import { GpxRouteMap } from "./GpxRouteMap";
@@ -18,6 +20,10 @@ import { GpxElevationChart } from "./GpxElevationChart";
 import { GpxTemperatureChart } from "./GpxTemperatureChart";
 import { GpxWeatherTable } from "./GpxWeatherTable";
 import { GpxModelBadges } from "./GpxModelBadges";
+import { simplifyPoints } from "@/components/planner/MapLayers";
+import { RoadProfileBarChart, type RoadDimension } from "@/components/planner/RoadProfile";
+
+type RoadHighlight = { dimension: RoadDimension; category: string } | null;
 
 type ModelOverride = Record<string, {
   temp: number | null; prcp: number | null;
@@ -49,6 +55,22 @@ export function GpxResultsPage() {
   const [pendingModel, setPendingModel] = useState<string | null>(null);
   const [modelLoading, setModelLoading] = useState(false);
   const [modelCache, setModelCache] = useState<Record<string, ModelOverride>>({});
+
+  // Surface / road-type profile tabs
+  const [activeTab, setActiveTab] = useState("map");
+  const [roadInfo, setRoadInfo] = useState<RoadInfoResult | null>(null);
+  const [roadInfoLoading, setRoadInfoLoading] = useState(false);
+  const roadInfoSigRef = useRef<string | null>(null);
+  const [roadHighlight, setRoadHighlight] = useState<RoadHighlight>(null);
+
+  function handleTabChange(tab: string) {
+    setActiveTab(tab);
+    setRoadHighlight(null);
+  }
+
+  function handleSelectRoadCategory(dimension: RoadDimension, category: string | null) {
+    setRoadHighlight(category ? { dimension, category } : null);
+  }
 
   useEffect(() => {
     if (!jobId) return;
@@ -152,6 +174,40 @@ export function GpxResultsPage() {
     if (!pts.length) return null;
     return { start: pts[0].km, end: pts[pts.length - 1].km };
   }, [results]);
+
+  // Surface/road-type profile data: fetched lazily once one of the two new
+  // tabs is opened (one Overpass query covers both dimensions), mirroring
+  // the same fetch pattern used by RoutePlannerPage.
+  const needRoadInfo = activeTab === "surface" || activeTab === "roadType";
+  useEffect(() => {
+    if (!needRoadInfo || !results || results.trackPoints.length < 2) return;
+    const simplified = simplifyPoints(
+      results.trackPoints.map(([lat, lon]) => ({ lat, lon })),
+      2000
+    );
+    const sig = JSON.stringify(simplified);
+    if (sig === roadInfoSigRef.current) return;
+    const controller = new AbortController();
+    let cancelled = false;
+    roadInfoSigRef.current = sig;
+    setRoadInfoLoading(true);
+    fetchRoadInfo(simplified, controller.signal)
+      .then((result) => {
+        if (!cancelled) setRoadInfo(result);
+      })
+      .catch(() => {
+        if (roadInfoSigRef.current === sig) roadInfoSigRef.current = null;
+        if (!cancelled) toast.error(t.routePlanner.layers.roadInfoError);
+      })
+      .finally(() => {
+        if (!cancelled) setRoadInfoLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needRoadInfo, results]);
 
   async function handleSelectModel(model: string) {
     if (modelLoading || model === selectedModel || !jobId) return;
@@ -260,13 +316,15 @@ export function GpxResultsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="map">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="flex flex-wrap items-center gap-2">
           <TabsList className="justify-start">
             <TabsTrigger value="map">{t.gpx.results.tabMap}</TabsTrigger>
             <TabsTrigger value="elevation">{t.gpx.results.tabElevation}</TabsTrigger>
             <TabsTrigger value="temperature">{t.gpx.results.tabTemperature}</TabsTrigger>
             <TabsTrigger value="weather">{t.gpx.results.tabWeather}</TabsTrigger>
+            <TabsTrigger value="surface">{t.gpx.results.tabSurface}</TabsTrigger>
+            <TabsTrigger value="roadType">{t.gpx.results.tabRoadType}</TabsTrigger>
           </TabsList>
           {forecastRange && (
             <div className="ml-auto shrink-0">
@@ -284,7 +342,11 @@ export function GpxResultsPage() {
         </div>
 
         <TabsContent value="map">
-          <GpxRouteMap results={{ ...results, weatherPoints: activeWeatherPoints }} />
+          <GpxRouteMap
+            results={{ ...results, weatherPoints: activeWeatherPoints }}
+            roadInfo={roadInfo}
+            roadHighlight={roadHighlight}
+          />
         </TabsContent>
 
         <TabsContent value="elevation">
@@ -323,6 +385,34 @@ export function GpxResultsPage() {
 
         <TabsContent value="weather">
           <GpxWeatherTable weatherPoints={activeWeatherPoints} />
+        </TabsContent>
+
+        <TabsContent value="surface">
+          <Card>
+            <CardContent className="pt-4">
+              <RoadProfileBarChart
+                samples={roadInfo?.samples}
+                dimension="surface"
+                selected={roadHighlight?.dimension === "surface" ? roadHighlight.category : null}
+                onSelect={(category) => handleSelectRoadCategory("surface", category)}
+                loading={roadInfoLoading}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="roadType">
+          <Card>
+            <CardContent className="pt-4">
+              <RoadProfileBarChart
+                samples={roadInfo?.samples}
+                dimension="highway"
+                selected={roadHighlight?.dimension === "highway" ? roadHighlight.category : null}
+                onSelect={(category) => handleSelectRoadCategory("highway", category)}
+                loading={roadInfoLoading}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

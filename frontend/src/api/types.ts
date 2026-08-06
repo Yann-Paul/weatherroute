@@ -394,6 +394,31 @@ export interface WindShelterResult {
   forest: ForestGeoJson;
 }
 
+export type SurfaceCategory = "paved" | "gravel" | "unpaved" | "unknown";
+
+export type RoadCategory =
+  | "motorway"
+  | "primary"
+  | "secondary"
+  | "tertiary"
+  | "minor"
+  | "service"
+  | "track"
+  | "path"
+  | "other";
+
+export interface RoadInfoSample {
+  lat: number;
+  lon: number;
+  km: number;
+  surface: SurfaceCategory;
+  highway: RoadCategory;
+}
+
+export interface RoadInfoResult {
+  samples: RoadInfoSample[];
+}
+
 export interface SavedRouteSummary {
   id: string;
   name: string;
