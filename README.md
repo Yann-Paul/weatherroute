@@ -189,12 +189,13 @@ Interaktive Punkt-für-Punkt-Routenplanung mit BRouter — die Karte füllt das 
 **Kartenebenen (Layer-Menü oben rechts)**
 - **Basiskarte**: Standard (Carto hell/dunkel, folgt dem App-Theme) oder Topographisch (OpenTopoMap mit Höhenlinien)
 - **POI-Overlays** entlang eines Korridors um die geroutete Strecke (OpenStreetMap via Overpass), einzeln zuschaltbar mit eigener Punktfarbe:
-  - Schutzhütten, Picknickplätze, Trinkwasser, Toiletten, Duschen
+  - Schutzhütten, Picknickplätze, Trinkwasser, Toiletten, Duschen, Raststellplätze (Wohnmobilstellplätze + Autobahnraststätten/Rastplätze)
   - Tankstellen, Supermärkte (inkl. Convenience-Läden), Restaurants & Imbisse, Bäckereien, Cafés
-  - Campingplätze, Geldautomaten, Fahrradreparatur (Läden + Reparaturstationen), Schlauchautomaten
+  - Campingplätze, Geldautomaten, Apotheken, Fahrradreparatur (Läden + Reparaturstationen), Schlauchautomaten
   - Bahnhöfe, Parks, Strände, Sehenswürdigkeiten (inkl. Aussichtspunkte), Pässe
   - Beim **Hovern** über einen POI erscheint ein Tooltip mit Name, Kategorie und weiteren OSM-Details (z. B. überdacht, Gebühr, Öffnungszeiten, Küche, Rollstuhlgerecht, Höhe bei Pässen) sowie einem Link **„In Google Maps öffnen"** (öffnet die Koordinaten in neuem Tab, kein API-Key nötig); auf Touch-Geräten öffnet ein Tipp auf den Punkt dasselbe Popup
 - **Wald-Overlay**: halbtransparente Waldflächen aus dem Korridor um die Route (Grundlage der Windschutz-Analyse)
+- **Regenradar** (Panel unter dem Ebenen-Menü, oben rechts): dasselbe RainViewer-Overlay wie in den [GPX-Ergebnissen](#gpx-analyse-gpx) — Ein/Aus-Schalter, Zeit-Slider mit Play/Pause über die letzten 2h, Deckkraft-Regler, „Live"-Modus; rein client-seitig, nur privat/nicht-kommerziell nutzbar
 - **Windexposition**: färbt die Route segmentweise nach effektivem Wind — kombiniert die Windvorhersage (Geschwindigkeit + Richtung relativ zur Fahrtrichtung: Gegenwind zählt voll, Rückenwind kaum) mit der Landbedeckung (Wald/Bebauung dämpfen den Wind); Legende grün/gelb/rot (geschützt / mäßig / stark exponiert). Benötigt geladene Wetterdaten
 - Alle Overlays setzen eine berechnete Route voraus. POI-Kategorien werden einzeln geladen — jede neu aktivierte, noch nicht geladene Kategorie löst ihre eigene Overpass-Anfrage aus (nicht gebündelt); bereits geladene Kategorien werden pro Streckensignatur gecacht, damit ein Toggle nicht erneut abfragt. Siehe [Overpass-Zuverlässigkeit](#overpass-zuverlässigkeit-streckenplaner-overlays) für Details zu Mirror-Racing und Query-Caching
 
@@ -759,10 +760,10 @@ langsam oder zeitweise unerreichbar sein kann. Um Wartezeiten zu begrenzen:
 
 ### Regenradar (RainViewer, rein client-seitig)
 
-Anders als die Wetter-APIs oben läuft das Regenradar-Overlay in den GPX-Ergebnissen **nie über den
-Server** — sowohl die Frame-Liste (`api.rainviewer.com/public/weather-maps.json`) als auch die
-Kachelbilder selbst (`tilecache.rainviewer.com`) werden direkt vom Browser der Nutzerin/des
-Nutzers geladen (`GpxRouteMap.tsx`). Das hat zwei Konsequenzen:
+Anders als die Wetter-APIs oben läuft das Regenradar-Overlay (GPX-Ergebnisse und Streckenplaner)
+**nie über den Server** — sowohl die Frame-Liste (`api.rainviewer.com/public/weather-maps.json`)
+als auch die Kachelbilder selbst (`tilecache.rainviewer.com`) werden direkt vom Browser der
+Nutzerin/des Nutzers geladen (`RainRadar.tsx`). Das hat zwei Konsequenzen:
 
 - Das Rate-Limit von RainViewer (100 Requests/IP/Minute) gilt pro Besucher, nicht aggregiert über
   alle App-Nutzer.
@@ -806,6 +807,7 @@ weatherroute/
 │       │   │   ├── SavedRoutesList.tsx # Gespeicherte Routen
 │       │   │   ├── RoutePlannerPage.tsx # Streckenplaner (BRouter, Vollbild-Karte)
 │       │   │   ├── MapLayers.tsx       # Layer-Menü + POI-/Wald-/Windexpositions-Overlays
+│       │   │   ├── RainRadar.tsx       # Regenradar-Overlay + Panel (RainViewer, geteilt mit GPX)
 │       │   │   └── AddressSearch.tsx   # Adress-/Ortssuche (Photon)
 │       │   ├── progress/
 │       │   │   ├── ProgressPage.tsx    # Fortschrittsanzeige
@@ -868,7 +870,7 @@ weatherroute/
 | `POST` | `/api/destination-jobs` | Zielsuche starten |
 | `POST` | `/api/gpx/jobs` | GPX-Analyse starten |
 | `POST` | `/api/route-planner/preview` | Streckenplaner: Live-Routenvorschau (BRouter) |
-| `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (19 Kategorien: Schutzhütten, Trinkwasser, Duschen, Tankstellen, Supermärkte, Bahnhöfe, Pässe, …) im Routenkorridor (Overpass) |
+| `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (21 Kategorien: Schutzhütten, Trinkwasser, Duschen, Raststellplätze, Tankstellen, Supermärkte, Apotheken, Bahnhöfe, Pässe, …) im Routenkorridor (Overpass) |
 | `POST` | `/api/route-planner/wind-shelter` | Streckenplaner: Waldflächen + Windschutz-Samples für Wald-/Windexpositions-Overlay (Overpass) |
 | `POST` | `/api/route-planner/jobs` | Streckenplaner: Route + Wetteranalyse starten |
 | `GET` | `/api/saved-routes` | Gespeicherte Routen auflisten |

@@ -82,6 +82,11 @@ import {
   type BaseLayer,
   type OverlayState,
 } from "@/components/planner/MapLayers";
+import {
+  RainRadarLayer,
+  RainRadarPanel,
+  useRainRadar,
+} from "@/components/planner/RainRadar";
 
 const PROFILES = ["trekking", "fastbike", "mtb", "safety"] as const;
 type Profile = (typeof PROFILES)[number];
@@ -241,6 +246,8 @@ function RouteMapView({
   onConfirmPending,
   onCancelPending,
   focusTarget,
+  radarTileUrl,
+  radarOpacity,
 }: {
   points: RoutePlannerPoint[];
   previewCoords: RoutePlannerPoint[];
@@ -256,6 +263,8 @@ function RouteMapView({
   onConfirmPending: (mode: "append" | "insert") => void;
   onCancelPending: () => void;
   focusTarget: { lat: number; lon: number } | null;
+  radarTileUrl: string | null;
+  radarOpacity: number;
 }) {
   const t = useT();
   const rp = t.routePlanner;
@@ -275,6 +284,7 @@ function RouteMapView({
       <ClickCapture onMapClick={onMapClick} />
       <FitOnce coordinates={points.map((p) => [p.lon, p.lat])} />
       <FlyTo target={focusTarget} />
+      {radarTileUrl && <RainRadarLayer tileUrl={radarTileUrl} opacity={radarOpacity} />}
       {overlays.forest && windShelter && <ForestLayer data={windShelter.forest} />}
       {routeLine.length > 1 && (
         <MapRoute coordinates={routeLine} color="hsl(var(--primary))" width={4} opacity={0.85} />
@@ -731,6 +741,7 @@ export function RoutePlannerPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // ── map layer state
+  const radar = useRainRadar();
   const [baseLayer, setBaseLayer] = useState<BaseLayer>("standard");
   const [overlays, setOverlays] = useState<OverlayState>(NO_OVERLAYS);
   const [windShelter, setWindShelter] = useState<WindShelterResult | null>(null);
@@ -1054,9 +1065,11 @@ export function RoutePlannerPage() {
           onConfirmPending={handleConfirmPending}
           onCancelPending={() => setPendingPoint(null)}
           focusTarget={focusTarget}
+          radarTileUrl={radar.enabled ? radar.tileUrl : null}
+          radarOpacity={radar.opacity}
         />
 
-        <div className="absolute right-3 top-3 z-20">
+        <div className="absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
           <LayersMenu
             base={baseLayer}
             onBaseChange={setBaseLayer}
@@ -1067,6 +1080,9 @@ export function RoutePlannerPage() {
             poisLoading={poisLoading}
             shelterLoading={shelterLoading}
           />
+          <div className="w-56 max-w-[calc(100vw-1.5rem)]">
+            <RainRadarPanel {...radar.panelProps} />
+          </div>
         </div>
 
         <div
