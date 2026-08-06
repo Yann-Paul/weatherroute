@@ -3815,7 +3815,10 @@ FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
 if FRONTEND_DIST.exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
 
-    @app.get("/{full_path:path}")
+    # methods=["GET", "HEAD"]: this FastAPI/Starlette version doesn't auto-add
+    # HEAD support to a GET route, so Render's HEAD / health check 405'd here
+    # and the deploy timed out waiting for a healthy response.
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
     async def serve_spa(full_path: str):
         # Serve static files if they exist, otherwise serve index.html for SPA routing
         file_path = FRONTEND_DIST / full_path
