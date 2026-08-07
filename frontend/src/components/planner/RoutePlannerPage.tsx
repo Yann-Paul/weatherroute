@@ -80,8 +80,10 @@ import {
   PoiLayer,
   POI_CATEGORIES,
   POI_COLORS,
+  RoadsOverlayLayer,
   simplifyPoints,
   TopoOverlayLayer,
+  TransitOverlayLayer,
   useMapOverlays,
   usePoiOverlay,
   WindExposureLayer,
@@ -307,6 +309,8 @@ function RouteMapView({
       <FlyTo target={focusTarget} />
       {mapOverlays.topo.enabled && <TopoOverlayLayer opacity={mapOverlays.topo.opacity} />}
       {mapOverlays.cycling.enabled && <CyclingOverlayLayer opacity={mapOverlays.cycling.opacity} />}
+      {mapOverlays.roads.enabled && <RoadsOverlayLayer opacity={mapOverlays.roads.opacity} />}
+      {mapOverlays.transit.enabled && <TransitOverlayLayer opacity={mapOverlays.transit.opacity} />}
       {radarTileUrl && <RainRadarLayer tileUrl={radarTileUrl} opacity={radarOpacity} />}
       {overlays.forest && windShelter && <ForestLayer data={windShelter.forest} />}
       {routeLine.length > 1 && (

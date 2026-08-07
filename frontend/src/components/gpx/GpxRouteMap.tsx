@@ -39,8 +39,10 @@ import {
   PoiLayer,
   POI_CATEGORIES,
   POI_COLORS,
+  RoadsOverlayLayer,
   simplifyPoints,
   TopoOverlayLayer,
+  TransitOverlayLayer,
   useMapOverlays,
   usePoiOverlay,
   WindExposureLayer,
@@ -1582,6 +1584,12 @@ export function GpxRouteMap({
         {mapOverlays.state.topo.enabled && <TopoOverlayLayer opacity={mapOverlays.state.topo.opacity} />}
         {mapOverlays.state.cycling.enabled && (
           <CyclingOverlayLayer opacity={mapOverlays.state.cycling.opacity} />
+        )}
+        {mapOverlays.state.roads.enabled && (
+          <RoadsOverlayLayer opacity={mapOverlays.state.roads.opacity} />
+        )}
+        {mapOverlays.state.transit.enabled && (
+          <TransitOverlayLayer opacity={mapOverlays.state.transit.opacity} />
         )}
         {radar.enabled && radar.tileUrl && <RainRadarLayer tileUrl={radar.tileUrl} opacity={radar.opacity} />}
         {overlays.forest && windShelter && <ForestLayer data={windShelter.forest} />}

@@ -135,7 +135,7 @@ export function baseLayerStyles(base: BaseLayer) {
 // pattern as RainRadarLayer, so e.g. cycling infrastructure can be shown
 // semi-transparently over the standard or topographic base map at once.
 
-export type TileOverlayKey = "topo" | "cycling";
+export type TileOverlayKey = "topo" | "cycling" | "roads" | "transit";
 
 export type TileOverlayState = { enabled: boolean; opacity: number };
 
@@ -144,6 +144,8 @@ export type MapOverlaysState = Record<TileOverlayKey, TileOverlayState>;
 export const DEFAULT_MAP_OVERLAYS: MapOverlaysState = {
   topo: { enabled: false, opacity: 0.6 },
   cycling: { enabled: false, opacity: 0.6 },
+  roads: { enabled: false, opacity: 0.6 },
+  transit: { enabled: false, opacity: 0.6 },
 };
 
 export function useMapOverlays() {
@@ -575,6 +577,8 @@ export function LayersMenu({
             <p className="text-xs font-semibold text-muted-foreground">{ly.mapOverlaysHeading}</p>
             {mapOverlayRow("topo", ly.baseTopo)}
             {mapOverlayRow("cycling", ly.baseCycling)}
+            {mapOverlayRow("roads", ly.baseRoads)}
+            {mapOverlayRow("transit", ly.baseTransit)}
           </div>
 
           <div className="h-px bg-border" />
@@ -750,6 +754,34 @@ export function CyclingOverlayLayer({ opacity }: { opacity: number }) {
       tiles={CYCLOSM_TILES}
       maxzoom={20}
       attribution={CYCLOSM_ATTRIBUTION}
+      opacity={opacity}
+    />
+  );
+}
+
+/** OSM standard road rendering overlaid semi-transparently on top of
+ * whichever base map is currently active. */
+export function RoadsOverlayLayer({ opacity }: { opacity: number }) {
+  return (
+    <TileOverlayLayer
+      id="roads-overlay"
+      tiles={ROADS_STYLE.sources.osmStandard.tiles as string[]}
+      maxzoom={19}
+      attribution={ROADS_STYLE.sources.osmStandard.attribution as string}
+      opacity={opacity}
+    />
+  );
+}
+
+/** Public-transport lines and stops (ÖPNVKarte) overlaid semi-transparently
+ * on top of whichever base map is currently active. */
+export function TransitOverlayLayer({ opacity }: { opacity: number }) {
+  return (
+    <TileOverlayLayer
+      id="transit-overlay"
+      tiles={TRANSIT_STYLE.sources.oepnvkarte.tiles as string[]}
+      maxzoom={18}
+      attribution={TRANSIT_STYLE.sources.oepnvkarte.attribution as string}
       opacity={opacity}
     />
   );
