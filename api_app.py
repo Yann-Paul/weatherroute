@@ -1450,7 +1450,8 @@ def _overpass_query(query: str) -> dict:
         )
 
 
-# category -> OSM tag matchers as (tag key, tag value, node_only, list_value).
+# category -> OSM tag matchers as (tag key, tag value, node_only, list_value,
+# [extra (tag key, tag value) required in addition — AND-combined]).
 # node_only skips ways/relations where the feature is practically always a
 # single node — keeps the Overpass query cheaper. list_value marks tags whose
 # value may be a semicolon-separated list (e.g. vending=bicycle_tube;drinks).
@@ -1480,6 +1481,26 @@ _POI_SELECTORS: dict[str, List[tuple]] = {
     "beach": [("natural", "beach", False, False)],
     "attraction": [("tourism", "attraction", False, False), ("tourism", "viewpoint", False, False)],
     "pass": [("mountain_pass", "yes", True, False)],
+    "cemetery": [("amenity", "grave_yard", False, False), ("landuse", "cemetery", False, False)],
+    "accommodation": [
+        ("tourism", "guest_house", False, False),
+        ("tourism", "motel", False, False),
+        ("tourism", "apartment", False, False),
+        ("tourism", "chalet", False, False),
+        ("tourism", "alpine_hut", False, False),
+        ("tourism", "wilderness_hut", False, False),
+    ],
+    "hostel": [("tourism", "hostel", False, False)],
+    "hotel": [("tourism", "hotel", False, False)],
+    "hardware_store": [("shop", "doityourself", False, False), ("shop", "hardware", False, False)],
+    "decathlon": [("brand", "Decathlon", False, False)],
+    "outdoor_shop": [("shop", "outdoor", False, False)],
+    "fishing_shop": [("shop", "fishing", False, False)],
+    "bike_cafe": [
+        ("amenity", "cafe", False, False, ("service:bicycle:repair", "yes")),
+        ("amenity", "cafe", False, False, ("service:bicycle:pump", "yes")),
+    ],
+    "bike_brand_shop": [("clothes", "cycling", False, False)],
 }
 _POI_CATEGORIES = set(_POI_SELECTORS)
 
@@ -1495,15 +1516,20 @@ _POI_DETAIL_TAGS = (
 
 def _poi_category(tags: dict, categories: List[str]) -> Optional[str]:
     for cat in categories:
-        for key, value, _node_only, list_value in _POI_SELECTORS[cat]:
+        for key, value, _node_only, list_value, *extra in _POI_SELECTORS[cat]:
             tag = tags.get(key)
             if tag is None:
                 continue
             if list_value:
-                if value in (part.strip() for part in tag.split(";")):
-                    return cat
-            elif tag == value:
-                return cat
+                if value not in (part.strip() for part in tag.split(";")):
+                    continue
+            elif tag != value:
+                continue
+            if extra:
+                extra_key, extra_value = extra[0]
+                if tags.get(extra_key) != extra_value:
+                    continue
+            return cat
     return None
 
 
@@ -1526,10 +1552,13 @@ def route_planner_pois(data: MapPoisRequest):
     around = _around_polyline([(p.lat, p.lon) for p in data.points], _POI_RADIUS_M)
     selectors = []
     for cat in categories:
-        for key, value, node_only, list_value in _POI_SELECTORS[cat]:
+        for key, value, node_only, list_value, *extra in _POI_SELECTORS[cat]:
             element = "node" if node_only else "nwr"
             # list-valued tags need a substring regex instead of an exact match
             match = f'["{key}"~"{value}"]' if list_value else f'["{key}"="{value}"]'
+            if extra:
+                extra_key, extra_value = extra[0]
+                match += f'["{extra_key}"="{extra_value}"]'
             selectors.append(f"{element}{match}{around};")
     query = f'[out:json][timeout:30];({"".join(selectors)});out center 3000;'
 

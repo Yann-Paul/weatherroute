@@ -193,12 +193,14 @@ Interaktive Punkt-für-Punkt-Routenplanung mit BRouter — die Karte füllt das 
 - Live-Routenvorschau (BRouter) mit Distanz/Höhenmetern, debounced bei jeder Änderung
 
 **Kartenebenen (Layer-Menü oben rechts)**
-- **Basiskarte**: Standard (Carto hell/dunkel, folgt dem App-Theme) oder Topographisch (OpenTopoMap mit Höhenlinien)
+- **Basiskarte**: Standard (Carto hell/dunkel, folgt dem App-Theme), Topographisch (OpenTopoMap mit Höhenlinien), Fahrrad (CyclOSM — Radinfrastruktur & Radfernwege wie EuroVelo oder Berlin–Kopenhagen), Straßen (offizielle OSM-Standardkarte mit farblich abgestufter Straßenhierarchie von Bundesstraße bis Feldweg) oder ÖPNV (ÖPNVKarte/memomaps mit Bus-/Bahnlinien und Haltestellen)
 - **POI-Overlays** entlang eines Korridors um die geroutete Strecke (OpenStreetMap via Overpass), einzeln zuschaltbar mit eigener Punktfarbe:
   - Schutzhütten, Picknickplätze, Trinkwasser, Toiletten, Duschen, Raststellplätze (Wohnmobilstellplätze + Autobahnraststätten/Rastplätze)
-  - Tankstellen, Supermärkte (inkl. Convenience-Läden), Restaurants & Imbisse, Bäckereien, Cafés
-  - Campingplätze, Geldautomaten, Apotheken, Fahrradreparatur (Läden + Reparaturstationen), Schlauchautomaten
-  - Bahnhöfe, Parks, Strände, Sehenswürdigkeiten (inkl. Aussichtspunkte), Pässe
+  - Tankstellen, Supermärkte (inkl. Convenience-Läden), Restaurants & Imbisse, Bäckereien, Cafés, Radcafés (fahrradfreundliche Cafés mit Reparatur-/Pumpservice)
+  - Campingplätze, Unterkünfte (Gästehäuser, Motels, Ferienwohnungen, Chalets, Alpen-/Schutzhütten), Hostels, Hotels
+  - Geldautomaten, Apotheken, Fahrradreparatur (Läden + Reparaturstationen), Schlauchautomaten, Bahnhöfe
+  - Baumärkte, Decathlon, Campingausrüster, Angelshops, Radmarkenshops (z. B. Rapha)
+  - Parks, Strände, Sehenswürdigkeiten (inkl. Aussichtspunkte), Pässe, Friedhöfe
   - Beim **Hovern** über einen POI erscheint ein Tooltip mit Name, Kategorie und weiteren OSM-Details (z. B. überdacht, Gebühr, Öffnungszeiten, Küche, Rollstuhlgerecht, Höhe bei Pässen) sowie einem Link **„In Google Maps öffnen"** (öffnet die Koordinaten in neuem Tab, kein API-Key nötig); auf Touch-Geräten öffnet ein Tipp auf den Punkt dasselbe Popup
 - **Wald-Overlay**: halbtransparente Waldflächen aus dem Korridor um die Route (Grundlage der Windschutz-Analyse)
 - **Regenradar** (Panel unter dem Ebenen-Menü, oben rechts): dasselbe RainViewer-Overlay wie in den [GPX-Ergebnissen](#gpx-analyse-gpx) — Ein/Aus-Schalter, Zeit-Slider mit Play/Pause über die letzten 2h, Deckkraft-Regler, „Live"-Modus; rein client-seitig, nur privat/nicht-kommerziell nutzbar
@@ -719,6 +721,9 @@ Rückgabe: beste 5 Routen als [{ 'cities': [(city_id, day), ...], 'score': float
 | [Overpass](https://overpass-api.de) | OSM-Abfragen für Streckenplaner-Overlays: POIs (Schutzhütten, Trinkwasser, Tankstellen, Supermärkte, Bahnhöfe, Sehenswürdigkeiten, Pässe u. v. m.) und Wald-/Landbedeckung für die Windexposition |
 | [BRouter](https://brouter.de) | Fahrrad-/Trekking-Routing im Streckenplaner (alternativ [lokale Instanz](#starten)) |
 | [OpenTopoMap](https://opentopomap.org) | Topographische Basiskarten-Kacheln im Streckenplaner |
+| [CyclOSM](https://www.cyclosm.org) | Basiskarten-Kacheln mit Radinfrastruktur & Radfernwegen (EuroVelo u. a.) im Streckenplaner |
+| [OpenStreetMap-Standardkarte](https://www.openstreetmap.org) | Basiskarten-Kacheln mit farblich abgestufter Straßenhierarchie im Streckenplaner |
+| [memomaps ÖPNVKarte](https://memomaps.de) | Basiskarten-Kacheln mit öffentlichem Verkehr (Linien/Haltestellen) im Streckenplaner |
 | [Open-Meteo](https://api.open-meteo.com) | Live-Wettervorhersage (16 Tage) mit wählbarem Modell (`best_match`, ECMWF, ICON, GFS, …) |
 
 ### Client-seitiger Fallback für Open-Meteo
@@ -876,11 +881,11 @@ weatherroute/
 | `POST` | `/api/destination-jobs` | Zielsuche starten |
 | `POST` | `/api/gpx/jobs` | GPX-Analyse starten |
 | `POST` | `/api/route-planner/preview` | Streckenplaner: Live-Routenvorschau (BRouter) |
-| `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (21 Kategorien: Schutzhütten, Trinkwasser, Duschen, Raststellplätze, Tankstellen, Supermärkte, Apotheken, Bahnhöfe, Pässe, …) im Routenkorridor (Overpass) |
+| `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (31 Kategorien: Schutzhütten, Trinkwasser, Duschen, Raststellplätze, Tankstellen, Supermärkte, Apotheken, Unterkünfte/Hostels/Hotels, Bahnhöfe, Pässe, Friedhöfe, Baumärkte, Angelshops, Radmarkenshops, …) im Routenkorridor (Overpass) |
 | `POST` | `/api/route-planner/wind-shelter` | Streckenplaner: Waldflächen + Windschutz-Samples für Wald-/Windexpositions-Overlay (Overpass) |
 | `POST` | `/api/route-planner/jobs` | Streckenplaner: Route + Wetteranalyse starten |
 | `GET` | `/api/saved-routes` | Gespeicherte Routen auflisten |
-| `POST` | `/api/saved-routes` | Route speichern |
+| `POST` | `/api/saved-routes` | Route speichern (optional inkl. POIs, bei GPX-/Streckenplaner-Routen) |
 | `DELETE` | `/api/saved-routes/{id}` | Route löschen |
 | `POST` | `/api/saved-routes/{id}/restore` | Route in Planer laden |
 

@@ -355,7 +355,17 @@ export type PoiCategory =
   | "park"
   | "beach"
   | "attraction"
-  | "pass";
+  | "pass"
+  | "cemetery"
+  | "accommodation"
+  | "hostel"
+  | "hotel"
+  | "hardware_store"
+  | "decathlon"
+  | "outdoor_shop"
+  | "fishing_shop"
+  | "bike_cafe"
+  | "bike_brand_shop";
 
 export interface MapPoi {
   lat: number;

@@ -72,6 +72,7 @@ import {
 } from "@/components/wizard/dayConfig";
 import { downloadGpx } from "@/utils/gpxExport";
 import {
+  baseLayerStyles,
   ForestLayer,
   LayersMenu,
   NO_OVERLAYS,
@@ -79,7 +80,6 @@ import {
   POI_CATEGORIES,
   POI_COLORS,
   simplifyPoints,
-  TOPO_STYLES,
   usePoiOverlay,
   WindExposureLayer,
   type BaseLayer,
@@ -294,7 +294,7 @@ function RouteMapView({
       center={GERMANY_CENTER}
       zoom={6}
       className="h-full w-full"
-      styles={baseLayer === "topo" ? TOPO_STYLES : undefined}
+      styles={baseLayerStyles(baseLayer)}
     >
       <ClickCapture onMapClick={onMapClick} />
       <FitOnce coordinates={points.map((p) => [p.lon, p.lat])} />

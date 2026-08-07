@@ -41,15 +41,112 @@ const TOPO_STYLE: maplibregl.StyleSpecification = {
 // Stable object identity — the Map component compares styles by reference.
 export const TOPO_STYLES = { light: TOPO_STYLE, dark: TOPO_STYLE };
 
-export type BaseLayer = "standard" | "topo";
+// CyclOSM highlights cycling infrastructure and long-distance cycle routes
+// (EuroVelo, D-Route networks, …) — free tiles, no API key required.
+const CYCLING_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    cyclosm: {
+      type: "raster",
+      tiles: [
+        "https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+        "https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+        "https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      maxzoom: 20,
+      attribution:
+        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | © <a href="https://www.cyclosm.org">CyclOSM</a>',
+    },
+  },
+  layers: [{ id: "cyclosm", type: "raster", source: "cyclosm" }],
+};
+
+export const CYCLING_STYLES = { light: CYCLING_STYLE, dark: CYCLING_STYLE };
+
+// Official OSM standard tiles — road hierarchy (motorway/Bundesstraße down to
+// Feldweg/track) is colour- and width-coded, unlike the minimal Carto styles.
+const ROADS_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    osmStandard: {
+      type: "raster",
+      tiles: [
+        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    },
+  },
+  layers: [{ id: "osmStandard", type: "raster", source: "osmStandard" }],
+};
+
+export const ROADS_STYLES = { light: ROADS_STYLE, dark: ROADS_STYLE };
+
+// ÖPNVKarte (memomaps) highlights public-transport lines and stops — free
+// tiles, no API key required.
+const TRANSIT_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    oepnvkarte: {
+      type: "raster",
+      tiles: [
+        "https://a.tile.memomaps.de/tilegen/{z}/{x}/{y}.png",
+        "https://b.tile.memomaps.de/tilegen/{z}/{x}/{y}.png",
+        "https://c.tile.memomaps.de/tilegen/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      maxzoom: 18,
+      attribution:
+        'Map <a href="https://memomaps.de">memomaps.de</a> CC-BY-SA | © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    },
+  },
+  layers: [{ id: "oepnvkarte", type: "raster", source: "oepnvkarte" }],
+};
+
+export const TRANSIT_STYLES = { light: TRANSIT_STYLE, dark: TRANSIT_STYLE };
+
+export type BaseLayer = "standard" | "topo" | "cycling" | "roads" | "transit";
+
+const BASE_STYLES: Record<Exclude<BaseLayer, "standard">, { light: maplibregl.StyleSpecification; dark: maplibregl.StyleSpecification }> = {
+  topo: TOPO_STYLES,
+  cycling: CYCLING_STYLES,
+  roads: ROADS_STYLES,
+  transit: TRANSIT_STYLES,
+};
+
+/** Resolves a BaseLayer to the map `styles` prop (undefined = default Carto style). */
+export function baseLayerStyles(base: BaseLayer) {
+  return base === "standard" ? undefined : BASE_STYLES[base];
+}
 
 // Thematic groups for the layer menu; group and category order also defines
 // the menu row order.
 export const POI_GROUPS = [
-  { id: "supplies", categories: ["water", "supermarket", "food", "bakery", "cafe"] },
-  { id: "rest", categories: ["shelter", "picnic", "toilets", "shower", "rest_stop", "camping"] },
+  { id: "supplies", categories: ["water", "supermarket", "food", "bakery", "cafe", "bike_cafe"] },
+  {
+    id: "rest",
+    categories: [
+      "shelter",
+      "picnic",
+      "toilets",
+      "shower",
+      "rest_stop",
+      "camping",
+      "accommodation",
+      "hostel",
+      "hotel",
+    ],
+  },
   { id: "services", categories: ["fuel", "atm", "pharmacy", "bike_repair", "bike_tube", "train"] },
-  { id: "sights", categories: ["park", "beach", "attraction", "pass"] },
+  {
+    id: "shops",
+    categories: ["hardware_store", "decathlon", "outdoor_shop", "fishing_shop", "bike_brand_shop"],
+  },
+  { id: "sights", categories: ["park", "beach", "attraction", "pass", "cemetery"] },
 ] as const satisfies readonly { id: string; categories: readonly PoiCategory[] }[];
 
 export type PoiGroupId = (typeof POI_GROUPS)[number]["id"];
@@ -91,6 +188,16 @@ export const POI_COLORS: Record<PoiCategory, string> = {
   beach: "#fbbf24",
   attraction: "#d946ef",
   pass: "#78716c",
+  cemetery: "#71717a",
+  accommodation: "#f43f5e",
+  hostel: "#c084fc",
+  hotel: "#7e22ce",
+  hardware_store: "#92400e",
+  decathlon: "#0284c7",
+  outdoor_shop: "#4d7c0f",
+  fishing_shop: "#0e7490",
+  bike_cafe: "#0f766e",
+  bike_brand_shop: "#1d4ed8",
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -378,9 +485,12 @@ export function LayersMenu({
         <div className="space-y-3">
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-muted-foreground">{ly.baseHeading}</p>
-            <div className="flex gap-1 rounded-lg bg-muted/50 p-1">
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted/50 p-1">
               {baseButton("standard", ly.baseStandard)}
               {baseButton("topo", ly.baseTopo)}
+              {baseButton("cycling", ly.baseCycling)}
+              {baseButton("roads", ly.baseRoads)}
+              {baseButton("transit", ly.baseTransit)}
             </div>
           </div>
 

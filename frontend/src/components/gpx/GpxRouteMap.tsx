@@ -31,6 +31,7 @@ import { buildGpx } from "@/utils/gpxExport";
 import { useJobStore } from "@/stores/jobStore";
 import { useT } from "@/i18n/useT";
 import {
+  baseLayerStyles,
   ForestLayer,
   LayersMenu,
   NO_OVERLAYS,
@@ -38,7 +39,6 @@ import {
   POI_CATEGORIES,
   POI_COLORS,
   simplifyPoints,
-  TOPO_STYLES,
   usePoiOverlay,
   WindExposureLayer,
   type BaseLayer,
@@ -1568,7 +1568,7 @@ export function GpxRouteMap({
     <div className="space-y-3">
       <MapView
         theme={isDark ? "dark" : "light"}
-        styles={baseLayer === "topo" ? TOPO_STYLES : undefined}
+        styles={baseLayerStyles(baseLayer)}
         center={initCenter}
         zoom={8}
         className="h-[500px] w-full rounded-lg lg:h-[600px]"
