@@ -3842,12 +3842,15 @@ class SaveRouteRequest(BaseModel):
     jobId: str
     name: str
     plannerSettings: Optional[dict] = None
+    pois: Optional[List[dict]] = None
 
 
 def run_restore_job(job_id: str, saved_data: dict):
     """Background thread: expose saved result immediately (preview), then refresh forecast."""
     job = jobs[job_id]
     job["result"] = saved_data["result"]
+    if saved_data.get("pois"):
+        job["result"] = {**job["result"], "pois": saved_data["pois"]}
     job["status"] = "preview"
     meta = saved_data.get("forecastMeta")
     if meta and meta.get("elev_data"):
@@ -3904,6 +3907,8 @@ def save_route(req: SaveRouteRequest):
         "result": result,
         "forecastMeta": job.get("forecast_meta"),
         "plannerSettings": req.plannerSettings,
+        "jobType": job.get("jobType", "route"),
+        "pois": req.pois,
     }
     path = SAVED_ROUTES_DIR / f"{saved_id}.json"
     with open(path, "w", encoding="utf-8") as f:
@@ -3932,6 +3937,7 @@ def restore_saved_route(saved_id: str):
         "status": "pending",
         "step": "route",
         "message": "Restoring saved route...",
+        "jobType": saved_data.get("jobType", "route"),
         "osrm_done": 0,
         "osrm_total": 0,
         "rough_map": None,

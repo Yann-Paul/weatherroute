@@ -162,11 +162,12 @@ export async function getSavedRoutes(): Promise<SavedRouteSummary[]> {
 export async function saveRoute(
   jobId: string,
   name: string,
-  plannerSettings: PlannerSettings
+  plannerSettings: PlannerSettings | null = null,
+  pois?: MapPoi[]
 ): Promise<{ id: string; name: string }> {
   return request("/saved-routes", {
     method: "POST",
-    body: JSON.stringify({ jobId, name, plannerSettings }),
+    body: JSON.stringify({ jobId, name, plannerSettings, pois }),
   });
 }
 

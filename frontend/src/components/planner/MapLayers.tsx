@@ -128,13 +128,23 @@ function emptyPoiMap(): Record<PoiCategory, MapPoi[]> {
  */
 export function usePoiOverlay(
   points: RoutePlannerPoint[],
-  overlays: OverlayState
+  overlays: OverlayState,
+  initial?: MapPoi[]
 ): { poisByCategory: Record<PoiCategory, MapPoi[]>; poisLoading: boolean } {
   const t = useT();
-  const [poisByCategory, setPoisByCategory] = useState<Record<PoiCategory, MapPoi[]>>(emptyPoiMap);
+  const [poisByCategory, setPoisByCategory] = useState<Record<PoiCategory, MapPoi[]>>(() => {
+    if (!initial?.length) return emptyPoiMap();
+    const seeded = emptyPoiMap();
+    for (const poi of initial) seeded[poi.category] = [...seeded[poi.category], poi];
+    return seeded;
+  });
   const [poisLoading, setPoisLoading] = useState(false);
-  const loadedRef = useRef<Set<PoiCategory>>(new Set());
-  const routeSigRef = useRef<string | null>(null);
+  const loadedRef = useRef<Set<PoiCategory>>(
+    new Set(initial?.length ? initial.map((p) => p.category) : [])
+  );
+  const routeSigRef = useRef<string | null>(
+    initial?.length && points.length > 1 ? JSON.stringify(simplifyPoints(points)) : null
+  );
 
   const enabledCategories = POI_CATEGORIES.filter((c) => overlays[c]);
   const enabledKey = enabledCategories.join(",");

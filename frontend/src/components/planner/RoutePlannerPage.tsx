@@ -1133,7 +1133,8 @@ export function RoutePlannerPage() {
   // ── GPX export of the routed preview track
   function handleDownloadGpx() {
     if (previewCoords.length < 2) return;
-    downloadGpx(previewCoords, `weatherroute-${startDate || "route"}`);
+    const pois = POI_CATEGORIES.filter((cat) => overlays[cat]).flatMap((cat) => poisByCategory[cat]);
+    downloadGpx(previewCoords, `weatherroute-${startDate || "route"}`, pois);
   }
 
   // ── final submit: reuse an up-to-date weather preview job if one exists

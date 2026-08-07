@@ -43,6 +43,7 @@ Der klassische Modus. Der Nutzer gibt Städte ein, die er besuchen möchte, und 
 **Gespeicherte Routen**
 - Frühere Routenberechnungen können gespeichert und wiederhergestellt werden
 - Gespeicherte Routen lassen sich als Ausgangspunkt für neue Planungen laden
+- Funktioniert auch für GPX-Uploads und Streckenplaner-Routen (siehe [GPX-Ergebnisse](#gpx-analyse-gpx)) — dort werden zusätzlich die auf der Karte aktiven POIs mitgespeichert
 
 ---
 
@@ -166,11 +167,16 @@ Für bereits geplante Routen (z. B. aus Wanderungs- oder Radfahrplanern):
 - Vorschau des Höhenprofils vor der Berechnung
 
 **GPX-Ergebnisse (`/gpx/results/:jobId`)**
+
+Diese Seite zeigt sowohl hochgeladene GPX-Dateien als auch die vom Streckenplaner analysierten Routen (beide laufen durch dieselbe Wetter-Pipeline).
+
 - Karte mit dem hochgeladenen GPX-Pfad
 - Temperaturverlauf entlang der Route
 - Höhenprofil
 - Wettertabelle nach Etappen
 - Wettermodell-Umschalter (`best_match`, `ECMWF`, `ICON`, `GFS`) — neben der Tab-Leiste, aktualisiert alle vier Ansichten; gecacht wie in der Routenplaner-Ansicht
+- **„Speichern"**: legt Route + aktuell auf der Karte aktive POIs (siehe [POI-Overlays](#streckenplaner-route-planner)) unter „Gespeicherte Routen" ab. Beim Wiederöffnen erscheinen Track und POIs sofort, ohne erneute Overpass-Abfrage; weitere Kategorien lassen sich danach wie gewohnt zuschalten
+- **„GPX herunterladen"**: exportiert Track + aktive POIs als `.gpx`-Datei (POIs als `<wpt>`-Wegpunkte mit Name/Kategorie)
 - **Regenradar-Overlay (Prototyp)** — Panel oben links auf der Karte:
   - Ein/Aus-Schalter, Zeit-Slider mit Play/Pause-Animation über die letzten 2h (10-Min-Schritte) und Deckkraft-Regler
   - Folgt automatisch dem neuesten Radar-Frame ("Live"), springt per Klick zurück, sobald man manuell in die Vergangenheit scrubbt

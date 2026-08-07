@@ -20,6 +20,7 @@ import type {
   GpxJobResults,
   GpxNightHour,
   GpxWeatherPoint,
+  MapPoi,
   RoadInfoResult,
   RoutePlannerPoint,
   WindShelterResult,
@@ -1316,10 +1317,12 @@ export function GpxRouteMap({
   results,
   roadInfo,
   roadHighlight,
+  onPoisChange,
 }: {
   results: GpxJobResults;
   roadInfo?: RoadInfoResult | null;
   roadHighlight?: RoadHighlight;
+  onPoisChange?: (pois: MapPoi[]) => void;
 }) {
   const [visibleKmRange, setVisibleKmRange] = useState<[number, number] | null>(null);
   const [hoveredKm, setHoveredKm] = useState<number | null>(null);
@@ -1333,7 +1336,14 @@ export function GpxRouteMap({
 
   // ── map layers (base map + POI/forest/wind overlays, shared with planner)
   const [baseLayer, setBaseLayer] = useState<BaseLayer>("standard");
-  const [overlays, setOverlays] = useState<OverlayState>(NO_OVERLAYS);
+  const [overlays, setOverlays] = useState<OverlayState>(() => {
+    if (!results.pois?.length) return NO_OVERLAYS;
+    const enabled = new Set(results.pois.map((p) => p.category));
+    return {
+      ...NO_OVERLAYS,
+      ...Object.fromEntries([...enabled].map((c) => [c, true])),
+    };
+  });
   const [windShelter, setWindShelter] = useState<WindShelterResult | null>(null);
   const [shelterLoading, setShelterLoading] = useState(false);
   const shelterLoadedRef = useRef(false);
@@ -1343,7 +1353,13 @@ export function GpxRouteMap({
     [results.trackPoints]
   );
 
-  const { poisByCategory, poisLoading } = usePoiOverlay(routePoints, overlays);
+  const { poisByCategory, poisLoading } = usePoiOverlay(routePoints, overlays, results.pois);
+
+  useEffect(() => {
+    if (!onPoisChange) return;
+    onPoisChange(POI_CATEGORIES.filter((c) => overlays[c]).flatMap((c) => poisByCategory[c]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poisByCategory, overlays]);
 
   const needShelterData = overlays.forest || overlays.wind;
   useEffect(() => {

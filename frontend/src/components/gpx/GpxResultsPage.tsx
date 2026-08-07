@@ -1,19 +1,23 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { useParams } from "react-router";
 import { toast } from "sonner";
+import { Bookmark, BookmarkCheck, Download } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import {
   getGpxResults,
   getGpxModelForecast,
   fetchForecastViaBrowser,
   fetchGpxStopsViaBrowser,
   fetchRoadInfo,
+  saveRoute,
 } from "@/api/client";
-import type { GpxJobResults, GpxWeatherPoint, RoadInfoResult } from "@/api/types";
+import type { GpxJobResults, GpxWeatherPoint, MapPoi, RoadInfoResult } from "@/api/types";
 import { CLIENT_FALLBACK_NEEDED } from "@/api/types";
+import { downloadGpx } from "@/utils/gpxExport";
 import { useT } from "@/i18n/useT";
 import { GpxRouteMap } from "./GpxRouteMap";
 import { GpxElevationChart } from "./GpxElevationChart";
@@ -47,6 +51,10 @@ export function GpxResultsPage() {
   const t = useT();
   const [results, setResults] = useState<GpxJobResults | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentPois, setCurrentPois] = useState<MapPoi[]>([]);
+  const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const handlePoisChange = useCallback((pois: MapPoi[]) => setCurrentPois(pois), []);
   const [forecastFallbackStatus, setForecastFallbackStatus] = useState<"idle" | "loading" | "failed">("idle");
   const fallbackStarted = useRef(false);
 
@@ -76,10 +84,31 @@ export function GpxResultsPage() {
     if (!jobId) return;
     fallbackStarted.current = false;
     setForecastFallbackStatus("idle");
+    setIsSaved(false);
     getGpxResults(jobId)
       .then(setResults)
       .catch((e: Error) => setError(e.message));
   }, [jobId]);
+
+  async function handleSave() {
+    if (!jobId || !results || isSaved || isSaving) return;
+    setIsSaving(true);
+    try {
+      const name = `${results.startDate} · ${results.totalKm} km`;
+      await saveRoute(jobId, name, null, currentPois);
+      setIsSaved(true);
+    } catch {
+      toast.error(t.results.saveFailed);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function handleDownloadGpx() {
+    if (!results) return;
+    const coords = results.trackPoints.map(([lat, lon]) => ({ lat, lon }));
+    downloadGpx(coords, `weatherroute-${results.startDate || "route"}`, currentPois);
+  }
 
   // Server couldn't reach Open-Meteo (e.g. rate-limited outbound IP) - fetch
   // the missing points directly from the browser instead and patch them in.
@@ -314,6 +343,25 @@ export function GpxResultsPage() {
             {results.startDate} {results.startTime}
           </span>
         </div>
+        <div className="ml-auto flex gap-2">
+          <Button
+            size="sm"
+            variant={isSaved ? "outline" : "secondary"}
+            onClick={handleSave}
+            disabled={isSaving || isSaved}
+            className="gap-1"
+          >
+            {isSaved ? (
+              <><BookmarkCheck className="h-4 w-4" />{t.results.saved}</>
+            ) : (
+              <><Bookmark className="h-4 w-4" />{isSaving ? "..." : t.results.save}</>
+            )}
+          </Button>
+          <Button size="sm" variant="secondary" onClick={handleDownloadGpx} className="gap-1">
+            <Download className="h-4 w-4" />
+            {t.routePlanner.downloadGpx}
+          </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
@@ -346,6 +394,7 @@ export function GpxResultsPage() {
             results={{ ...results, weatherPoints: activeWeatherPoints }}
             roadInfo={roadInfo}
             roadHighlight={roadHighlight}
+            onPoisChange={handlePoisChange}
           />
         </TabsContent>
 

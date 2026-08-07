@@ -316,6 +316,7 @@ export interface GpxJobResults {
   dailyConfigs: GpxDayConfig[];
   trackPoints: [number, number][];
   forecastError: string | null;
+  pois?: MapPoi[];
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import type { RoutePlannerPoint } from "@/api/types";
+import type { MapPoi, RoutePlannerPoint } from "@/api/types";
 
 function escapeXml(s: string): string {
   return s
@@ -8,17 +8,30 @@ function escapeXml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Serialize a routed track as a GPX 1.1 document. */
-export function buildGpx(coords: RoutePlannerPoint[], name: string): string {
+function buildWaypoints(pois: MapPoi[]): string {
+  return pois
+    .map((p) => {
+      const label = p.name ?? p.subtype ?? p.category;
+      return `  <wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">
+    <name>${escapeXml(label)}</name>
+    <type>${escapeXml(p.category)}</type>
+  </wpt>`;
+    })
+    .join("\n");
+}
+
+/** Serialize a routed track (plus optional POI waypoints) as a GPX 1.1 document. */
+export function buildGpx(coords: RoutePlannerPoint[], name: string, pois?: MapPoi[]): string {
   const trkpts = coords
     .map((p) => `      <trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"/>`)
     .join("\n");
+  const wpts = pois?.length ? `${buildWaypoints(pois)}\n` : "";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="WeatherRoute" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
     <name>${escapeXml(name)}</name>
   </metadata>
-  <trk>
+${wpts}  <trk>
     <name>${escapeXml(name)}</name>
     <trkseg>
 ${trkpts}
@@ -28,9 +41,9 @@ ${trkpts}
 `;
 }
 
-/** Trigger a browser download of the given track as a .gpx file. */
-export function downloadGpx(coords: RoutePlannerPoint[], name: string): void {
-  const blob = new Blob([buildGpx(coords, name)], { type: "application/gpx+xml" });
+/** Trigger a browser download of the given track (plus optional POI waypoints) as a .gpx file. */
+export function downloadGpx(coords: RoutePlannerPoint[], name: string, pois?: MapPoi[]): void {
+  const blob = new Blob([buildGpx(coords, name, pois)], { type: "application/gpx+xml" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
