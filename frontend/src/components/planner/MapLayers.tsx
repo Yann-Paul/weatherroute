@@ -73,19 +73,23 @@ export const CYCLING_STYLES = { light: CYCLING_STYLE, dark: CYCLING_STYLE };
 
 // Official OSM standard tiles — road hierarchy (motorway/Bundesstraße down to
 // Feldweg/track) is colour- and width-coded, unlike the minimal Carto styles.
+const ROADS_TILES = [
+  "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+];
+const ROADS_ATTRIBUTION =
+  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
 const ROADS_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
     osmStandard: {
       type: "raster",
-      tiles: [
-        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      ],
+      tiles: ROADS_TILES,
       tileSize: 256,
       maxzoom: 19,
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      attribution: ROADS_ATTRIBUTION,
     },
   },
   layers: [{ id: "osmStandard", type: "raster", source: "osmStandard" }],
@@ -95,18 +99,21 @@ export const ROADS_STYLES = { light: ROADS_STYLE, dark: ROADS_STYLE };
 
 // ÖPNVKarte (memomaps) highlights public-transport lines and stops — free
 // tiles, no API key required.
+// memomaps' tile server sends no CORS headers, which breaks MapLibre's WebGL
+// texture loading — routed through our backend (same-origin) instead.
+const TRANSIT_TILES = ["/api/tiles/oepnv/{z}/{x}/{y}.png"];
+const TRANSIT_ATTRIBUTION =
+  'Map <a href="https://memomaps.de">memomaps.de</a> CC-BY-SA | © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
 const TRANSIT_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
     oepnvkarte: {
       type: "raster",
-      // memomaps' tile server sends no CORS headers, which breaks MapLibre's
-      // WebGL texture loading — routed through our backend (same-origin) instead.
-      tiles: ["/api/tiles/oepnv/{z}/{x}/{y}.png"],
+      tiles: TRANSIT_TILES,
       tileSize: 256,
       maxzoom: 18,
-      attribution:
-        'Map <a href="https://memomaps.de">memomaps.de</a> CC-BY-SA | © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      attribution: TRANSIT_ATTRIBUTION,
     },
   },
   layers: [{ id: "oepnvkarte", type: "raster", source: "oepnvkarte" }],
@@ -765,9 +772,9 @@ export function RoadsOverlayLayer({ opacity }: { opacity: number }) {
   return (
     <TileOverlayLayer
       id="roads-overlay"
-      tiles={ROADS_STYLE.sources.osmStandard.tiles as string[]}
+      tiles={ROADS_TILES}
       maxzoom={19}
-      attribution={ROADS_STYLE.sources.osmStandard.attribution as string}
+      attribution={ROADS_ATTRIBUTION}
       opacity={opacity}
     />
   );
@@ -779,9 +786,9 @@ export function TransitOverlayLayer({ opacity }: { opacity: number }) {
   return (
     <TileOverlayLayer
       id="transit-overlay"
-      tiles={TRANSIT_STYLE.sources.oepnvkarte.tiles as string[]}
+      tiles={TRANSIT_TILES}
       maxzoom={18}
-      attribution={TRANSIT_STYLE.sources.oepnvkarte.attribution as string}
+      attribution={TRANSIT_ATTRIBUTION}
       opacity={opacity}
     />
   );
