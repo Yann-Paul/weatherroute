@@ -24,7 +24,7 @@ import xml.etree.ElementTree as ET
 import pycountry
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from typing import Any, List, Optional
 
@@ -1588,6 +1588,31 @@ def route_planner_pois(data: MapPoisRequest):
             "tags": {k: str(tags[k]) for k in _POI_DETAIL_TAGS if tags.get(k)},
         })
     return {"pois": pois}
+
+
+# memomaps' ÖPNVKarte tiles don't send Access-Control-Allow-Origin, so
+# MapLibre GL (which loads raster tiles as CORS-mode WebGL textures) can't
+# use them directly cross-origin — proxy them same-origin through our API.
+_OEPNV_TILE_HOSTS = ("a.tile.memomaps.de", "b.tile.memomaps.de", "c.tile.memomaps.de")
+
+
+@app.get("/api/tiles/oepnv/{z}/{x}/{y}.png")
+def oepnv_tile(z: int, x: int, y: int):
+    host = _OEPNV_TILE_HOSTS[(x + y) % len(_OEPNV_TILE_HOSTS)]
+    try:
+        resp = requests.get(
+            f"https://{host}/tilegen/{z}/{x}/{y}.png",
+            headers={"User-Agent": "WeatherRoute/1.0"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        raise HTTPException(502, f"ÖPNVKarte nicht erreichbar: {e}")
+    return Response(
+        content=resp.content,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=604800"},
+    )
 
 
 def _point_in_ring(lat: float, lon: float, ring: List[tuple]) -> bool:

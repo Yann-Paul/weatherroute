@@ -32,6 +32,7 @@ import { useJobStore } from "@/stores/jobStore";
 import { useT } from "@/i18n/useT";
 import {
   baseLayerStyles,
+  CyclingOverlayLayer,
   ForestLayer,
   LayersMenu,
   NO_OVERLAYS,
@@ -39,6 +40,8 @@ import {
   POI_CATEGORIES,
   POI_COLORS,
   simplifyPoints,
+  TopoOverlayLayer,
+  useMapOverlays,
   usePoiOverlay,
   WindExposureLayer,
   type BaseLayer,
@@ -1336,6 +1339,7 @@ export function GpxRouteMap({
 
   // ── map layers (base map + POI/forest/wind overlays, shared with planner)
   const [baseLayer, setBaseLayer] = useState<BaseLayer>("standard");
+  const mapOverlays = useMapOverlays();
   const [overlays, setOverlays] = useState<OverlayState>(() => {
     if (!results.pois?.length) return NO_OVERLAYS;
     const enabled = new Set(results.pois.map((p) => p.category));
@@ -1575,6 +1579,10 @@ export function GpxRouteMap({
       >
         <MapControls showFullscreen showLocate onLocate={setUserLocation} />
         {userLocation && <UserLocationMarker longitude={userLocation.longitude} latitude={userLocation.latitude} />}
+        {mapOverlays.state.topo.enabled && <TopoOverlayLayer opacity={mapOverlays.state.topo.opacity} />}
+        {mapOverlays.state.cycling.enabled && (
+          <CyclingOverlayLayer opacity={mapOverlays.state.cycling.opacity} />
+        )}
         {radar.enabled && radar.tileUrl && <RainRadarLayer tileUrl={radar.tileUrl} opacity={radar.opacity} />}
         {overlays.forest && windShelter && <ForestLayer data={windShelter.forest} />}
         <div className="absolute top-2 left-2 z-10 flex w-56 max-w-[calc(100%-1rem)] flex-col gap-2">
@@ -1602,6 +1610,9 @@ export function GpxRouteMap({
           <LayersMenu
             base={baseLayer}
             onBaseChange={setBaseLayer}
+            mapOverlays={mapOverlays.state}
+            onToggleMapOverlay={mapOverlays.toggle}
+            onMapOverlayOpacityChange={mapOverlays.setOpacity}
             overlays={overlays}
             onToggleOverlay={(key) => setOverlays((o) => ({ ...o, [key]: !o[key] }))}
             routeReady={trackCoords.length > 1}

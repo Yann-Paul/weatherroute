@@ -404,6 +404,8 @@ const de = {
       baseCycling: "Fahrrad",
       baseRoads: "Straßen",
       baseTransit: "ÖPNV",
+      mapOverlaysHeading: "Karten überlagern",
+      opacity: "Deckkraft",
       overlaysHeading: "Zusatzebenen",
       groups: {
         supplies: "Essen & Trinken",
@@ -1052,6 +1054,8 @@ const en = {
       baseCycling: "Cycling",
       baseRoads: "Roads",
       baseTransit: "Public transport",
+      mapOverlaysHeading: "Overlay on map",
+      opacity: "Opacity",
       overlaysHeading: "Overlays",
       groups: {
         supplies: "Food & drink",

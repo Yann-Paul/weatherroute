@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useMap } from "@/components/ui/map";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 import { useT } from "@/i18n/useT";
 import { fetchRoutePois } from "@/api/client";
 import type {
@@ -19,20 +20,23 @@ import type {
 
 // ─── base map styles ─────────────────────────────────────────────────────────
 
+const OPENTOPOMAP_TILES = [
+  "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+  "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
+  "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
+];
+const OPENTOPOMAP_ATTRIBUTION =
+  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | © <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)';
+
 const TOPO_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
     opentopomap: {
       type: "raster",
-      tiles: [
-        "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
-        "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
-        "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
-      ],
+      tiles: OPENTOPOMAP_TILES,
       tileSize: 256,
       maxzoom: 17,
-      attribution:
-        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | © <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
+      attribution: OPENTOPOMAP_ATTRIBUTION,
     },
   },
   layers: [{ id: "opentopomap", type: "raster", source: "opentopomap" }],
@@ -43,20 +47,23 @@ export const TOPO_STYLES = { light: TOPO_STYLE, dark: TOPO_STYLE };
 
 // CyclOSM highlights cycling infrastructure and long-distance cycle routes
 // (EuroVelo, D-Route networks, …) — free tiles, no API key required.
+const CYCLOSM_TILES = [
+  "https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+  "https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+  "https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+];
+const CYCLOSM_ATTRIBUTION =
+  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | © <a href="https://www.cyclosm.org">CyclOSM</a>';
+
 const CYCLING_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
     cyclosm: {
       type: "raster",
-      tiles: [
-        "https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
-        "https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
-        "https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
-      ],
+      tiles: CYCLOSM_TILES,
       tileSize: 256,
       maxzoom: 20,
-      attribution:
-        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | © <a href="https://www.cyclosm.org">CyclOSM</a>',
+      attribution: CYCLOSM_ATTRIBUTION,
     },
   },
   layers: [{ id: "cyclosm", type: "raster", source: "cyclosm" }],
@@ -93,11 +100,9 @@ const TRANSIT_STYLE: maplibregl.StyleSpecification = {
   sources: {
     oepnvkarte: {
       type: "raster",
-      tiles: [
-        "https://a.tile.memomaps.de/tilegen/{z}/{x}/{y}.png",
-        "https://b.tile.memomaps.de/tilegen/{z}/{x}/{y}.png",
-        "https://c.tile.memomaps.de/tilegen/{z}/{x}/{y}.png",
-      ],
+      // memomaps' tile server sends no CORS headers, which breaks MapLibre's
+      // WebGL texture loading — routed through our backend (same-origin) instead.
+      tiles: ["/api/tiles/oepnv/{z}/{x}/{y}.png"],
       tileSize: 256,
       maxzoom: 18,
       attribution:
@@ -121,6 +126,38 @@ const BASE_STYLES: Record<Exclude<BaseLayer, "standard">, { light: maplibregl.St
 /** Resolves a BaseLayer to the map `styles` prop (undefined = default Carto style). */
 export function baseLayerStyles(base: BaseLayer) {
   return base === "standard" ? undefined : BASE_STYLES[base];
+}
+
+// ─── map overlays (topo / cycling on top of the active base map) ────────────
+//
+// Unlike BaseLayer (mutually exclusive, swaps the whole style), these are
+// additive raster layers drawn on top of whatever base map is active — same
+// pattern as RainRadarLayer, so e.g. cycling infrastructure can be shown
+// semi-transparently over the standard or topographic base map at once.
+
+export type TileOverlayKey = "topo" | "cycling";
+
+export type TileOverlayState = { enabled: boolean; opacity: number };
+
+export type MapOverlaysState = Record<TileOverlayKey, TileOverlayState>;
+
+export const DEFAULT_MAP_OVERLAYS: MapOverlaysState = {
+  topo: { enabled: false, opacity: 0.6 },
+  cycling: { enabled: false, opacity: 0.6 },
+};
+
+export function useMapOverlays() {
+  const [state, setState] = useState<MapOverlaysState>(DEFAULT_MAP_OVERLAYS);
+
+  function toggle(key: TileOverlayKey) {
+    setState((s) => ({ ...s, [key]: { ...s[key], enabled: !s[key].enabled } }));
+  }
+
+  function setOpacity(key: TileOverlayKey, opacity: number) {
+    setState((s) => ({ ...s, [key]: { ...s[key], opacity } }));
+  }
+
+  return { state, toggle, setOpacity };
 }
 
 // Thematic groups for the layer menu; group and category order also defines
@@ -387,6 +424,9 @@ export function buildWindSegments(
 export function LayersMenu({
   base,
   onBaseChange,
+  mapOverlays,
+  onToggleMapOverlay,
+  onMapOverlayOpacityChange,
   overlays,
   onToggleOverlay,
   routeReady,
@@ -396,6 +436,9 @@ export function LayersMenu({
 }: {
   base: BaseLayer;
   onBaseChange: (b: BaseLayer) => void;
+  mapOverlays: MapOverlaysState;
+  onToggleMapOverlay: (key: TileOverlayKey) => void;
+  onMapOverlayOpacityChange: (key: TileOverlayKey, opacity: number) => void;
   overlays: OverlayState;
   onToggleOverlay: (key: keyof OverlayState) => void;
   /** Overlays need a computed route — disabled until one exists. */
@@ -429,6 +472,38 @@ export function LayersMenu({
       >
         {label}
       </button>
+    );
+  }
+
+  function mapOverlayRow(key: TileOverlayKey, label: string) {
+    const id = `map-overlay-${key}`;
+    const state = mapOverlays[key];
+    return (
+      <div key={key} className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={id}
+            checked={state.enabled}
+            onCheckedChange={() => onToggleMapOverlay(key)}
+          />
+          <label htmlFor={id} className="flex-1 cursor-pointer select-none text-xs">
+            {label}
+          </label>
+        </div>
+        {state.enabled && (
+          <div className="flex items-center gap-2 pl-6">
+            <span className="shrink-0 text-[10px] text-muted-foreground">{ly.opacity}</span>
+            <Slider
+              min={0.1}
+              max={1}
+              step={0.05}
+              value={[state.opacity]}
+              onValueChange={([v]) => onMapOverlayOpacityChange(key, v)}
+              className="min-w-0 flex-1"
+            />
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -492,6 +567,14 @@ export function LayersMenu({
               {baseButton("roads", ly.baseRoads)}
               {baseButton("transit", ly.baseTransit)}
             </div>
+          </div>
+
+          <div className="h-px bg-border" />
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground">{ly.mapOverlaysHeading}</p>
+            {mapOverlayRow("topo", ly.baseTopo)}
+            {mapOverlayRow("cycling", ly.baseCycling)}
           </div>
 
           <div className="h-px bg-border" />
@@ -587,6 +670,90 @@ export function LayersMenu({
 }
 
 // ─── map layer components (must live inside <Map>) ──────────────────────────
+
+/** Generic additive raster tile layer with adjustable opacity — the shared
+ * implementation behind TopoOverlayLayer/CyclingOverlayLayer (mirrors
+ * RainRadarLayer's addSource/addLayer/cleanup pattern). */
+function TileOverlayLayer({
+  id,
+  tiles,
+  maxzoom,
+  attribution,
+  opacity,
+}: {
+  id: string;
+  tiles: string[];
+  maxzoom: number;
+  attribution: string;
+  opacity: number;
+}) {
+  const { map, isLoaded } = useMap();
+  const sourceId = `${id}-source`;
+  const layerId = `${id}-layer`;
+
+  useEffect(() => {
+    if (!map || !isLoaded) return;
+
+    map.addSource(sourceId, {
+      type: "raster",
+      tiles,
+      tileSize: 256,
+      maxzoom,
+      attribution,
+    });
+    map.addLayer({
+      id: layerId,
+      type: "raster",
+      source: sourceId,
+      paint: { "raster-opacity": opacity },
+    });
+
+    return () => {
+      try {
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
+      } catch {
+        // map may already be destroyed
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, isLoaded]);
+
+  useEffect(() => {
+    if (!map || !map.getLayer(layerId)) return;
+    map.setPaintProperty(layerId, "raster-opacity", opacity);
+  }, [map, layerId, opacity]);
+
+  return null;
+}
+
+/** Topographic relief (OpenTopoMap) overlaid semi-transparently on top of
+ * whichever base map is currently active. */
+export function TopoOverlayLayer({ opacity }: { opacity: number }) {
+  return (
+    <TileOverlayLayer
+      id="topo-overlay"
+      tiles={OPENTOPOMAP_TILES}
+      maxzoom={17}
+      attribution={OPENTOPOMAP_ATTRIBUTION}
+      opacity={opacity}
+    />
+  );
+}
+
+/** Cycling infrastructure (CyclOSM) overlaid semi-transparently on top of
+ * whichever base map is currently active. */
+export function CyclingOverlayLayer({ opacity }: { opacity: number }) {
+  return (
+    <TileOverlayLayer
+      id="cycling-overlay"
+      tiles={CYCLOSM_TILES}
+      maxzoom={20}
+      attribution={CYCLOSM_ATTRIBUTION}
+      opacity={opacity}
+    />
+  );
+}
 
 /** POI markers as a circle layer with a hover tooltip (name, category and
  * whitelisted OSM detail tags). Clicking a marker pins the popup open (it no

@@ -73,6 +73,7 @@ import {
 import { downloadGpx } from "@/utils/gpxExport";
 import {
   baseLayerStyles,
+  CyclingOverlayLayer,
   ForestLayer,
   LayersMenu,
   NO_OVERLAYS,
@@ -80,9 +81,12 @@ import {
   POI_CATEGORIES,
   POI_COLORS,
   simplifyPoints,
+  TopoOverlayLayer,
+  useMapOverlays,
   usePoiOverlay,
   WindExposureLayer,
   type BaseLayer,
+  type MapOverlaysState,
   type OverlayState,
 } from "@/components/planner/MapLayers";
 import {
@@ -250,6 +254,7 @@ function RouteMapView({
   onDragPoint,
   onRemovePoint,
   baseLayer,
+  mapOverlays,
   overlays,
   poisByCategory,
   windShelter,
@@ -269,6 +274,7 @@ function RouteMapView({
   onDragPoint: (i: number, lat: number, lon: number) => void;
   onRemovePoint: (i: number) => void;
   baseLayer: BaseLayer;
+  mapOverlays: MapOverlaysState;
   overlays: OverlayState;
   poisByCategory: Record<PoiCategory, MapPoi[]>;
   windShelter: WindShelterResult | null;
@@ -299,6 +305,8 @@ function RouteMapView({
       <ClickCapture onMapClick={onMapClick} />
       <FitOnce coordinates={points.map((p) => [p.lon, p.lat])} />
       <FlyTo target={focusTarget} />
+      {mapOverlays.topo.enabled && <TopoOverlayLayer opacity={mapOverlays.topo.opacity} />}
+      {mapOverlays.cycling.enabled && <CyclingOverlayLayer opacity={mapOverlays.cycling.opacity} />}
       {radarTileUrl && <RainRadarLayer tileUrl={radarTileUrl} opacity={radarOpacity} />}
       {overlays.forest && windShelter && <ForestLayer data={windShelter.forest} />}
       {routeLine.length > 1 && (
@@ -808,6 +816,7 @@ export function RoutePlannerPage() {
   // ── map layer state
   const radar = useRainRadar();
   const [baseLayer, setBaseLayer] = useState<BaseLayer>("standard");
+  const mapOverlays = useMapOverlays();
   const [overlays, setOverlays] = useState<OverlayState>(NO_OVERLAYS);
   const [windShelter, setWindShelter] = useState<WindShelterResult | null>(null);
   const [shelterLoading, setShelterLoading] = useState(false);
@@ -1174,6 +1183,7 @@ export function RoutePlannerPage() {
           onDragPoint={handleDragPoint}
           onRemovePoint={handleRemovePoint}
           baseLayer={baseLayer}
+          mapOverlays={mapOverlays.state}
           overlays={overlays}
           poisByCategory={poisByCategory}
           windShelter={windShelter}
@@ -1191,6 +1201,9 @@ export function RoutePlannerPage() {
           <LayersMenu
             base={baseLayer}
             onBaseChange={setBaseLayer}
+            mapOverlays={mapOverlays.state}
+            onToggleMapOverlay={mapOverlays.toggle}
+            onMapOverlayOpacityChange={mapOverlays.setOpacity}
             overlays={overlays}
             onToggleOverlay={handleToggleOverlay}
             routeReady={previewCoords.length > 1}

@@ -193,7 +193,8 @@ Interaktive Punkt-für-Punkt-Routenplanung mit BRouter — die Karte füllt das 
 - Live-Routenvorschau (BRouter) mit Distanz/Höhenmetern, debounced bei jeder Änderung
 
 **Kartenebenen (Layer-Menü oben rechts)**
-- **Basiskarte**: Standard (Carto hell/dunkel, folgt dem App-Theme), Topographisch (OpenTopoMap mit Höhenlinien), Fahrrad (CyclOSM — Radinfrastruktur & Radfernwege wie EuroVelo oder Berlin–Kopenhagen), Straßen (offizielle OSM-Standardkarte mit farblich abgestufter Straßenhierarchie von Bundesstraße bis Feldweg) oder ÖPNV (ÖPNVKarte/memomaps mit Bus-/Bahnlinien und Haltestellen)
+- **Basiskarte**: Standard (Carto hell/dunkel, folgt dem App-Theme), Topographisch (OpenTopoMap mit Höhenlinien), Fahrrad (CyclOSM — Radinfrastruktur & Radfernwege wie EuroVelo oder Berlin–Kopenhagen), Straßen (offizielle OSM-Standardkarte mit farblich abgestufter Straßenhierarchie von Bundesstraße bis Feldweg) oder ÖPNV (ÖPNVKarte/memomaps mit Bus-/Bahnlinien und Haltestellen) — diese Optionen schließen sich gegenseitig aus (Kartenwechsel statt Überlagerung)
+- **Karten überlagern**: Topographisch (OpenTopoMap) und Fahrrad (CyclOSM) lassen sich zusätzlich als halbtransparente Ebene *über* der aktiven Basiskarte einblenden (je eigener Ein/Aus-Schalter + Deckkraft-Regler), beliebig kombinierbar miteinander und mit jeder Basiskarte — z. B. Radinfrastruktur über der Standardkarte oder Höhenlinien über der ÖPNV-Karte
 - **POI-Overlays** entlang eines Korridors um die geroutete Strecke (OpenStreetMap via Overpass), einzeln zuschaltbar mit eigener Punktfarbe:
   - Schutzhütten, Picknickplätze, Trinkwasser, Toiletten, Duschen, Raststellplätze (Wohnmobilstellplätze + Autobahnraststätten/Rastplätze)
   - Tankstellen, Supermärkte (inkl. Convenience-Läden), Restaurants & Imbisse, Bäckereien, Cafés, Radcafés (fahrradfreundliche Cafés mit Reparatur-/Pumpservice)
