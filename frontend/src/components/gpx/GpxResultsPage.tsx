@@ -204,10 +204,10 @@ export function GpxResultsPage() {
     return { start: pts[0].km, end: pts[pts.length - 1].km };
   }, [results]);
 
-  // Surface/road-type profile data: fetched lazily once one of the two new
-  // tabs is opened (one Overpass query covers both dimensions), mirroring
-  // the same fetch pattern used by RoutePlannerPage.
-  const needRoadInfo = activeTab === "surface" || activeTab === "roadType";
+  // Surface/road-type profile data: fetched lazily once the elevation tab is
+  // opened (one Overpass query covers both dimensions), mirroring the same
+  // fetch pattern used by RoutePlannerPage.
+  const needRoadInfo = activeTab === "elevation";
   useEffect(() => {
     if (!needRoadInfo || !results || results.trackPoints.length < 2) return;
     const simplified = simplifyPoints(
@@ -371,8 +371,6 @@ export function GpxResultsPage() {
             <TabsTrigger value="elevation">{t.gpx.results.tabElevation}</TabsTrigger>
             <TabsTrigger value="temperature">{t.gpx.results.tabTemperature}</TabsTrigger>
             <TabsTrigger value="weather">{t.gpx.results.tabWeather}</TabsTrigger>
-            <TabsTrigger value="surface">{t.gpx.results.tabSurface}</TabsTrigger>
-            <TabsTrigger value="roadType">{t.gpx.results.tabRoadType}</TabsTrigger>
           </TabsList>
           {forecastRange && (
             <div className="ml-auto shrink-0">
@@ -400,7 +398,7 @@ export function GpxResultsPage() {
 
         <TabsContent value="elevation">
           <Card>
-            <CardContent className="pt-4">
+            <CardContent className="space-y-5 pt-4">
               {elevation ? (
                 <GpxElevationChart
                   elevation={elevation}
@@ -411,6 +409,26 @@ export function GpxResultsPage() {
               ) : (
                 <p className="text-muted-foreground">{t.results.elevationLoading}</p>
               )}
+              <div>
+                <p className="mb-2 text-sm font-semibold">{t.gpx.results.tabSurface}</p>
+                <RoadProfileBarChart
+                  samples={roadInfo?.samples}
+                  dimension="surface"
+                  selected={roadHighlight?.dimension === "surface" ? roadHighlight.category : null}
+                  onSelect={(category) => handleSelectRoadCategory("surface", category)}
+                  loading={roadInfoLoading}
+                />
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-semibold">{t.gpx.results.tabRoadType}</p>
+                <RoadProfileBarChart
+                  samples={roadInfo?.samples}
+                  dimension="highway"
+                  selected={roadHighlight?.dimension === "highway" ? roadHighlight.category : null}
+                  onSelect={(category) => handleSelectRoadCategory("highway", category)}
+                  loading={roadInfoLoading}
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -434,34 +452,6 @@ export function GpxResultsPage() {
 
         <TabsContent value="weather">
           <GpxWeatherTable weatherPoints={activeWeatherPoints} />
-        </TabsContent>
-
-        <TabsContent value="surface">
-          <Card>
-            <CardContent className="pt-4">
-              <RoadProfileBarChart
-                samples={roadInfo?.samples}
-                dimension="surface"
-                selected={roadHighlight?.dimension === "surface" ? roadHighlight.category : null}
-                onSelect={(category) => handleSelectRoadCategory("surface", category)}
-                loading={roadInfoLoading}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="roadType">
-          <Card>
-            <CardContent className="pt-4">
-              <RoadProfileBarChart
-                samples={roadInfo?.samples}
-                dimension="highway"
-                selected={roadHighlight?.dimension === "highway" ? roadHighlight.category : null}
-                onSelect={(category) => handleSelectRoadCategory("highway", category)}
-                loading={roadInfoLoading}
-              />
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
     </div>
