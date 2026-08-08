@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { CloudRain, Play, Pause } from "lucide-react";
-import { useMap } from "@/components/ui/map";
+import { findContentLayerBeforeId, useMap } from "@/components/ui/map";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useT } from "@/i18n/useT";
@@ -118,12 +118,17 @@ export function RainRadarLayer({ tileUrl, opacity }: { tileUrl: string; opacity:
       attribution:
         'Regenradar &copy; <a href="https://www.rainviewer.com/" target="_blank" rel="noreferrer">RainViewer</a>',
     });
-    map.addLayer({
-      id: RADAR_LAYER_ID,
-      type: "raster",
-      source: RADAR_SOURCE_ID,
-      paint: { "raster-opacity": opacity },
-    });
+    // Insert below the route/POI/wind/forest layers (if already present) so
+    // toggling the radar on never hides the route underneath it.
+    map.addLayer(
+      {
+        id: RADAR_LAYER_ID,
+        type: "raster",
+        source: RADAR_SOURCE_ID,
+        paint: { "raster-opacity": opacity },
+      },
+      findContentLayerBeforeId(map)
+    );
 
     return () => {
       try {

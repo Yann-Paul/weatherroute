@@ -3,7 +3,7 @@ import maplibregl from "maplibre-gl";
 import type { FeatureCollection, LineString } from "geojson";
 import { ChevronRight, Layers, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useMap } from "@/components/ui/map";
+import { findContentLayerBeforeId, useMap } from "@/components/ui/map";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
@@ -712,12 +712,17 @@ function TileOverlayLayer({
       maxzoom,
       attribution,
     });
-    map.addLayer({
-      id: layerId,
-      type: "raster",
-      source: sourceId,
-      paint: { "raster-opacity": opacity },
-    });
+    // Insert below the route/POI/wind/forest layers (if already present) so
+    // toggling this overlay on never hides the route underneath it.
+    map.addLayer(
+      {
+        id: layerId,
+        type: "raster",
+        source: sourceId,
+        paint: { "raster-opacity": opacity },
+      },
+      findContentLayerBeforeId(map)
+    );
 
     return () => {
       try {

@@ -1024,6 +1024,30 @@ function MapPopup({
   );
 }
 
+// Layers carrying route/marker information that must always render above
+// additive raster overlays (topo/cycling/roads/transit, rain radar) — keeps
+// the route visible no matter which order overlays get toggled on in.
+const CONTENT_LAYER_PREFIXES = [
+  "route-layer-",
+  "wind-layer-",
+  "poi-layer-",
+  "forest-layer-",
+  "clusters-",
+  "cluster-count-",
+  "unclustered-point-",
+  "rainviewer-radar-layer",
+];
+
+/** Id of the bottom-most already-added "content" layer (route, POIs, wind,
+ * forest, clusters, rain radar), if any. Pass as the `before` argument to
+ * `map.addLayer()` so additive layers (raster tile overlays) get inserted
+ * below it instead of on top, which would otherwise hide the route. */
+function findContentLayerBeforeId(map: MapLibreGL.Map): string | undefined {
+  return map.getStyle().layers?.find((l) =>
+    CONTENT_LAYER_PREFIXES.some((p) => l.id.startsWith(p))
+  )?.id;
+}
+
 type MapRouteProps = {
   /** Optional unique identifier for the route layer */
   id?: string;
@@ -1501,6 +1525,7 @@ export {
   MapControls,
   MapRoute,
   MapClusterLayer,
+  findContentLayerBeforeId,
 };
 
 export type { MapRef, MapViewport };
