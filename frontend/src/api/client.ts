@@ -7,7 +7,7 @@ import type {
   PlannerSettings,
   GpxJobResults,
   GpxDayConfig,
-  SavedRouteSummary,
+  SavedRoute,
   DestinationFinderFormData,
   DestinationJobResults,
   ModelForecastData,
@@ -24,6 +24,7 @@ import type {
   WindShelterResult,
   RoadInfoResult,
 } from "./types";
+import { getSavedRoute, putSavedRoute } from "@/lib/savedRoutesDb";
 
 const BASE = "/api";
 
@@ -155,28 +156,40 @@ export async function submitRoutePlannerJob(
   });
 }
 
-export async function getSavedRoutes(): Promise<SavedRouteSummary[]> {
-  return request("/saved-routes");
-}
-
+// Saved routes are persisted client-side in IndexedDB (see @/lib/savedRoutesDb),
+// not on the server — Render's filesystem doesn't survive a redeploy or an
+// instance restart after idling. The backend only bundles a finished job's
+// result into a storable blob (`/saved-routes/export`) and, on restore,
+// briefly rehydrates that blob into an in-memory job so the weather forecast
+// can be refreshed (`/saved-routes/restore`).
 export async function saveRoute(
   jobId: string,
   name: string,
   plannerSettings: PlannerSettings | null = null,
   pois?: MapPoi[]
 ): Promise<{ id: string; name: string }> {
-  return request("/saved-routes", {
+  const bundle = await request<Omit<SavedRoute, "id">>("/saved-routes/export", {
     method: "POST",
     body: JSON.stringify({ jobId, name, plannerSettings, pois }),
   });
-}
-
-export async function deleteSavedRoute(id: string): Promise<void> {
-  await request(`/saved-routes/${id}`, { method: "DELETE" });
+  const id = crypto.randomUUID();
+  await putSavedRoute({ id, ...bundle });
+  return { id, name };
 }
 
 export async function restoreSavedRoute(id: string): Promise<{ jobId: string; plannerSettings: PlannerSettings | null }> {
-  return request(`/saved-routes/${id}/restore`, { method: "POST" });
+  const route = await getSavedRoute(id);
+  if (!route) throw new Error("Saved route not found");
+  return request("/saved-routes/restore", {
+    method: "POST",
+    body: JSON.stringify({
+      result: route.result,
+      forecastMeta: route.forecastMeta,
+      plannerSettings: route.plannerSettings,
+      pois: route.pois,
+      jobType: route.jobType,
+    }),
+  });
 }
 
 export async function submitDestinationJob(data: DestinationFinderFormData): Promise<{ jobId: string }> {

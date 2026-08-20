@@ -442,6 +442,21 @@ export interface SavedRouteSummary {
 /** Planner settings snapshot stored alongside a saved route. */
 export type PlannerSettings = PlannerFormData;
 
+/**
+ * Full saved-route blob, persisted client-side in IndexedDB (see
+ * @/lib/savedRoutesDb). `result` and `forecastMeta` are opaque payloads
+ * handed back to the backend verbatim on restore — the backend never stores
+ * them itself, since Render's filesystem doesn't survive a redeploy or an
+ * instance restart after idling.
+ */
+export interface SavedRoute extends SavedRouteSummary {
+  result: unknown;
+  forecastMeta?: unknown;
+  plannerSettings: PlannerSettings | null;
+  jobType: string;
+  pois?: MapPoi[];
+}
+
 export interface DestinationFinderFormData {
   startCity: string;
   startDay: number;

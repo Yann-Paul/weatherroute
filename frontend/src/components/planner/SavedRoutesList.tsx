@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useJobStore } from "@/stores/jobStore";
 import { usePlannerStore } from "@/stores/plannerStore";
-import { getSavedRoutes, deleteSavedRoute, restoreSavedRoute } from "@/api/client";
+import { restoreSavedRoute } from "@/api/client";
+import { listSavedRoutes, deleteSavedRoute } from "@/lib/savedRoutesDb";
 import { useT } from "@/i18n/useT";
 import { dayOfYearToDate } from "@/utils/constants";
 import { useLangStore } from "@/i18n/store";
@@ -23,7 +24,7 @@ export function SavedRoutesList() {
   const lang = useLangStore((s) => s.lang);
 
   useEffect(() => {
-    getSavedRoutes()
+    listSavedRoutes()
       .then(setRoutes)
       .catch(() => setRoutes([]))
       .finally(() => setLoading(false));

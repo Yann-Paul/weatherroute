@@ -74,9 +74,6 @@ def _elev_api(latlons):
     return (OPEN_ELEV_SRTM, 100,
             lambda b: {"locations": "|".join(f"{lat},{lon}" for lat, lon in b)})
 
-SAVED_ROUTES_DIR = Path("data/saved_routes")
-SAVED_ROUTES_DIR.mkdir(parents=True, exist_ok=True)
-
 
 def _friendly_error(err, api_name: str = "") -> str:
     """Convert a raw exception into a user-friendly German error message."""
@@ -3889,6 +3886,14 @@ def run_gpx_analysis(
 
 # ---------------------------------------------------------------------------
 # Saved routes
+#
+# Routes are persisted in the BROWSER (IndexedDB), not on the server: Render's
+# web-service filesystem is ephemeral, so anything written to disk here would
+# be lost on every redeploy and every time the instance restarts after being
+# idle. Instead this backend is stateless w.r.t. saved routes — it only
+# bundles a completed job's result into a portable blob on save (the frontend
+# stores that blob locally), and briefly rehydrates it into an in-memory job
+# on restore (so the weather forecast can be refreshed against current data).
 # ---------------------------------------------------------------------------
 
 
@@ -3897,6 +3902,14 @@ class SaveRouteRequest(BaseModel):
     name: str
     plannerSettings: Optional[dict] = None
     pois: Optional[List[dict]] = None
+
+
+class RestoreRouteRequest(BaseModel):
+    result: dict
+    forecastMeta: Optional[dict] = None
+    plannerSettings: Optional[dict] = None
+    pois: Optional[List[dict]] = None
+    jobType: Optional[str] = "route"
 
 
 def run_restore_job(job_id: str, saved_data: dict):
@@ -3924,35 +3937,15 @@ def run_restore_job(job_id: str, saved_data: dict):
     job["status"] = "done"
 
 
-@app.get("/api/saved-routes")
-def list_saved_routes():
-    routes = []
-    for path in sorted(SAVED_ROUTES_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
-        try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
-            routes.append({
-                "id": data["id"],
-                "name": data["name"],
-                "savedAt": data["savedAt"],
-                "totalDistance": data.get("totalDistance", 0),
-                "totalDays": data.get("totalDays", 0),
-                "startDay": data.get("startDay", 0),
-            })
-        except Exception:
-            continue
-    return routes
-
-
-@app.post("/api/saved-routes")
-def save_route(req: SaveRouteRequest):
+@app.post("/api/saved-routes/export")
+def export_saved_route(req: SaveRouteRequest):
+    """Bundle a completed job into a self-contained blob for the frontend to
+    store locally (see saveRoute() in the frontend's api/client.ts)."""
     job = jobs.get(req.jobId)
     if not job or job["status"] not in ("done", "preview") or not job.get("result"):
         raise HTTPException(404, "Job not found or not completed")
-    saved_id = str(uuid.uuid4())
     result = job["result"]
-    saved_data = {
-        "id": saved_id,
+    return {
         "name": req.name,
         "savedAt": datetime.utcnow().isoformat(),
         "totalDistance": result.get("totalDistance", 0),
@@ -3964,34 +3957,18 @@ def save_route(req: SaveRouteRequest):
         "jobType": job.get("jobType", "route"),
         "pois": req.pois,
     }
-    path = SAVED_ROUTES_DIR / f"{saved_id}.json"
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(saved_data, f, ensure_ascii=False)
-    return {"id": saved_id, "name": req.name}
 
 
-@app.delete("/api/saved-routes/{saved_id}")
-def delete_saved_route(saved_id: str):
-    path = SAVED_ROUTES_DIR / f"{saved_id}.json"
-    if not path.exists():
-        raise HTTPException(404, "Saved route not found")
-    path.unlink()
-    return {"ok": True}
-
-
-@app.post("/api/saved-routes/{saved_id}/restore")
-def restore_saved_route(saved_id: str):
-    path = SAVED_ROUTES_DIR / f"{saved_id}.json"
-    if not path.exists():
-        raise HTTPException(404, "Saved route not found")
-    with open(path, encoding="utf-8") as f:
-        saved_data = json.load(f)
+@app.post("/api/saved-routes/restore")
+def restore_saved_route(data: RestoreRouteRequest):
+    """Rehydrate a locally-stored route blob into a fresh in-memory job and
+    refresh its weather forecast in the background."""
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "status": "pending",
         "step": "route",
         "message": "Restoring saved route...",
-        "jobType": saved_data.get("jobType", "route"),
+        "jobType": data.jobType or "route",
         "osrm_done": 0,
         "osrm_total": 0,
         "rough_map": None,
@@ -4002,9 +3979,9 @@ def restore_saved_route(saved_id: str):
         "forecast_done": 0,
         "forecast_total": 0,
     }
-    t = threading.Thread(target=run_restore_job, args=(job_id, saved_data), daemon=True)
+    t = threading.Thread(target=run_restore_job, args=(job_id, data.dict()), daemon=True)
     t.start()
-    return {"jobId": job_id, "plannerSettings": saved_data.get("plannerSettings")}
+    return {"jobId": job_id, "plannerSettings": data.plannerSettings}
 
 
 # ---------------------------------------------------------------------------
