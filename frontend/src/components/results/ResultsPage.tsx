@@ -15,6 +15,7 @@ import { ModelBadges } from "./ModelBadges";
 import { useResultsStore } from "@/stores/resultsStore";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { getJobResults, getJobStatus, saveRoute } from "@/api/client";
+import { cacheJobResult, getCachedJobResult } from "@/lib/resultsCacheDb";
 import { toast } from "sonner";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
@@ -52,6 +53,7 @@ export function ResultsPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [forecastUpdating, setForecastUpdating] = useState(false);
+  const [offlineFromCache, setOfflineFromCache] = useState(false);
   const t = useT();
   const lang = useLangStore((s) => s.lang);
   const elevPollingRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -60,18 +62,36 @@ export function ResultsPage() {
   useEffect(() => {
     if (!jobId) return;
 
+    async function loadFromCacheOrFail(fallbackMessage: string) {
+      const cached = await getCachedJobResult<JobResults>(jobId!, "route").catch(() => undefined);
+      if (cached) {
+        setResults(cached.data);
+        setJobId(jobId!);
+        setOfflineFromCache(true);
+      } else {
+        setError(fallbackMessage);
+      }
+    }
+
     async function fetchResults() {
+      if (!navigator.onLine) {
+        await loadFromCacheOrFail(t.results.loadFailed);
+        setLoading(false);
+        return;
+      }
       try {
         const data = await getJobResults(jobId!);
         setResults(data);
         setJobId(jobId!);
+        setOfflineFromCache(false);
+        cacheJobResult(jobId!, "route", data).catch(() => {});
         // Check if forecast is still being refreshed (restored route)
         const status = await getJobStatus(jobId!);
         if (status.status !== "done") {
           setForecastUpdating(true);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : t.results.loadFailed);
+        await loadFromCacheOrFail(err instanceof Error ? err.message : t.results.loadFailed);
       } finally {
         setLoading(false);
       }
@@ -89,9 +109,18 @@ export function ResultsPage() {
     }
   }, [forecastError, forecastFallbackStatus, retryForecastViaBrowser]);
 
-  // Poll for forecast refresh (when restoring saved routes)
+  // Poll for forecast refresh (when restoring saved routes). Skips the
+  // network call entirely while offline instead of spamming failed
+  // requests — it just keeps rechecking navigator.onLine every 5s.
   useEffect(() => {
     if (!forecastUpdating || !jobId) return;
+
+    function scheduleForecastPoll(delay: number) {
+      forecastPollingRef.current = setTimeout(() => {
+        if (navigator.onLine) pollForecast();
+        else scheduleForecastPoll(5000);
+      }, delay);
+    }
 
     async function pollForecast() {
       try {
@@ -102,19 +131,26 @@ export function ResultsPage() {
           setJobId(jobId!);
           setForecastUpdating(false);
         } else {
-          forecastPollingRef.current = setTimeout(pollForecast, 2000);
+          scheduleForecastPoll(2000);
         }
       } catch {
-        forecastPollingRef.current = setTimeout(pollForecast, 5000);
+        scheduleForecastPoll(5000);
       }
     }
 
-    forecastPollingRef.current = setTimeout(pollForecast, 2000);
+    scheduleForecastPoll(2000);
     return () => { if (forecastPollingRef.current) clearTimeout(forecastPollingRef.current); };
   }, [forecastUpdating, jobId, setResults]);
 
   useEffect(() => {
     if (!jobId || elevationComplete !== false) return;
+
+    function scheduleElevationPoll(delay: number) {
+      elevPollingRef.current = setTimeout(() => {
+        if (navigator.onLine) pollElevation();
+        else scheduleElevationPoll(5000);
+      }, delay);
+    }
 
     async function pollElevation() {
       try {
@@ -127,14 +163,14 @@ export function ResultsPage() {
             elevationComplete: data.elevationComplete,
           });
         } else {
-          elevPollingRef.current = setTimeout(pollElevation, 2000);
+          scheduleElevationPoll(2000);
         }
       } catch {
-        elevPollingRef.current = setTimeout(pollElevation, 5000);
+        scheduleElevationPoll(5000);
       }
     }
 
-    elevPollingRef.current = setTimeout(pollElevation, 2000);
+    scheduleElevationPoll(2000);
     return () => { if (elevPollingRef.current) clearTimeout(elevPollingRef.current); };
   }, [jobId, elevationComplete, updateElevation]);
 
@@ -243,6 +279,12 @@ export function ResultsPage() {
           </Button>
         </div>
       </div>
+
+      {offlineFromCache && (
+        <div aria-live="polite" className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
+          {t.results.offlineShowingCached}
+        </div>
+      )}
 
       {forecastUpdating && (
         <div aria-live="polite" className="rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-foreground">

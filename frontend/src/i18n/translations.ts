@@ -191,6 +191,7 @@ const de = {
     loadFailed: "Ergebnisse konnten nicht geladen werden",
     loading: "Ergebnisse werden geladen",
     elevationLoading: "Höhenprofil wird noch geladen...",
+    offlineShowingCached: "Offline – zeige zuletzt geladene Version dieser Route.",
     save: "Speichern",
     saved: "Gespeichert",
     saveFailed: "Route konnte nicht gespeichert werden.",
@@ -209,6 +210,12 @@ const de = {
     km: "km",
     days: "Tage",
     forecastUpdating: "Vorhersage wird aktualisiert...",
+  },
+  liveLocation: {
+    start: "Navigation starten",
+    stop: "Navigation beenden",
+    locating: "Standort wird gesucht...",
+    error: "Standort nicht verfügbar. Bitte Standortzugriff im Browser erlauben.",
   },
   routeMap: {
     legendTitle: "Routenqualität",
@@ -841,6 +848,7 @@ const en = {
     loadFailed: "Failed to load results",
     loading: "Loading results",
     elevationLoading: "Elevation profile is still loading...",
+    offlineShowingCached: "Offline – showing the last loaded version of this route.",
     save: "Save",
     saved: "Saved",
     saveFailed: "Could not save route.",
@@ -859,6 +867,12 @@ const en = {
     km: "km",
     days: "days",
     forecastUpdating: "Updating forecast...",
+  },
+  liveLocation: {
+    start: "Start navigation",
+    stop: "Stop navigation",
+    locating: "Finding your location...",
+    error: "Location unavailable. Please allow location access in your browser.",
   },
   routeMap: {
     legendTitle: "Route quality",

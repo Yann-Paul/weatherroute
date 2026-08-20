@@ -12,6 +12,7 @@ import {
   MapRoute,
   useMap,
 } from "@/components/ui/map";
+import { useLiveLocation, LiveLocationButton, LiveLocationMarker } from "@/components/planner/LiveLocation";
 import { toast } from "sonner";
 import { fetchWindShelter, previewRoutePlan, submitGpxJob } from "@/api/client";
 import type {
@@ -1280,42 +1281,6 @@ function GpxMiniTempChart({
   );
 }
 
-// ─── User location marker ──────────────────────────────────────────────────────
-
-function UserLocationMarker({ longitude, latitude }: { longitude: number; latitude: number }) {
-  const t = useT();
-  return (
-    <MapMarker longitude={longitude} latitude={latitude}>
-      <MarkerContent>
-        <div style={{ position: "relative", width: 16, height: 16 }}>
-          <div
-            className="animate-ping"
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: "50%",
-              background: "rgba(37,99,235,0.55)",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: "50%",
-              background: "#2563eb",
-              border: "2px solid white",
-              boxShadow: "0 0 4px rgba(0,0,0,0.4)",
-            }}
-          />
-        </div>
-      </MarkerContent>
-      <MarkerPopup>
-        <div className="text-xs font-medium">{t.gpx.results.radar.currentPosition}</div>
-      </MarkerPopup>
-    </MapMarker>
-  );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function GpxRouteMap({
@@ -1478,8 +1443,7 @@ export function GpxRouteMap({
   }
 
   const radar = useRainRadar();
-
-  const [userLocation, setUserLocation] = useState<{ longitude: number; latitude: number } | null>(null);
+  const liveLocation = useLiveLocation();
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -1579,8 +1543,9 @@ export function GpxRouteMap({
         zoom={8}
         className="h-[500px] w-full rounded-lg lg:h-[600px]"
       >
-        <MapControls showFullscreen showLocate onLocate={setUserLocation} />
-        {userLocation && <UserLocationMarker longitude={userLocation.longitude} latitude={userLocation.latitude} />}
+        <MapControls showFullscreen />
+        <LiveLocationButton status={liveLocation.status} onToggle={liveLocation.toggle} className="top-2 left-2" />
+        <LiveLocationMarker coords={liveLocation.coords} />
         {mapOverlays.state.topo.enabled && <TopoOverlayLayer opacity={mapOverlays.state.topo.opacity} />}
         {mapOverlays.state.cycling.enabled && (
           <CyclingOverlayLayer opacity={mapOverlays.state.cycling.opacity} />

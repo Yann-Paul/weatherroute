@@ -15,6 +15,7 @@ import {
   fetchRoadInfo,
   saveRoute,
 } from "@/api/client";
+import { cacheJobResult, getCachedJobResult } from "@/lib/resultsCacheDb";
 import type { GpxJobResults, GpxWeatherPoint, MapPoi, RoadInfoResult } from "@/api/types";
 import { CLIENT_FALLBACK_NEEDED } from "@/api/types";
 import { downloadGpx } from "@/utils/gpxExport";
@@ -56,6 +57,7 @@ export function GpxResultsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const handlePoisChange = useCallback((pois: MapPoi[]) => setCurrentPois(pois), []);
   const [forecastFallbackStatus, setForecastFallbackStatus] = useState<"idle" | "loading" | "failed">("idle");
+  const [offlineFromCache, setOfflineFromCache] = useState(false);
   const fallbackStarted = useRef(false);
 
   // Model switching state
@@ -85,9 +87,28 @@ export function GpxResultsPage() {
     fallbackStarted.current = false;
     setForecastFallbackStatus("idle");
     setIsSaved(false);
+    setOfflineFromCache(false);
+
+    async function loadFromCacheOrFail(fallbackMessage: string) {
+      const cached = await getCachedJobResult<GpxJobResults>(jobId!, "gpx").catch(() => undefined);
+      if (cached) {
+        setResults(cached.data);
+        setOfflineFromCache(true);
+      } else {
+        setError(fallbackMessage);
+      }
+    }
+
+    if (!navigator.onLine) {
+      loadFromCacheOrFail(t.results.loadFailed);
+      return;
+    }
     getGpxResults(jobId)
-      .then(setResults)
-      .catch((e: Error) => setError(e.message));
+      .then((data) => {
+        setResults(data);
+        cacheJobResult(jobId, "gpx", data).catch(() => {});
+      })
+      .catch((e: Error) => loadFromCacheOrFail(e.message));
   }, [jobId]);
 
   async function handleSave() {
@@ -309,6 +330,11 @@ export function GpxResultsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4">
+      {offlineFromCache && (
+        <div aria-live="polite" className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
+          {t.results.offlineShowingCached}
+        </div>
+      )}
       {forecastFallbackStatus === "loading" && (
         <div aria-live="polite" className="rounded-lg border border-chart-1/30 bg-chart-1/10 px-3 py-2 text-xs text-foreground">
           {t.results.forecastFallbackLoading}

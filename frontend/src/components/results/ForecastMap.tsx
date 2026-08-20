@@ -11,6 +11,7 @@ import {
   useMap,
 } from "@/components/ui/map";
 import { useResultsStore } from "@/stores/resultsStore";
+import { useLiveLocation, LiveLocationButton, LiveLocationMarker } from "@/components/planner/LiveLocation";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
 import { dayToShortDE } from "@/utils/tempColor";
@@ -574,6 +575,7 @@ const lang = useLangStore((s) => s.lang);
   const [showTempProfile, setShowTempProfile] = useState(false);
   const isDark = useIsDark();
   const t = useT();
+  const liveLocation = useLiveLocation();
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -1421,8 +1423,10 @@ const lang = useLangStore((s) => s.lang);
 
         <HoverDotFM miniElev={miniElev} />
         <MapBoundsForecastTracker miniElev={miniElev} />
+        <LiveLocationMarker coords={liveLocation.coords} />
 
         <MapControls position="bottom-right" showFullscreen />
+        <LiveLocationButton status={liveLocation.status} onToggle={liveLocation.toggle} className="top-2 left-2" />
 
         {isFullscreen && (
           <div className="absolute bottom-0 left-0 right-0 z-10">

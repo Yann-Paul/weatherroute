@@ -28,6 +28,7 @@ function useRainViewerFrames(enabled: boolean): { data: RainViewerData | null; e
     if (!enabled) return;
     let cancelled = false;
     async function load() {
+      if (!navigator.onLine) return; // avoid spamming a doomed request; the 5min interval will retry
       try {
         const res = await fetch("https://api.rainviewer.com/public/weather-maps.json");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
