@@ -177,6 +177,7 @@ Diese Seite zeigt sowohl hochgeladene GPX-Dateien als auch die vom Streckenplane
 - Wettermodell-Umschalter (`best_match`, `ECMWF`, `ICON`, `GFS`) — neben der Tab-Leiste, aktualisiert alle vier Ansichten; gecacht wie in der Routenplaner-Ansicht
 - **„Speichern"**: legt Route + aktuell auf der Karte aktive POIs (siehe [POI-Overlays](#streckenplaner-route-planner)) unter „Gespeicherte Routen" ab. Beim Wiederöffnen erscheinen Track und POIs sofort, ohne erneute Overpass-Abfrage; weitere Kategorien lassen sich danach wie gewohnt zuschalten
 - **„GPX herunterladen"**: exportiert Track + aktive POIs als `.gpx`-Datei (POIs als `<wpt>`-Wegpunkte mit Name/Kategorie)
+- **„Route aufteilen"**: unterteilt die Strecke in Abschnitte — wahlweise **pro Tag** (nutzt die bestehende Tagesplanung, `dailyConfigs`) oder **alle X km** (frei wählbarer Kilometerabstand). Nach der Aufteilung erscheint eine Abschnitts-Leiste („Gesamte Route" + „Tag 1/2/…" bzw. „Abschnitt 1 (0–X km)/…") zum Umschalten; der gewählte Abschnitt wird auf der Karte farbig hervorgehoben. Jeder Abschnitt lässt sich einzeln als eigene `.gpx`-Datei herunterladen (POIs werden dabei nur für den Korridor dieses Abschnitts neu abgefragt, nicht für die ganze Route), oder alle Abschnitte gebündelt als `.zip`
 - **Regenradar-Overlay (Prototyp)** — Panel oben links auf der Karte:
   - Ein/Aus-Schalter, Zeit-Slider mit Play/Pause-Animation über die letzten 2h (10-Min-Schritte) und Deckkraft-Regler
   - Folgt automatisch dem neuesten Radar-Frame ("Live"), springt per Klick zurück, sobald man manuell in die Vergangenheit scrubbt
@@ -196,6 +197,7 @@ Interaktive Punkt-für-Punkt-Routenplanung mit BRouter — die Karte füllt das 
 - **Basiskarte**: Standard (Carto hell/dunkel, folgt dem App-Theme), Topographisch (OpenTopoMap mit Höhenlinien), Fahrrad (CyclOSM — Radinfrastruktur & Radfernwege wie EuroVelo oder Berlin–Kopenhagen), Straßen (offizielle OSM-Standardkarte mit farblich abgestufter Straßenhierarchie von Bundesstraße bis Feldweg) oder ÖPNV (ÖPNVKarte/memomaps mit Bus-/Bahnlinien und Haltestellen) — diese Optionen schließen sich gegenseitig aus (Kartenwechsel statt Überlagerung)
 - **Karten überlagern**: Topographisch (OpenTopoMap) und Fahrrad (CyclOSM) lassen sich zusätzlich als halbtransparente Ebene *über* der aktiven Basiskarte einblenden (je eigener Ein/Aus-Schalter + Deckkraft-Regler), beliebig kombinierbar miteinander und mit jeder Basiskarte — z. B. Radinfrastruktur über der Standardkarte oder Höhenlinien über der ÖPNV-Karte
 - **POI-Overlays** entlang eines Korridors um die geroutete Strecke (OpenStreetMap via Overpass), einzeln zuschaltbar mit eigener Punktfarbe:
+  - **Suchradius** (Regler im Layer-Menü, 250 m–10 km, Standard 2000 m): bestimmt die Korridorbreite um die Strecke, in der nach POIs gesucht wird — gilt für alle Kategorien gemeinsam sowie für abschnittsweise GPX-Downloads (siehe „Route aufteilen" unten); eine Änderung löst für bereits aktive Kategorien automatisch eine neue Overpass-Abfrage aus
   - Schutzhütten, Picknickplätze, Trinkwasser, Toiletten, Duschen, Raststellplätze (Wohnmobilstellplätze + Autobahnraststätten/Rastplätze)
   - Tankstellen, Supermärkte (inkl. Convenience-Läden), Restaurants & Imbisse, Bäckereien, Cafés, Radcafés (fahrradfreundliche Cafés mit Reparatur-/Pumpservice)
   - Campingplätze, Unterkünfte (Gästehäuser, Motels, Ferienwohnungen, Chalets, Alpen-/Schutzhütten), Hostels, Hotels
@@ -212,6 +214,7 @@ Interaktive Punkt-für-Punkt-Routenplanung mit BRouter — die Karte füllt das 
 - **Adresssuche**: Suchfeld mit Autovervollständigung für Adressen und Orte (inkl. Hausnummern, Photon-Geocoder). Bei Auswahl fliegt die Karte zum Treffer; der Ort wird als Wegpunkt angehängt bzw. bei bestehender Strecke erscheint dieselbe Anhängen/Einfügen-Wahl wie beim Kartenklick
 - Profilwahl (Trekking/Rennrad/MTB/Safety)
 - Startdatum sowie Tagesplanung (Startzeit, Geschwindigkeit, km/Tag) — wahlweise einheitlich für alle Tage oder individuell pro Etappe, bereits beim Zeichnen der Route einstellbar
+- **„Route aufteilen"**: wie in den [GPX-Ergebnissen](#gpx-analyse-gpx) — Aufteilung pro Tag oder alle X km, Abschnitts-Umschalter mit farbiger Kartenhervorhebung, Download einzelner Abschnitte oder aller Abschnitte als `.zip` (jeweils mit auf den Abschnitt beschränkten POIs)
 - „Route analysieren" schickt die fertige Strecke durch dieselbe Wetter-Pipeline wie die GPX-Analyse und landet auf der GPX-Ergebnisseite
 
 **Höhenprofil & Wetter (unten links)**
@@ -882,7 +885,7 @@ weatherroute/
 | `POST` | `/api/destination-jobs` | Zielsuche starten |
 | `POST` | `/api/gpx/jobs` | GPX-Analyse starten |
 | `POST` | `/api/route-planner/preview` | Streckenplaner: Live-Routenvorschau (BRouter) |
-| `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (31 Kategorien: Schutzhütten, Trinkwasser, Duschen, Raststellplätze, Tankstellen, Supermärkte, Apotheken, Unterkünfte/Hostels/Hotels, Bahnhöfe, Pässe, Friedhöfe, Baumärkte, Angelshops, Radmarkenshops, …) im Routenkorridor (Overpass) |
+| `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (31 Kategorien: Schutzhütten, Trinkwasser, Duschen, Raststellplätze, Tankstellen, Supermärkte, Apotheken, Unterkünfte/Hostels/Hotels, Bahnhöfe, Pässe, Friedhöfe, Baumärkte, Angelshops, Radmarkenshops, …) im Routenkorridor (Overpass); optionaler `radiusM`-Parameter (250–10 000 m, Standard 2000 m) steuert die Korridorbreite |
 | `POST` | `/api/route-planner/wind-shelter` | Streckenplaner: Waldflächen + Windschutz-Samples für Wald-/Windexpositions-Overlay (Overpass) |
 | `POST` | `/api/route-planner/jobs` | Streckenplaner: Route + Wetteranalyse starten |
 | `GET` | `/api/saved-routes` | Gespeicherte Routen auflisten |

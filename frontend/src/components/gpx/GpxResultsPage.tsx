@@ -16,16 +16,17 @@ import {
   saveRoute,
 } from "@/api/client";
 import { cacheJobResult, getCachedJobResult } from "@/lib/resultsCacheDb";
-import type { GpxJobResults, GpxWeatherPoint, MapPoi, RoadInfoResult } from "@/api/types";
+import type { GpxJobResults, GpxWeatherPoint, MapPoi, RoadInfoResult, RoutePlannerPoint } from "@/api/types";
 import { CLIENT_FALLBACK_NEEDED } from "@/api/types";
 import { downloadGpx } from "@/utils/gpxExport";
 import { useT } from "@/i18n/useT";
+import { RouteSplitControl } from "@/components/planner/RouteSplitControl";
 import { GpxRouteMap } from "./GpxRouteMap";
 import { GpxElevationChart } from "./GpxElevationChart";
 import { GpxTemperatureChart } from "./GpxTemperatureChart";
 import { GpxWeatherTable } from "./GpxWeatherTable";
 import { GpxModelBadges } from "./GpxModelBadges";
-import { simplifyPoints } from "@/components/planner/MapLayers";
+import { DEFAULT_POI_RADIUS_M, simplifyPoints } from "@/components/planner/MapLayers";
 import { RoadProfileBarChart, type RoadDimension } from "@/components/planner/RoadProfile";
 
 type RoadHighlight = { dimension: RoadDimension; category: string } | null;
@@ -53,9 +54,12 @@ export function GpxResultsPage() {
   const [results, setResults] = useState<GpxJobResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentPois, setCurrentPois] = useState<MapPoi[]>([]);
+  const [currentPoiRadiusM, setCurrentPoiRadiusM] = useState(DEFAULT_POI_RADIUS_M);
+  const [highlightSegment, setHighlightSegment] = useState<RoutePlannerPoint[] | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const handlePoisChange = useCallback((pois: MapPoi[]) => setCurrentPois(pois), []);
+  const handlePoiRadiusChange = useCallback((radiusM: number) => setCurrentPoiRadiusM(radiusM), []);
   const [forecastFallbackStatus, setForecastFallbackStatus] = useState<"idle" | "loading" | "failed">("idle");
   const [offlineFromCache, setOfflineFromCache] = useState(false);
   const fallbackStarted = useRef(false);
@@ -127,7 +131,6 @@ export function GpxResultsPage() {
 
   function handleDownloadGpx() {
     if (!results) return;
-    const coords = results.trackPoints.map(([lat, lon]) => ({ lat, lon }));
     downloadGpx(coords, `weatherroute-${results.startDate || "route"}`, currentPois);
   }
 
@@ -205,6 +208,11 @@ export function GpxResultsPage() {
 
     runFallback();
   }, [results, selectedModel]);
+
+  const coords = useMemo<RoutePlannerPoint[]>(
+    () => results?.trackPoints.map(([lat, lon]) => ({ lat, lon })) ?? [],
+    [results]
+  );
 
   // Merge model overrides into weather points
   const activeWeatherPoints = useMemo<GpxWeatherPoint[]>(() => {
@@ -390,6 +398,16 @@ export function GpxResultsPage() {
         </div>
       </div>
 
+      <RouteSplitControl
+        coords={coords}
+        totalKm={results.totalKm}
+        dailyKm={results.dailyConfigs.map((c) => c.dailyKm)}
+        pois={currentPois}
+        poiRadiusM={currentPoiRadiusM}
+        namePrefix={`weatherroute-${results.startDate || "route"}`}
+        onSelectedSegmentChange={(seg) => setHighlightSegment(seg?.coords ?? null)}
+      />
+
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="flex flex-wrap items-center gap-2">
           <TabsList className="justify-start">
@@ -419,6 +437,8 @@ export function GpxResultsPage() {
             roadInfo={roadInfo}
             roadHighlight={roadHighlight}
             onPoisChange={handlePoisChange}
+            onPoiRadiusChange={handlePoiRadiusChange}
+            highlightSegment={highlightSegment}
           />
         </TabsContent>
 

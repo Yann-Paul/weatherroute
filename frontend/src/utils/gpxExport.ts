@@ -1,3 +1,4 @@
+import JSZip from "jszip";
 import type { MapPoi, RoutePlannerPoint } from "@/api/types";
 
 function escapeXml(s: string): string {
@@ -41,15 +42,41 @@ ${trkpts}
 `;
 }
 
-/** Trigger a browser download of the given track (plus optional POI waypoints) as a .gpx file. */
-export function downloadGpx(coords: RoutePlannerPoint[], name: string, pois?: MapPoi[]): void {
-  const blob = new Blob([buildGpx(coords, name, pois)], { type: "application/gpx+xml" });
+/** Trigger a browser download of the given blob under the given filename. */
+export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${name}.gpx`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/** Trigger a browser download of the given track (plus optional POI waypoints) as a .gpx file. */
+export function downloadGpx(coords: RoutePlannerPoint[], name: string, pois?: MapPoi[]): void {
+  const blob = new Blob([buildGpx(coords, name, pois)], { type: "application/gpx+xml" });
+  downloadBlob(blob, `${name}.gpx`);
+}
+
+export interface GpxZipEntry {
+  name: string;
+  coords: RoutePlannerPoint[];
+  pois?: MapPoi[];
+}
+
+/** Bundle multiple route segments as individual .gpx files inside a single .zip. */
+export async function buildGpxZip(entries: GpxZipEntry[]): Promise<Blob> {
+  const zip = new JSZip();
+  for (const entry of entries) {
+    zip.file(`${entry.name}.gpx`, buildGpx(entry.coords, entry.name, entry.pois));
+  }
+  return zip.generateAsync({ type: "blob" });
+}
+
+/** Trigger a browser download of multiple route segments bundled as one .zip of .gpx files. */
+export async function downloadGpxZip(entries: GpxZipEntry[], zipName: string): Promise<void> {
+  const blob = await buildGpxZip(entries);
+  downloadBlob(blob, `${zipName}.zip`);
 }

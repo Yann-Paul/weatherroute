@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import maplibregl from "maplibre-gl";
 import {
@@ -71,9 +71,11 @@ import {
   type Param,
 } from "@/components/wizard/dayConfig";
 import { downloadGpx } from "@/utils/gpxExport";
+import { RouteSplitControl } from "@/components/planner/RouteSplitControl";
 import {
   baseLayerStyles,
   CyclingOverlayLayer,
+  DEFAULT_POI_RADIUS_M,
   ForestLayer,
   LayersMenu,
   NO_OVERLAYS,
@@ -268,6 +270,7 @@ function RouteMapView({
   focusTarget,
   radarTileUrl,
   radarOpacity,
+  highlightSegment,
 }: {
   points: RoutePlannerPoint[];
   previewCoords: RoutePlannerPoint[];
@@ -288,6 +291,7 @@ function RouteMapView({
   focusTarget: { lat: number; lon: number } | null;
   radarTileUrl: string | null;
   radarOpacity: number;
+  highlightSegment?: RoutePlannerPoint[] | null;
 }) {
   const t = useT();
   const rp = t.routePlanner;
@@ -315,6 +319,15 @@ function RouteMapView({
       {overlays.forest && windShelter && <ForestLayer data={windShelter.forest} />}
       {routeLine.length > 1 && (
         <MapRoute coordinates={routeLine} color="hsl(var(--primary))" width={4} opacity={0.85} />
+      )}
+      {highlightSegment && highlightSegment.length > 1 && (
+        <MapRoute
+          id="segment-highlight"
+          coordinates={highlightSegment.map((p) => [p.lon, p.lat])}
+          color="#22c55e"
+          width={6}
+          opacity={0.95}
+        />
       )}
       {overlays.wind && windShelter && weatherResult && (
         <WindExposureLayer
@@ -437,6 +450,7 @@ function ControlsPanel({
   finalizeBusy,
   onDownloadGpx,
   gpxDisabled,
+  splitControl,
 }: {
   onBack: () => void;
   profile: Profile;
@@ -468,6 +482,7 @@ function ControlsPanel({
   finalizeBusy: boolean;
   onDownloadGpx: () => void;
   gpxDisabled: boolean;
+  splitControl: ReactNode;
 }) {
   const t = useT();
   const rp = t.routePlanner;
@@ -624,6 +639,8 @@ function ControlsPanel({
               </Button>
             </div>
           </div>
+
+          {splitControl}
           </div>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 rounded-b-2xl bg-gradient-to-t from-card to-transparent" />
         </div>
@@ -792,7 +809,7 @@ export function RoutePlannerPage() {
 
   // ── route state
   const [points, setPoints] = useState<RoutePlannerPoint[]>([]);
-  const [profile, setProfile] = useState<Profile>("trekking");
+  const [profile, setProfile] = useState<Profile>("fastbike");
   const [previewCoords, setPreviewCoords] = useState<RoutePlannerPoint[]>([]);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [ascentM, setAscentM] = useState<number | null>(null);
@@ -803,6 +820,9 @@ export function RoutePlannerPage() {
   // ── pending waypoint (append-vs-insert choice) + map focus target
   const [pendingPoint, setPendingPoint] = useState<RoutePlannerPoint | null>(null);
   const [focusTarget, setFocusTarget] = useState<{ lat: number; lon: number } | null>(null);
+
+  // ── selected route-split segment, highlighted on the map
+  const [highlightSegment, setHighlightSegment] = useState<RoutePlannerPoint[] | null>(null);
 
   // ── date state
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -819,9 +839,10 @@ export function RoutePlannerPage() {
 
   // ── map layer state
   const radar = useRainRadar();
-  const [baseLayer, setBaseLayer] = useState<BaseLayer>("standard");
+  const [baseLayer, setBaseLayer] = useState<BaseLayer>("cycling");
   const mapOverlays = useMapOverlays();
   const [overlays, setOverlays] = useState<OverlayState>(NO_OVERLAYS);
+  const [poiRadiusM, setPoiRadiusM] = useState(DEFAULT_POI_RADIUS_M);
   const [windShelter, setWindShelter] = useState<WindShelterResult | null>(null);
   const [shelterLoading, setShelterLoading] = useState(false);
   const shelterSigRef = useRef<string | null>(null);
@@ -890,7 +911,7 @@ export function RoutePlannerPage() {
 
   // ── map overlay data: POIs (Overpass corridor query, one category at a
   // time — see usePoiOverlay for why).
-  const { poisByCategory, poisLoading } = usePoiOverlay(previewCoords, overlays);
+  const { poisByCategory, poisLoading } = usePoiOverlay(previewCoords, overlays, poiRadiusM);
 
   // ── map overlay data: wind-shelter landcover analysis (forest + wind layers).
   // Same debounce/abort scheme as the POI query above.
@@ -1199,6 +1220,7 @@ export function RoutePlannerPage() {
           focusTarget={focusTarget}
           radarTileUrl={radar.enabled ? radar.tileUrl : null}
           radarOpacity={radar.opacity}
+          highlightSegment={highlightSegment}
         />
 
         <div className="absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
@@ -1214,6 +1236,8 @@ export function RoutePlannerPage() {
             windReady={weatherResult != null}
             poisLoading={poisLoading}
             shelterLoading={shelterLoading}
+            poiRadiusM={poiRadiusM}
+            onPoiRadiusChange={setPoiRadiusM}
           />
           <div className="w-56 max-w-[calc(100vw-1.5rem)]">
             <RainRadarPanel {...radar.panelProps} />
@@ -1257,6 +1281,19 @@ export function RoutePlannerPage() {
               finalizeBusy={submitting}
               onDownloadGpx={handleDownloadGpx}
               gpxDisabled={previewCoords.length < 2 || previewLoading}
+              splitControl={
+                previewCoords.length > 1 && (
+                  <RouteSplitControl
+                    coords={previewCoords}
+                    totalKm={distanceKm}
+                    dailyKm={buildConfigs().map((c) => c.dailyKm)}
+                    pois={POI_CATEGORIES.filter((cat) => overlays[cat]).flatMap((cat) => poisByCategory[cat])}
+                    poiRadiusM={poiRadiusM}
+                    namePrefix={`weatherroute-${startDate || "route"}`}
+                    onSelectedSegmentChange={(seg) => setHighlightSegment(seg?.coords ?? null)}
+                  />
+                )
+              }
             />
           </div>
         </div>

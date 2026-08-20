@@ -279,9 +279,14 @@ function emptyPoiMap(): Record<PoiCategory, MapPoi[]> {
  * categories at once takes roughly N times as long in total as the
  * previous single combined query did.
  */
+export const DEFAULT_POI_RADIUS_M = 2000;
+export const POI_RADIUS_MIN_M = 250;
+export const POI_RADIUS_MAX_M = 10000;
+
 export function usePoiOverlay(
   points: RoutePlannerPoint[],
   overlays: OverlayState,
+  radiusM: number = DEFAULT_POI_RADIUS_M,
   initial?: MapPoi[]
 ): { poisByCategory: Record<PoiCategory, MapPoi[]>; poisLoading: boolean } {
   const t = useT();
@@ -295,19 +300,20 @@ export function usePoiOverlay(
   const loadedRef = useRef<Set<PoiCategory>>(
     new Set(initial?.length ? initial.map((p) => p.category) : [])
   );
-  const routeSigRef = useRef<string | null>(
-    initial?.length && points.length > 1 ? JSON.stringify(simplifyPoints(points)) : null
+  const querySigRef = useRef<string | null>(
+    initial?.length && points.length > 1 ? `${JSON.stringify(simplifyPoints(points))}|${radiusM}` : null
   );
 
   const enabledCategories = POI_CATEGORIES.filter((c) => overlays[c]);
   const enabledKey = enabledCategories.join(",");
-  const routeSig = points.length > 1 ? JSON.stringify(simplifyPoints(points)) : null;
+  const querySig =
+    points.length > 1 ? `${JSON.stringify(simplifyPoints(points))}|${radiusM}` : null;
 
   useEffect(() => {
-    if (!routeSig || enabledCategories.length === 0) return;
+    if (!querySig || enabledCategories.length === 0) return;
 
-    if (routeSig !== routeSigRef.current) {
-      routeSigRef.current = routeSig;
+    if (querySig !== querySigRef.current) {
+      querySigRef.current = querySig;
       loadedRef.current = new Set();
       setPoisByCategory(emptyPoiMap());
     }
@@ -322,7 +328,7 @@ export function usePoiOverlay(
       let inFlight = missing.length;
       setPoisLoading(true);
       for (const category of missing) {
-        fetchRoutePois(simplified, [category], controller.signal)
+        fetchRoutePois(simplified, [category], radiusM, controller.signal)
           .then((result) => {
             if (cancelled) return;
             loadedRef.current.add(category);
@@ -344,7 +350,7 @@ export function usePoiOverlay(
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeSig, enabledKey]);
+  }, [querySig, enabledKey]);
 
   return { poisByCategory, poisLoading };
 }
@@ -442,6 +448,8 @@ export function LayersMenu({
   windReady,
   poisLoading,
   shelterLoading,
+  poiRadiusM,
+  onPoiRadiusChange,
 }: {
   base: BaseLayer;
   onBaseChange: (b: BaseLayer) => void;
@@ -456,6 +464,9 @@ export function LayersMenu({
   windReady: boolean;
   poisLoading: boolean;
   shelterLoading: boolean;
+  /** POI search radius around the route, in meters. */
+  poiRadiusM: number;
+  onPoiRadiusChange: (m: number) => void;
 }) {
   const t = useT();
   const ly = t.routePlanner.layers;
@@ -592,6 +603,20 @@ export function LayersMenu({
 
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground">{ly.overlaysHeading}</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <span>{ly.poiRadius}</span>
+                <span className="font-medium text-foreground">{poiRadiusM} m</span>
+              </div>
+              <Slider
+                min={POI_RADIUS_MIN_M}
+                max={POI_RADIUS_MAX_M}
+                step={250}
+                value={[poiRadiusM]}
+                onValueChange={([v]) => onPoiRadiusChange(v)}
+                className="min-w-0"
+              />
+            </div>
             {POI_GROUPS.map((group) => {
               const activeCount = group.categories.filter((c) => overlays[c]).length;
               const open = openGroups[group.id];

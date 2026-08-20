@@ -112,11 +112,12 @@ export async function previewRoutePlan(
 export async function fetchRoutePois(
   points: RoutePlannerPoint[],
   categories: PoiCategory[],
+  radiusM?: number,
   signal?: AbortSignal
 ): Promise<MapPoi[]> {
   const result = await request<{ pois: MapPoi[] }>("/route-planner/pois", {
     method: "POST",
-    body: JSON.stringify({ points, categories }),
+    body: JSON.stringify({ points, categories, radiusM }),
     signal,
   });
   return result.pois;

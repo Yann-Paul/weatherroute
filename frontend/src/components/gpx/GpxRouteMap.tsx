@@ -34,6 +34,7 @@ import { useT } from "@/i18n/useT";
 import {
   baseLayerStyles,
   CyclingOverlayLayer,
+  DEFAULT_POI_RADIUS_M,
   ForestLayer,
   LayersMenu,
   NO_OVERLAYS,
@@ -1288,11 +1289,15 @@ export function GpxRouteMap({
   roadInfo,
   roadHighlight,
   onPoisChange,
+  onPoiRadiusChange,
+  highlightSegment,
 }: {
   results: GpxJobResults;
   roadInfo?: RoadInfoResult | null;
   roadHighlight?: RoadHighlight;
   onPoisChange?: (pois: MapPoi[]) => void;
+  onPoiRadiusChange?: (radiusM: number) => void;
+  highlightSegment?: RoutePlannerPoint[] | null;
 }) {
   const [visibleKmRange, setVisibleKmRange] = useState<[number, number] | null>(null);
   const [hoveredKm, setHoveredKm] = useState<number | null>(null);
@@ -1305,7 +1310,7 @@ export function GpxRouteMap({
   const setJobId = useJobStore((s) => s.setJobId);
 
   // ── map layers (base map + POI/forest/wind overlays, shared with planner)
-  const [baseLayer, setBaseLayer] = useState<BaseLayer>("standard");
+  const [baseLayer, setBaseLayer] = useState<BaseLayer>("cycling");
   const mapOverlays = useMapOverlays();
   const [overlays, setOverlays] = useState<OverlayState>(() => {
     if (!results.pois?.length) return NO_OVERLAYS;
@@ -1315,6 +1320,7 @@ export function GpxRouteMap({
       ...Object.fromEntries([...enabled].map((c) => [c, true])),
     };
   });
+  const [poiRadiusM, setPoiRadiusM] = useState(DEFAULT_POI_RADIUS_M);
   const [windShelter, setWindShelter] = useState<WindShelterResult | null>(null);
   const [shelterLoading, setShelterLoading] = useState(false);
   const shelterLoadedRef = useRef(false);
@@ -1324,13 +1330,17 @@ export function GpxRouteMap({
     [results.trackPoints]
   );
 
-  const { poisByCategory, poisLoading } = usePoiOverlay(routePoints, overlays, results.pois);
+  const { poisByCategory, poisLoading } = usePoiOverlay(routePoints, overlays, poiRadiusM, results.pois);
 
   useEffect(() => {
     if (!onPoisChange) return;
     onPoisChange(POI_CATEGORIES.filter((c) => overlays[c]).flatMap((c) => poisByCategory[c]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [poisByCategory, overlays]);
+
+  useEffect(() => {
+    onPoiRadiusChange?.(poiRadiusM);
+  }, [poiRadiusM, onPoiRadiusChange]);
 
   const needShelterData = overlays.forest || overlays.wind;
   useEffect(() => {
@@ -1592,6 +1602,8 @@ export function GpxRouteMap({
             windReady={results.weatherPoints.length > 0}
             poisLoading={poisLoading}
             shelterLoading={shelterLoading}
+            poiRadiusM={poiRadiusM}
+            onPoiRadiusChange={setPoiRadiusM}
           />
         </div>
         <FitTrack coordinates={trackCoords} />
@@ -1601,6 +1613,16 @@ export function GpxRouteMap({
             color="#2563eb"
             width={2.5}
             opacity={0.85}
+            interactive={false}
+          />
+        )}
+        {highlightSegment && highlightSegment.length > 1 && (
+          <MapRoute
+            id="segment-highlight"
+            coordinates={highlightSegment.map((p) => [p.lon, p.lat])}
+            color="#22c55e"
+            width={5}
+            opacity={0.95}
             interactive={false}
           />
         )}

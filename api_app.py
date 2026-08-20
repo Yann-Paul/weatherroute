@@ -1317,8 +1317,11 @@ _overpass_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread
 _OVERPASS_HEDGE_DELAY_S = 8.0
 
 # POI radius around the route (m) — wide enough to catch a detour-worthy
-# shelter, narrow enough to keep Overpass results relevant.
+# shelter, narrow enough to keep Overpass results relevant. User-adjustable
+# per request (MapPoisRequest.radiusM) within [_POI_RADIUS_MIN_M, _POI_RADIUS_MAX_M].
 _POI_RADIUS_M = 2000
+_POI_RADIUS_MIN_M = 250
+_POI_RADIUS_MAX_M = 10000
 # Landcover polygons only matter right at the track for the shelter test;
 # the wider margin is for the forest overlay to not look clipped.
 _LANDCOVER_RADIUS_M = 800
@@ -1533,6 +1536,7 @@ def _poi_category(tags: dict, categories: List[str]) -> Optional[str]:
 class MapPoisRequest(BaseModel):
     points: List[RoutePlannerPoint]
     categories: List[str]
+    radiusM: Optional[int] = None
 
 
 @app.post("/api/route-planner/pois")
@@ -1546,7 +1550,10 @@ def route_planner_pois(data: MapPoisRequest):
     if not categories:
         raise HTTPException(400, "Keine gültige Kategorie angegeben")
 
-    around = _around_polyline([(p.lat, p.lon) for p in data.points], _POI_RADIUS_M)
+    radius_m = _POI_RADIUS_M if data.radiusM is None else data.radiusM
+    radius_m = max(_POI_RADIUS_MIN_M, min(_POI_RADIUS_MAX_M, radius_m))
+
+    around = _around_polyline([(p.lat, p.lon) for p in data.points], radius_m)
     selectors = []
     for cat in categories:
         for key, value, node_only, list_value, *extra in _POI_SELECTORS[cat]:
