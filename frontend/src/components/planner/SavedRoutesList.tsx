@@ -33,10 +33,10 @@ export function SavedRoutesList() {
   async function handleOpen(id: string) {
     setOpeningId(id);
     try {
-      const { jobId, plannerSettings } = await restoreSavedRoute(id);
+      const { jobId, plannerSettings, path } = await restoreSavedRoute(id);
       if (plannerSettings) restoreSettings(plannerSettings);
       setJobId(jobId);
-      navigate(`/progress/${jobId}`);
+      navigate(path);
     } catch {
       setOpeningId(null);
       toast.error(t.savedRoutes.openFailed ?? "Could not open route.");

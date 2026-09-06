@@ -25,6 +25,7 @@ import type {
   RoadInfoResult,
 } from "./types";
 import { getSavedRoute, putSavedRoute } from "@/lib/savedRoutesDb";
+import { cacheJobResult } from "@/lib/resultsCacheDb";
 
 const BASE = "/api";
 
@@ -178,19 +179,52 @@ export async function saveRoute(
   return { id, name };
 }
 
-export async function restoreSavedRoute(id: string): Promise<{ jobId: string; plannerSettings: PlannerSettings | null }> {
+// Opening a saved route normally asks the server to rehydrate it into a job
+// and refresh its weather forecast (see restore_saved_route in api_app.py).
+// While offline that round-trip can't happen at all, but the saved blob
+// already holds a finished result — so in that case we skip the backend
+// entirely and feed the snapshot straight into the same IndexedDB results
+// cache that ResultsPage/GpxResultsPage already fall back to when a job
+// fetch fails offline (see resultsCacheDb.ts). No live forecast refresh,
+// but the route, weather and POIs from the last save are fully viewable.
+export async function restoreSavedRoute(
+  id: string
+): Promise<{ jobId: string; plannerSettings: PlannerSettings | null; path: string }> {
   const route = await getSavedRoute(id);
   if (!route) throw new Error("Saved route not found");
-  return request("/saved-routes/restore", {
-    method: "POST",
-    body: JSON.stringify({
-      result: route.result,
-      forecastMeta: route.forecastMeta,
-      plannerSettings: route.plannerSettings,
-      pois: route.pois,
-      jobType: route.jobType,
-    }),
-  });
+  const isGpx = route.jobType === "gpx";
+
+  if (navigator.onLine) {
+    try {
+      const res = await request<{ jobId: string }>("/saved-routes/restore", {
+        method: "POST",
+        body: JSON.stringify({
+          result: route.result,
+          forecastMeta: route.forecastMeta,
+          plannerSettings: route.plannerSettings,
+          pois: route.pois,
+          jobType: route.jobType,
+        }),
+      });
+      return {
+        jobId: res.jobId,
+        plannerSettings: route.plannerSettings ?? null,
+        path: `/progress/${res.jobId}`,
+      };
+    } catch {
+      // Fall through to the offline path below.
+    }
+  }
+
+  const merged = route.pois
+    ? { ...(route.result as Record<string, unknown>), pois: route.pois }
+    : route.result;
+  await cacheJobResult(id, isGpx ? "gpx" : "route", merged);
+  return {
+    jobId: id,
+    plannerSettings: route.plannerSettings ?? null,
+    path: isGpx ? `/gpx/results/${id}` : `/results/${id}`,
+  };
 }
 
 export async function submitDestinationJob(data: DestinationFinderFormData): Promise<{ jobId: string }> {

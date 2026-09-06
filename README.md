@@ -44,6 +44,7 @@ Der klassische Modus. Der Nutzer gibt Städte ein, die er besuchen möchte, und 
 - Frühere Routenberechnungen können gespeichert und wiederhergestellt werden
 - Gespeicherte Routen lassen sich als Ausgangspunkt für neue Planungen laden
 - Funktioniert auch für GPX-Uploads und Streckenplaner-Routen (siehe [GPX-Ergebnisse](#gpx-analyse-gpx)) — dort werden zusätzlich die auf der Karte aktiven POIs mitgespeichert
+- Die Speicherung liegt komplett im **Browser** (IndexedDB), nicht auf dem Server — siehe [Gespeicherte Routen: Speicherort](#gespeicherte-routen-speicherort)
 
 ---
 
@@ -788,6 +789,35 @@ RainViewers kostenlose API ist laut Nutzungsbedingungen nur für **private/nicht
 Nutzung freigegeben; seit der API-Umstellung Anfang 2026 gibt es außerdem nur noch
 Vergangenheitsdaten (letzte 2h) und eine auf Zoomstufe 7 begrenzte Auflösung.
 
+### Gespeicherte Routen: Speicherort
+
+Gespeicherte Routen liegen **ausschließlich im Browser** (IndexedDB), nicht auf dem Server:
+Render setzt das Dateisystem eines Web-Service bei jedem Redeploy und jedem automatischen
+Neustart nach Inaktivität zurück, sodass dort abgelegte Dateien verloren wären. Der Server ist
+bezüglich gespeicherter Routen zustandslos und nur kurz beteiligt:
+
+1. **Speichern** (`saveRoute()` in `frontend/src/api/client.ts`): Das Frontend schickt `jobId`,
+   Name, optionale Planner-Einstellungen und die aktuell auf der Karte aktiven POIs an
+   `POST /api/saved-routes/export`. Der Server bündelt das fertige Job-Ergebnis samt
+   Wetter-Metadaten zu einem selbstständigen Blob; das Frontend schreibt diesen Blob unter einer
+   lokal erzeugten ID in die IndexedDB (`frontend/src/lib/savedRoutesDb.ts`).
+2. **Wiederherstellen** (`restoreSavedRoute()`): Der Blob wird aus der IndexedDB gelesen und an
+   `POST /api/saved-routes/restore` geschickt. Der Server legt daraus einen neuen, temporären
+   In-Memory-Job an, spielt das gespeicherte Ergebnis inkl. POIs sofort als Vorschau ein (keine
+   erneute Overpass-Abfrage) und aktualisiert die Wetterprognose im Hintergrund gegen aktuelle
+   Daten.
+
+Auflisten und Löschen gespeicherter Routen passiert komplett client-seitig, ohne Server-Aufruf.
+
+**Wiederherstellen funktioniert auch komplett offline:** Ist der Browser laut `navigator.onLine`
+offline, oder schlägt der Restore-Request an den Server fehl, überspringt `restoreSavedRoute()`
+den Server komplett und schreibt den bereits vorhandenen Blob (Ergebnis + POIs) direkt in den
+lokalen Ergebnis-Cache (`frontend/src/lib/resultsCacheDb.ts`), aus dem die Ergebnisseiten
+(`ResultsPage.tsx`, `GpxResultsPage.tsx`) ohnehin schon lesen, wenn ein Job-Abruf offline
+fehlschlägt. Navigiert wird dann direkt zur Ergebnisseite statt über `/progress/:jobId`. Einzige
+Einschränkung: keine Aktualisierung der Wetterprognose gegen aktuelle Daten — es wird exakt der
+Stand vom letzten Speichern angezeigt.
+
 ---
 
 ## Projektstruktur
@@ -803,8 +833,9 @@ weatherroute/
 │       ├── european_city_climate_normals.json  # Klimanormale 1991–2020 (5 MB)
 │       ├── german_city_names.json              # Deutsche Städtenamen → IDs
 │       ├── city_ids_by_country.json            # Ländercode → Stadtliste
-│       ├── nominatim_cities.json               # Cache für geocodierte Städte
-│       └── saved_routes/                       # Gespeicherte Nutzerrouten (JSON)
+│       └── nominatim_cities.json               # Cache für geocodierte Städte
+│       (Gespeicherte Routen liegen NICHT hier, sondern im Browser — IndexedDB,
+│        siehe "Gespeicherte Routen: Speicherort")
 │
 ├── frontend/
 │   └── src/
@@ -888,10 +919,8 @@ weatherroute/
 | `POST` | `/api/route-planner/pois` | Streckenplaner: POIs (31 Kategorien: Schutzhütten, Trinkwasser, Duschen, Raststellplätze, Tankstellen, Supermärkte, Apotheken, Unterkünfte/Hostels/Hotels, Bahnhöfe, Pässe, Friedhöfe, Baumärkte, Angelshops, Radmarkenshops, …) im Routenkorridor (Overpass); optionaler `radiusM`-Parameter (250–10 000 m, Standard 2000 m) steuert die Korridorbreite |
 | `POST` | `/api/route-planner/wind-shelter` | Streckenplaner: Waldflächen + Windschutz-Samples für Wald-/Windexpositions-Overlay (Overpass) |
 | `POST` | `/api/route-planner/jobs` | Streckenplaner: Route + Wetteranalyse starten |
-| `GET` | `/api/saved-routes` | Gespeicherte Routen auflisten |
-| `POST` | `/api/saved-routes` | Route speichern (optional inkl. POIs, bei GPX-/Streckenplaner-Routen) |
-| `DELETE` | `/api/saved-routes/{id}` | Route löschen |
-| `POST` | `/api/saved-routes/{id}/restore` | Route in Planer laden |
+| `POST` | `/api/saved-routes/export` | Fertigen Job zu einem Blob bündeln (optional inkl. POIs), den das Frontend in IndexedDB speichert — siehe [Gespeicherte Routen: Speicherort](#gespeicherte-routen-speicherort) |
+| `POST` | `/api/saved-routes/restore` | Gespeicherten Blob (inkl. POIs) zu einem neuen In-Memory-Job rehydrieren und Wetterprognose aktualisieren |
 
 ---
 
