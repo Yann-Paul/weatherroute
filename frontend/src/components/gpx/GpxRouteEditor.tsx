@@ -3,6 +3,7 @@ import maplibregl from "maplibre-gl";
 import { Loader2, Pencil, X } from "lucide-react";
 import { MapMarker, MarkerContent, MapRoute, useMap } from "@/components/ui/map";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -165,6 +166,8 @@ export function GpxEditPanel({
   previewError,
   canApply,
   applying,
+  saveAfterApply,
+  onSaveAfterApplyChange,
   onActivate,
   onCancel,
   onReset,
@@ -180,6 +183,8 @@ export function GpxEditPanel({
   previewError: boolean;
   canApply: boolean;
   applying: boolean;
+  saveAfterApply: boolean;
+  onSaveAfterApplyChange: (v: boolean) => void;
   onActivate: () => void;
   onCancel: () => void;
   onReset: () => void;
@@ -261,6 +266,21 @@ export function GpxEditPanel({
       {previewError && !previewLoading && (
         <p className="mt-2 text-[10px] text-destructive">{ed.previewError}</p>
       )}
+
+      <div className="mt-2 flex items-center gap-2">
+        <Checkbox
+          id="gpx-edit-save-after-apply"
+          checked={saveAfterApply}
+          onCheckedChange={(v) => onSaveAfterApplyChange(v === true)}
+          disabled={applying}
+        />
+        <label
+          htmlFor="gpx-edit-save-after-apply"
+          className="cursor-pointer select-none text-[10px] text-muted-foreground"
+        >
+          {ed.saveAfterApply}
+        </label>
+      </div>
 
       <div className="mt-2.5 flex flex-col gap-1.5">
         <Button

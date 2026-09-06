@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import { useParams } from "react-router";
+import { useParams, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Bookmark, BookmarkCheck, Download } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -50,6 +50,8 @@ function nearestGpxHourKey(hourFrac: number): string {
 
 export function GpxResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
   const t = useT();
   const [results, setResults] = useState<GpxJobResults | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +130,20 @@ export function GpxResultsPage() {
       setIsSaving(false);
     }
   }
+
+  // Triggered from the GPX edit mode's "save route afterwards" checkbox: the
+  // edited route is resubmitted as a brand-new job (see GpxRouteMap's
+  // handleApplyEdit), so saving can only happen here, once that job's
+  // weather has finished computing and this page has its results.
+  const autoSaveTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (!results || autoSaveTriggeredRef.current) return;
+    if (!(location.state as { autoSaveRoute?: boolean } | null)?.autoSaveRoute) return;
+    autoSaveTriggeredRef.current = true;
+    navigate(location.pathname, { replace: true, state: null });
+    handleSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results]);
 
   function handleDownloadGpx() {
     if (!results) return;

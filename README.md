@@ -184,6 +184,10 @@ Diese Seite zeigt sowohl hochgeladene GPX-Dateien als auch die vom Streckenplane
   - Folgt automatisch dem neuesten Radar-Frame ("Live"), springt per Klick zurück, sobald man manuell in die Vergangenheit scrubbt
   - Standort-Button in den Kartensteuerelementen (unten rechts) zeigt die aktuelle Position als pulsierenden Marker — praktisch zur Prüfung, ob es gerade über einem selbst regnet
   - Datenquelle: [RainViewer](https://www.rainviewer.com/api.html), **nur privat/nicht-kommerziell nutzbar**, max. Zoomstufe 7, keine Vorhersage (nur Vergangenheitsdaten)
+- **„Route bearbeiten"** — Panel oben links auf der Karte:
+  - Abschnitt der Route per Klick auswählen (Start, Ende) und einen neuen Zwischenpunkt setzen — der Abschnitt wird über das gewählte Routing-Profil neu berechnet und als Vorschau angezeigt
+  - **„Übernehmen & neu analysieren"** übermittelt die geänderte Strecke als neue GPX-Analyse (komplette Wetter-/Höhenneuberechnung) und leitet zur neuen Ergebnisseite weiter
+  - Checkbox **„Route danach speichern"**: sichert die neu berechnete Route automatisch unter „Gespeicherte Routen", sobald die Neuberechnung abgeschlossen ist — ohne dass man auf der neuen Ergebnisseite manuell nochmal „Speichern" klicken muss
 
 ### Streckenplaner (`/route-planner`)
 

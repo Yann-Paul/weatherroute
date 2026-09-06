@@ -1375,6 +1375,7 @@ export function GpxRouteMap({
   const [editPreviewLoading, setEditPreviewLoading] = useState(false);
   const [editPreviewError, setEditPreviewError] = useState(false);
   const [editApplying, setEditApplying] = useState(false);
+  const [editSaveAfterApply, setEditSaveAfterApply] = useState(false);
   const editReqRef = useRef(0);
 
   function handleEditMapClick(lat: number, lon: number) {
@@ -1443,7 +1444,7 @@ export function GpxRouteMap({
     try {
       const { jobId } = await submitGpxJob(file, results.startDate, results.dailyConfigs);
       setJobId(jobId);
-      navigate(`/progress/${jobId}`);
+      navigate(`/progress/${jobId}`, editSaveAfterApply ? { state: { autoSaveRoute: true } } : undefined);
     } catch (err) {
       toast.error(
         t.gpx.results.edit.applyError + (err instanceof Error ? `: ${err.message}` : "")
@@ -1580,6 +1581,8 @@ export function GpxRouteMap({
             previewError={editPreviewError}
             canApply={editPreview.length > 1 && !editPreviewLoading}
             applying={editApplying}
+            saveAfterApply={editSaveAfterApply}
+            onSaveAfterApplyChange={setEditSaveAfterApply}
             onActivate={() => setEditActive(true)}
             onCancel={() => {
               setEditActive(false);

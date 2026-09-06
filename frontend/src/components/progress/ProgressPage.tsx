@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useLocation } from "react-router";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -37,6 +37,7 @@ function getStepStatus(
 export function ProgressPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const job = useJobStore();
   const t = useT();
   const lang = useLangStore((s) => s.lang);
@@ -49,6 +50,10 @@ export function ProgressPage() {
   // without needing to restart the effect when they change.
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
+  // Forwarded to the results page once the job finishes (e.g. "save this
+  // route automatically" when the job came from the GPX edit-mode "apply").
+  const locationStateRef = useRef(location.state);
+  locationStateRef.current = location.state;
   const jobRef = useJobStore;          // stable store reference (Zustand selector)
   const tRef = useRef(t);
   tRef.current = t;
@@ -98,7 +103,8 @@ export function ProgressPage() {
             jt === "gpx" ? `/gpx/results/${jobId}`
             : jt === "destination" ? `/destination/results/${jobId}`
             : `/results/${jobId}`;
-          timeoutId = setTimeout(() => navigateRef.current(target), 600);
+          const state = locationStateRef.current;
+          timeoutId = setTimeout(() => navigateRef.current(target, state ? { state } : undefined), 600);
           return;
         }
 
