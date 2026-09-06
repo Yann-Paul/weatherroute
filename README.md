@@ -221,6 +221,7 @@ Interaktive Punkt-für-Punkt-Routenplanung mit BRouter — die Karte füllt das 
 - Startdatum sowie Tagesplanung (Startzeit, Geschwindigkeit, km/Tag) — wahlweise einheitlich für alle Tage oder individuell pro Etappe, bereits beim Zeichnen der Route einstellbar
 - **„Route aufteilen"**: wie in den [GPX-Ergebnissen](#gpx-analyse-gpx) — Aufteilung pro Tag oder alle X km, Abschnitts-Umschalter mit farbiger Kartenhervorhebung, Download einzelner Abschnitte oder aller Abschnitte als `.zip` (jeweils mit auf den Abschnitt beschränkten POIs)
 - „Route analysieren" schickt die fertige Strecke durch dieselbe Wetter-Pipeline wie die GPX-Analyse und landet auf der GPX-Ergebnisseite
+- **„Route speichern"**: sichert die Route bereits direkt im Planner unter „Gespeicherte Routen" — nutzt den im Hintergrund automatisch berechneten Wetter-Job (siehe „Höhenprofil & Wetter" unten), ohne dass man vorher „Route analysieren" anklicken muss. Aktiv, sobald die Hintergrundberechnung abgeschlossen und die Vorschau nicht veraltet ist
 
 **Höhenprofil & Wetter (unten links)**
 - Sobald Route und Einstellungen einen gültigen Stand erreichen, wird automatisch (debounced, ohne Klick) eine Wettervorschau berechnet — derselbe Job wie bei der finalen Analyse, nur ohne Weiterleitung

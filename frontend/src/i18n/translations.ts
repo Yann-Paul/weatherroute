@@ -404,6 +404,7 @@ const de = {
     weatherEmptyHint: "Route zeichnen, Datum & Tempo einstellen und auf „Wetter anzeigen“ klicken.",
     weatherErrorFallback: "Wetterdaten konnten nicht geladen werden.",
     downloadGpx: "GPX herunterladen",
+    saveNotReady: "Wetterdaten werden noch berechnet…",
     split: {
       heading: "Route aufteilen",
       modeOff: "Aus",
@@ -1076,6 +1077,7 @@ const en = {
     weatherEmptyHint: "Draw a route, set date & pace, then click “Show weather”.",
     weatherErrorFallback: "Could not load weather data.",
     downloadGpx: "Download GPX",
+    saveNotReady: "Weather data is still being calculated…",
     split: {
       heading: "Split route",
       modeOff: "Off",

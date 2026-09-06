@@ -3,6 +3,8 @@ import { useNavigate } from "react-router";
 import maplibregl from "maplibre-gl";
 import {
   ArrowLeft,
+  Bookmark,
+  BookmarkCheck,
   ChevronDown,
   ChevronUp,
   Download,
@@ -41,6 +43,7 @@ import {
   getGpxResults,
   fetchWindShelter,
   fetchRoadInfo,
+  saveRoute,
 } from "@/api/client";
 import type {
   GeocodeResult,
@@ -450,6 +453,11 @@ function ControlsPanel({
   finalizeBusy,
   onDownloadGpx,
   gpxDisabled,
+  onSaveRoute,
+  saveDisabled,
+  saveNotReadyHint,
+  saving,
+  saved,
   splitControl,
 }: {
   onBack: () => void;
@@ -482,6 +490,11 @@ function ControlsPanel({
   finalizeBusy: boolean;
   onDownloadGpx: () => void;
   gpxDisabled: boolean;
+  onSaveRoute: () => void;
+  saveDisabled: boolean;
+  saveNotReadyHint?: string;
+  saving: boolean;
+  saved: boolean;
   splitControl: ReactNode;
 }) {
   const t = useT();
@@ -618,7 +631,7 @@ function ControlsPanel({
             {actionsDisabled && actionsDisabledHint && (
               <p className="text-center text-xs text-muted-foreground">{actionsDisabledHint}</p>
             )}
-            <div className="flex items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -628,6 +641,20 @@ function ControlsPanel({
               >
                 <Download className="h-4 w-4" />
                 {rp.downloadGpx}
+              </Button>
+              <Button
+                type="button"
+                variant={saved ? "outline" : "secondary"}
+                onClick={onSaveRoute}
+                disabled={saveDisabled}
+                title={saveDisabled && !saved && !saving ? saveNotReadyHint : undefined}
+                className="gap-1.5 max-sm:h-8 max-sm:px-3 max-sm:text-xs"
+              >
+                {saved ? (
+                  <><BookmarkCheck className="h-4 w-4" />{t.results.saved}</>
+                ) : (
+                  <><Bookmark className="h-4 w-4" />{saving ? "…" : t.results.save}</>
+                )}
               </Button>
               <Button
                 type="button"
@@ -871,6 +898,11 @@ export function RoutePlannerPage() {
   const [weatherJobId, setWeatherJobId] = useState<string | null>(null);
   const [weatherSignature, setWeatherSignature] = useState<string | null>(null);
   const pollTokenRef = useRef(0);
+
+  // ── save state (tied to the background weather job — see submitWeatherJob)
+  const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  useEffect(() => { setIsSaved(false); }, [weatherJobId]);
 
   useEffect(() => () => { pollTokenRef.current++; }, []);
 
@@ -1171,6 +1203,25 @@ export function RoutePlannerPage() {
     downloadGpx(previewCoords, `weatherroute-${startDate || "route"}`, pois);
   }
 
+  // ── save the route: reuses the weather job the planner already computed
+  // in the background (see the auto-fetch effect above) instead of requiring
+  // a separate "Route analysieren" round trip.
+  const saveReady = weatherStatus === "done" && weatherJobId != null && !isStale;
+  async function handleSaveRoute() {
+    if (!saveReady || !weatherJobId || isSaved || isSaving) return;
+    setIsSaving(true);
+    try {
+      const name = `${startDate} · ${Math.round(distanceKm ?? 0)} km`;
+      const pois = POI_CATEGORIES.filter((cat) => overlays[cat]).flatMap((cat) => poisByCategory[cat]);
+      await saveRoute(weatherJobId, name, null, pois);
+      setIsSaved(true);
+    } catch {
+      toast.error(t.results.saveFailed);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   // ── final submit: reuse an up-to-date weather preview job if one exists
   async function handleFinalize() {
     if (points.length < 2) { toast.error(rp.errors.minPoints); return; }
@@ -1281,6 +1332,11 @@ export function RoutePlannerPage() {
               finalizeBusy={submitting}
               onDownloadGpx={handleDownloadGpx}
               gpxDisabled={previewCoords.length < 2 || previewLoading}
+              onSaveRoute={handleSaveRoute}
+              saveDisabled={!saveReady || isSaving || isSaved}
+              saveNotReadyHint={rp.saveNotReady}
+              saving={isSaving}
+              saved={isSaved}
               splitControl={
                 previewCoords.length > 1 && (
                   <RouteSplitControl
