@@ -2864,6 +2864,54 @@ def parse_open_meteo_data(valid, data_list):
     return result
 
 
+def interpolate_gpx_hourly(hourly, hour_frac):
+    """Interpolate the parsed GPX weather data for an exact arrival hour.
+
+    GPX points can arrive at any minute, while the shared forecast parser
+    keeps five six-hour samples (including the following day's 00:00). Using
+    the nearest sample creates visible jumps at e.g. 15:00, so interpolate
+    numeric weather fields between the surrounding samples instead.
+    """
+    if not hourly:
+        return {}
+
+    steps = [h for h in (0, 6, 12, 18, 24) if str(h) in hourly]
+    if not steps:
+        return {}
+
+    hour = max(0.0, min(24.0, float(hour_frac)))
+    if hour <= steps[0]:
+        return dict(hourly[str(steps[0])] or {})
+    if hour >= steps[-1]:
+        return dict(hourly[str(steps[-1])] or {})
+
+    upper_idx = next(i for i, step in enumerate(steps) if step >= hour)
+    lower = steps[upper_idx - 1]
+    upper = steps[upper_idx]
+    fraction = (hour - lower) / (upper - lower) if upper > lower else 0.0
+    lower_data = hourly.get(str(lower)) or {}
+    upper_data = hourly.get(str(upper)) or {}
+
+    result = {}
+    for key in set(lower_data) | set(upper_data):
+        v0 = lower_data.get(key)
+        v1 = upper_data.get(key)
+        if isinstance(v0, (int, float)) and isinstance(v1, (int, float)):
+            if key == "wdir":
+                # Interpolate the shorter turn around the 0°/360° boundary.
+                delta = (v1 - v0 + 540) % 360 - 180
+                result[key] = (v0 + fraction * delta) % 360
+            else:
+                result[key] = v0 + fraction * (v1 - v0)
+        elif isinstance(v0, (int, float)):
+            result[key] = v0
+        elif isinstance(v1, (int, float)):
+            result[key] = v1
+        else:
+            result[key] = v0 if fraction < 0.5 else v1
+    return result
+
+
 def fetch_open_meteo_forecast(points, on_progress=None, model="best_match"):
     """Fetch Open-Meteo forecast for a list of points with target_date.
 

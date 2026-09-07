@@ -1189,15 +1189,10 @@ function GpxMiniTempChart({
     if (cs.tMode === "time") {
       const ms = cs.tStart + ((x - cs.PL) / cs.cW) * cs.msRange;
       cxFixed = x;
-      let bestTemp: number | null = null;
-      let bestDist = Infinity;
-      for (const p of (cs.unifiedPts as { ms: number; temp: number }[])) {
-        const d = Math.abs(p.ms - ms);
-        if (d < bestDist) { bestDist = d; bestTemp = p.temp; }
-      }
+      const bestTemp = interpNightMs(ms, cs.unifiedPts as { ms: number; temp: number }[]);
       const timeStr = new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
       ttHtml = `<div style="color:${ttMuted};font-size:9px;margin-bottom:2px">🕐 ${timeStr}</div>`;
-      if (bestTemp != null) {
+      if (Number.isFinite(bestTemp)) {
         ttHtml += `<div style="color:${tempToRgb(bestTemp, DESIRED_TEMP)};font-size:13px;font-weight:600">☀ ${bestTemp.toFixed(1)}°C</div>`;
         cy = cs.PT + cs.cH - ((bestTemp - cs.tMin) / cs.tRange) * cs.cH;
       }

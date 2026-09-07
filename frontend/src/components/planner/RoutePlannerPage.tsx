@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import maplibregl from "maplibre-gl";
 import {
   ArrowLeft,
@@ -863,10 +863,13 @@ function ProfileWindow({
 
 export function RoutePlannerPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const t = useT();
   const rp = t.routePlanner;
   const lang = useLangStore((s) => s.lang);
   const setJobId = useJobStore((s) => s.setJobId);
+  const startTutorial = (location.state as { showRoutePlannerTutorial?: boolean } | null)
+    ?.showRoutePlannerTutorial === true;
 
   useEffect(() => {
     document.title = lang === "de" ? "WeatherRoute — Streckenplaner" : "WeatherRoute — Route Planner";
@@ -904,7 +907,17 @@ export function RoutePlannerPage() {
   const [collapsed, setCollapsed] = useState(false);
   const [weatherCollapsed, setWeatherCollapsed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [tourStep, setTourStep] = useState<RoutePlannerTourStep | null>("profile");
+  const [tourStep, setTourStep] = useState<RoutePlannerTourStep | null>(
+    startTutorial ? "profile" : null,
+  );
+
+  // Consume the navigation flag so a browser refresh or revisiting the route
+  // does not unexpectedly start the tutorial again.
+  useEffect(() => {
+    if (startTutorial) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [startTutorial, navigate, location.pathname]);
 
   function handleTourNext() {
     if (!tourStep) return;

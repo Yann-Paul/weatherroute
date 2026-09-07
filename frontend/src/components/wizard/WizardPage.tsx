@@ -1233,7 +1233,7 @@ export function WizardPage() {
           {/* Route planner option */}
           <button
             type="button"
-            onClick={() => navigate("/route-planner")}
+            onClick={() => navigate("/route-planner", { state: { showRoutePlannerTutorial: true } })}
             className="flex flex-col gap-4 rounded-2xl border-2 border-border bg-card p-6 text-left transition-all hover:border-primary/50 hover:shadow-sm"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">

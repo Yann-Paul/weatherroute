@@ -16,7 +16,7 @@ import {
   saveRoute,
 } from "@/api/client";
 import { cacheJobResult, getCachedJobResult } from "@/lib/resultsCacheDb";
-import type { GpxJobResults, GpxWeatherPoint, MapPoi, RoadInfoResult, RoutePlannerPoint } from "@/api/types";
+import type { ForecastHourData, GpxJobResults, GpxWeatherPoint, MapPoi, RoadInfoResult, RoutePlannerPoint } from "@/api/types";
 import { CLIENT_FALLBACK_NEEDED } from "@/api/types";
 import { downloadGpx } from "@/utils/gpxExport";
 import { useT } from "@/i18n/useT";
@@ -36,16 +36,45 @@ type ModelOverride = Record<string, {
   wspd: number | null; wdir: number | null; cloud: number | null;
 }>;
 
-// Nearest-hour lookup for route/pass points, mirrors _nearest_gpx_hour_key in api_app.py
-const GPX_HOUR_STEPS = [0, 6, 12, 18];
 function hourFracFromIso(iso: string): number {
   const [hh, mm] = iso.slice(11, 16).split(":").map(Number);
   return hh + mm / 60;
 }
-function nearestGpxHourKey(hourFrac: number): string {
-  return String(GPX_HOUR_STEPS.reduce((best, h) =>
-    Math.abs(hourFrac - h) < Math.abs(hourFrac - best) ? h : best
-  ));
+
+function interpolateGpxHourly(
+  hourly: Record<string, ForecastHourData> | undefined,
+  hourFrac: number,
+): ForecastHourData | undefined {
+  if (!hourly) return undefined;
+  const steps = [0, 6, 12, 18, 24].filter((h) => hourly[String(h)] != null);
+  if (steps.length === 0) return undefined;
+  const hour = Math.max(0, Math.min(24, hourFrac));
+  if (hour <= steps[0]) return hourly[String(steps[0])];
+  if (hour >= steps[steps.length - 1]) return hourly[String(steps[steps.length - 1])];
+
+  const upperIndex = steps.findIndex((step) => step >= hour);
+  const lower = steps[upperIndex - 1];
+  const upper = steps[upperIndex];
+  const fraction = upper > lower ? (hour - lower) / (upper - lower) : 0;
+  const a = hourly[String(lower)];
+  const b = hourly[String(upper)];
+  const interpolate = (x: number | null, y: number | null): number | null => {
+    if (x != null && y != null) return x + fraction * (y - x);
+    return x ?? y;
+  };
+  const interpolateDirection = (x: number | null, y: number | null): number | null => {
+    if (x == null || y == null) return x ?? y;
+    const delta = ((y - x + 540) % 360) - 180;
+    return (x + fraction * delta + 360) % 360;
+  };
+  return {
+    temp: interpolate(a.temp, b.temp),
+    prcp: interpolate(a.prcp, b.prcp),
+    wspd: interpolate(a.wspd, b.wspd),
+    wdir: interpolateDirection(a.wdir, b.wdir),
+    cloud: interpolate(a.cloud, b.cloud),
+    sun: interpolate(a.sun, b.sun),
+  };
 }
 
 export function GpxResultsPage() {
@@ -177,8 +206,7 @@ export function GpxResultsPage() {
           routePending.forEach((p, i) => {
             const pdata = data[String(i)];
             if (pdata?.ok) {
-              const hourKey = nearestGpxHourKey(hourFracFromIso(p.wp.arrivalTime));
-              const h = pdata.hourly?.[hourKey];
+              const h = interpolateGpxHourly(pdata.hourly, hourFracFromIso(p.wp.arrivalTime));
               if (h) {
                 patched[p.idx] = {
                   ...patched[p.idx],
@@ -310,8 +338,7 @@ export function GpxResultsPage() {
           routePts.forEach((p, i) => {
             const pdata = data[String(i)];
             if (pdata?.ok) {
-              const hourKey = nearestGpxHourKey(hourFracFromIso(p.wp.arrivalTime));
-              const h = pdata.hourly?.[hourKey];
+              const h = interpolateGpxHourly(pdata.hourly, hourFracFromIso(p.wp.arrivalTime));
               if (h) overrides[String(p.idx)] = { temp: h.temp, prcp: h.prcp, wspd: h.wspd, wdir: h.wdir, cloud: h.cloud };
             }
           });

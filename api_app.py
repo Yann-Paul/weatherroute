@@ -48,6 +48,7 @@ from module import (
     build_open_meteo_params,
     request_open_meteo,
     parse_open_meteo_data,
+    interpolate_gpx_hourly,
     OpenMeteoUnreachableError,
     find_destination_route,
     find_destination_route_hierarchical,
@@ -1028,14 +1029,6 @@ _ALLOWED_FORECAST_MODELS = {
 }
 
 
-_GPX_STOP_HOUR_STEPS = [0, 6, 12, 18]
-
-
-def _nearest_gpx_hour_key(hour_frac):
-    step = min(_GPX_STOP_HOUR_STEPS, key=lambda h: abs(hour_frac - h))
-    return str(step)
-
-
 @app.get("/api/jobs/{job_id}/gpx-forecast/{model_name}")
 def gpx_forecast_by_model(job_id: str, model_name: str):
     if model_name not in _ALLOWED_FORECAST_MODELS:
@@ -1059,7 +1052,7 @@ def gpx_forecast_by_model(job_id: str, model_name: str):
     for i, (pt_idx, arrival_hour_frac, _fp) in enumerate(forecast_pts):
         pdata = fdata.get(i, {})
         if pdata.get("ok", False):
-            h_data = (pdata.get("hourly") or {}).get(_nearest_gpx_hour_key(arrival_hour_frac)) or {}
+            h_data = interpolate_gpx_hourly(pdata.get("hourly") or {}, arrival_hour_frac)
             updates[str(pt_idx)] = {
                 "temp": h_data.get("temp"),
                 "prcp": h_data.get("prcp"),
@@ -3417,14 +3410,31 @@ def _parse_gpx_stop_raw(data, stop_ele, stop_dt, nxt_start_dt):
         for i, t in enumerate(htimes)
     }
 
-    def _nearest_hw(dt):
+    def _interpolated_hw(dt):
+        """Interpolate the raw hourly weather at the exact stop timestamp."""
+        lower_dt = dt.replace(minute=0, second=0, microsecond=0)
+        upper_dt = lower_dt + timedelta(hours=1)
+        lower = hw.get(lower_dt.strftime("%Y-%m-%dT%H:00"))
+        upper = hw.get(upper_dt.strftime("%Y-%m-%dT%H:00"))
+        fraction = (dt - lower_dt).total_seconds() / 3600.0
+        if lower is not None and upper is not None:
+            result = {}
+            for key in ("temp", "prcp", "wspd"):
+                v0, v1 = lower.get(key), upper.get(key)
+                if isinstance(v0, (int, float)) and isinstance(v1, (int, float)):
+                    result[key] = v0 + fraction * (v1 - v0)
+                else:
+                    result[key] = v0 if v0 is not None else v1
+            return result
+
+        # Graceful fallback at the edges of the returned API window.
         for delta in [0, 1, -1, 2, -2, 3, -3]:
             key = (dt + timedelta(hours=delta)).strftime("%Y-%m-%dT%H:00")
             if key in hw:
                 return hw[key]
         return {}
 
-    sw = _nearest_hw(stop_dt)
+    sw = _interpolated_hw(stop_dt)
     stop_temp = _tc(sw.get("temp"))
     stop_prcp = round(sw["prcp"], 2) if sw.get("prcp") is not None else None
     stop_wspd = round(sw["wspd"], 1) if sw.get("wspd") is not None else None
@@ -3432,7 +3442,7 @@ def _parse_gpx_stop_raw(data, stop_ele, stop_dt, nxt_start_dt):
     night_data = []
     slot = stop_dt
     while slot < nxt_start_dt - timedelta(minutes=1):
-        slw = _nearest_hw(slot)
+        slw = _interpolated_hw(slot)
         night_data.append({
             "hour": slot.strftime("%H:%M"),
             "date": slot.date().isoformat(),
@@ -3443,7 +3453,7 @@ def _parse_gpx_stop_raw(data, stop_ele, stop_dt, nxt_start_dt):
         slot = slot + timedelta(hours=3)
     # Always include an explicit point at departure time so that
     # interpNightMs(tNightEnd) and adjStartTemp on day N+1 are accurate.
-    slw_dep = _nearest_hw(nxt_start_dt)
+    slw_dep = _interpolated_hw(nxt_start_dt)
     night_data.append({
         "hour": nxt_start_dt.strftime("%H:%M"),
         "date": nxt_start_dt.date().isoformat(),
@@ -3659,8 +3669,6 @@ def run_gpx_analysis(
 
         done_count = [0]
         gpx_forecast_error = None
-        _nearest_hour_key = _nearest_gpx_hour_key
-
         # Store forecast point metadata so model switching can re-fetch later
         job["gpx_forecast_meta"] = {
             "forecast_pts": [(pt_idx, ah_frac, fp) for pt_idx, ah_frac, fp in forecast_pts]
@@ -3683,8 +3691,7 @@ def run_gpx_analysis(
                     pdata = fdata.get(i, {})
                     if pdata.get("ok", False):
                         hourly = pdata.get("hourly") or {}
-                        step_key = _nearest_hour_key(arrival_hour_frac)
-                        h_data = hourly.get(step_key) or {}
+                        h_data = interpolate_gpx_hourly(hourly, arrival_hour_frac)
                         weather_points[pt_idx]["temp"] = h_data.get("temp")
                         weather_points[pt_idx]["prcp"] = h_data.get("prcp")
                         weather_points[pt_idx]["wspd"] = h_data.get("wspd")

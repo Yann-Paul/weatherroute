@@ -949,6 +949,29 @@ weatherroute/
 
 ## Starten
 
+### Voraussetzungen
+
+| Software | Version | Verwendung |
+|---|---|---|
+| [Python](https://www.python.org/downloads/) | 3.11 (siehe `.python-version`) | Backend (FastAPI) |
+| [Node.js](https://nodejs.org/) | ≥ 20.19 oder ≥ 22.12 (LTS empfohlen) — bringt `npm` mit | Frontend (Vite 7) |
+| [Docker](https://www.docker.com/) | aktuell | nur für Produktions-Container bzw. lokale BRouter-Instanz (optional) |
+| [Git](https://git-scm.com/) | aktuell | Repository klonen, optional BRouter-Quellcode für lokale Instanz |
+
+**Erstmalige Installation der Abhängigkeiten**
+
+```bash
+# Backend (Python-Pakete)
+pip install -r requirements.txt
+
+# Frontend (Node-Pakete)
+cd frontend
+npm install
+cd ..
+```
+
+Danach die Start-Skripte wie unten beschrieben verwenden — sie erwarten, dass beide Schritte bereits erfolgt sind (kein automatisches `pip install`/`npm install`).
+
 **Entwicklung**
 
 ```bash
