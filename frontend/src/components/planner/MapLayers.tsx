@@ -9,6 +9,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { useT } from "@/i18n/useT";
 import { fetchRoutePois } from "@/api/client";
+import {
+  RoutePlannerTourHint,
+  type RoutePlannerTourStep,
+} from "@/components/planner/RoutePlannerTour";
 import type {
   ForestGeoJson,
   GpxWeatherPoint,
@@ -450,6 +454,10 @@ export function LayersMenu({
   shelterLoading,
   poiRadiusM,
   onPoiRadiusChange,
+  tourStep,
+  onTourNext,
+  onTourBack,
+  onTourSkip,
 }: {
   base: BaseLayer;
   onBaseChange: (b: BaseLayer) => void;
@@ -467,9 +475,19 @@ export function LayersMenu({
   /** POI search radius around the route, in meters. */
   poiRadiusM: number;
   onPoiRadiusChange: (m: number) => void;
+  tourStep?: RoutePlannerTourStep | null;
+  onTourNext?: () => void;
+  onTourBack?: () => void;
+  onTourSkip?: () => void;
 }) {
   const t = useT();
   const ly = t.routePlanner.layers;
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const tourPoisActive = tourStep === "pois";
+
+  useEffect(() => {
+    if (tourStep !== undefined && !tourPoisActive) setPopoverOpen(false);
+  }, [tourStep, tourPoisActive]);
   // Groups with an active overlay start expanded; the rest stay collapsed.
   const [openGroups, setOpenGroups] = useState<Record<PoiGroupId, boolean>>(
     () =>
@@ -562,12 +580,22 @@ export function LayersMenu({
   }
 
   return (
-    <Popover>
+    <Popover
+      open={tourPoisActive ? true : tourStep === undefined ? undefined : popoverOpen}
+      onOpenChange={(open) => {
+        setPopoverOpen(open);
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           type="button"
           aria-label={ly.button}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card/95 text-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-muted"
+          className={[
+            "flex h-10 w-10 items-center justify-center rounded-xl border bg-card/95 text-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-muted",
+            tourStep === "layers" || tourPoisActive
+              ? "ring-2 ring-primary ring-offset-2"
+              : "",
+          ].join(" ")}
         >
           <Layers className="h-5 w-5" />
         </button>
@@ -601,8 +629,21 @@ export function LayersMenu({
 
           <div className="h-px bg-border" />
 
-          <div className="space-y-2">
+          <div
+            className={[
+              "space-y-2",
+              tourPoisActive ? "rounded-lg ring-2 ring-primary/60 ring-offset-2" : "",
+            ].join(" ")}
+          >
             <p className="text-xs font-semibold text-muted-foreground">{ly.overlaysHeading}</p>
+            {tourPoisActive && onTourNext && onTourBack && onTourSkip && (
+              <RoutePlannerTourHint
+                step="pois"
+                onNext={onTourNext}
+                onBack={onTourBack}
+                onSkip={onTourSkip}
+              />
+            )}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                 <span>{ly.poiRadius}</span>

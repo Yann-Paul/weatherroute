@@ -8,11 +8,9 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
-  Info,
   Loader2,
   Mountain,
   RefreshCw,
-  X,
 } from "lucide-react";
 import {
   Map,
@@ -58,6 +56,11 @@ import type {
   WindShelterResult,
 } from "@/api/types";
 import { AddressSearch } from "@/components/planner/AddressSearch";
+import {
+  ROUTE_PLANNER_TOUR_STEPS,
+  RoutePlannerTourHint,
+  type RoutePlannerTourStep,
+} from "@/components/planner/RoutePlannerTour";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
 import { useJobStore } from "@/stores/jobStore";
@@ -251,52 +254,6 @@ function FitOnce({ coordinates }: { coordinates: [number, number][] }) {
     map.fitBounds(bounds, { padding: 60 });
   }, [map, isLoaded, coordinates]);
   return null;
-}
-
-function RoutePlannerGuide({ onDismiss }: { onDismiss: () => void }) {
-  const t = useT();
-  const tutorial = t.routePlanner.tutorial;
-  const items = [
-    { title: tutorial.profileTitle, description: tutorial.profileDesc },
-    { title: tutorial.pointsTitle, description: tutorial.pointsDesc },
-    { title: tutorial.layersTitle, description: tutorial.layersDesc },
-    { title: tutorial.poisTitle, description: tutorial.poisDesc },
-  ];
-
-  return (
-    <div className="rounded-xl border border-primary/25 bg-primary/5 p-3">
-      <div className="flex items-start gap-2">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">{tutorial.title}</p>
-          <ol className="mt-2 space-y-2">
-            {items.map((item, index) => (
-              <li key={item.title} className="flex items-start gap-2 text-xs">
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
-                  {index + 1}
-                </span>
-                <span className="leading-relaxed">
-                  <span className="font-medium">{item.title}: </span>
-                  <span className="text-muted-foreground">{item.description}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            {tutorial.poisNote}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label={tutorial.close}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
-  );
 }
 
 // ─── full-window map ────────────────────────────────────────────────────────
@@ -507,6 +464,10 @@ function ControlsPanel({
   saving,
   saved,
   splitControl,
+  tourStep,
+  onTourNext,
+  onTourBack,
+  onTourSkip,
 }: {
   onBack: () => void;
   profile: Profile;
@@ -544,12 +505,15 @@ function ControlsPanel({
   saving: boolean;
   saved: boolean;
   splitControl: ReactNode;
+  tourStep: RoutePlannerTourStep | null;
+  onTourNext: () => void;
+  onTourBack: () => void;
+  onTourSkip: () => void;
 }) {
   const t = useT();
   const rp = t.routePlanner;
   const tp = t.planner;
   const w = t.wizard;
-  const [showGuide, setShowGuide] = useState(true);
 
   function pillClass(active: boolean) {
     return [
@@ -592,8 +556,6 @@ function ControlsPanel({
       {!collapsed && (
         <div className="relative min-h-0 flex-1 border-t border-border">
           <div className="h-full space-y-2.5 overflow-y-auto px-3 py-2.5 sm:space-y-3 sm:px-4 sm:py-3 max-sm:[&_input]:h-8 max-sm:[&_input]:text-xs max-sm:[&_[role=combobox]]:h-8 max-sm:[&_[role=combobox]]:text-xs max-sm:[&_label]:text-xs">
-          {showGuide && <RoutePlannerGuide onDismiss={() => setShowGuide(false)} />}
-
           {/* address / place search */}
           <AddressSearch onSelect={onAddressSelect} />
 
@@ -602,7 +564,7 @@ function ControlsPanel({
             <div className="min-w-[160px] flex-1 space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">{rp.profile}</p>
               <Select value={profile} onValueChange={(v) => onProfileChange(v as Profile)}>
-                <SelectTrigger>
+                <SelectTrigger className={tourStep === "profile" ? "ring-2 ring-primary ring-offset-2" : undefined}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -628,7 +590,24 @@ function ControlsPanel({
               </button>
             )}
           </div>
+          {tourStep === "profile" && (
+            <RoutePlannerTourHint
+              step="profile"
+              onNext={onTourNext}
+              onBack={onTourBack}
+              onSkip={onTourSkip}
+            />
+          )}
           <Hint>{rp.mapHint}</Hint>
+
+          {tourStep === "points" && (
+            <RoutePlannerTourHint
+              step="points"
+              onNext={onTourNext}
+              onBack={onTourBack}
+              onSkip={onTourSkip}
+            />
+          )}
 
           {previewError && (
             <Alert variant="destructive">
@@ -682,6 +661,14 @@ function ControlsPanel({
             {actionsDisabled && actionsDisabledHint && (
               <p className="text-center text-xs text-muted-foreground">{actionsDisabledHint}</p>
             )}
+            {tourStep === "save" && (
+              <RoutePlannerTourHint
+                step="save"
+                onNext={onTourNext}
+                onBack={onTourBack}
+                onSkip={onTourSkip}
+              />
+            )}
             <div className="flex flex-wrap items-center justify-end gap-2">
               <Button
                 type="button"
@@ -699,7 +686,10 @@ function ControlsPanel({
                 onClick={onSaveRoute}
                 disabled={saveDisabled}
                 title={saveDisabled && !saved && !saving ? saveNotReadyHint : undefined}
-                className="gap-1.5 max-sm:h-8 max-sm:px-3 max-sm:text-xs"
+                className={[
+                  "gap-1.5 max-sm:h-8 max-sm:px-3 max-sm:text-xs",
+                  tourStep === "save" ? "ring-2 ring-primary ring-offset-2" : "",
+                ].join(" ")}
               >
                 {saved ? (
                   <><BookmarkCheck className="h-4 w-4" />{t.results.saved}</>
@@ -914,6 +904,19 @@ export function RoutePlannerPage() {
   const [collapsed, setCollapsed] = useState(false);
   const [weatherCollapsed, setWeatherCollapsed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [tourStep, setTourStep] = useState<RoutePlannerTourStep | null>("profile");
+
+  function handleTourNext() {
+    if (!tourStep) return;
+    const index = ROUTE_PLANNER_TOUR_STEPS.indexOf(tourStep);
+    setTourStep(ROUTE_PLANNER_TOUR_STEPS[index + 1] ?? null);
+  }
+
+  function handleTourBack() {
+    if (!tourStep) return;
+    const index = ROUTE_PLANNER_TOUR_STEPS.indexOf(tourStep);
+    if (index > 0) setTourStep(ROUTE_PLANNER_TOUR_STEPS[index - 1]);
+  }
 
   // ── map layer state
   const radar = useRainRadar();
@@ -1326,21 +1329,47 @@ export function RoutePlannerPage() {
         />
 
         <div className="absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
-          <LayersMenu
-            base={baseLayer}
-            onBaseChange={setBaseLayer}
-            mapOverlays={mapOverlays.state}
-            onToggleMapOverlay={mapOverlays.toggle}
-            onMapOverlayOpacityChange={mapOverlays.setOpacity}
-            overlays={overlays}
-            onToggleOverlay={handleToggleOverlay}
-            routeReady={previewCoords.length > 1}
-            windReady={weatherResult != null}
-            poisLoading={poisLoading}
-            shelterLoading={shelterLoading}
-            poiRadiusM={poiRadiusM}
-            onPoiRadiusChange={setPoiRadiusM}
-          />
+          <div className="flex items-start gap-2">
+            {tourStep === "layers" && (
+              <div className="w-64 max-w-[calc(100vw-5rem)]">
+                <RoutePlannerTourHint
+                  step="layers"
+                  onNext={handleTourNext}
+                  onBack={handleTourBack}
+                  onSkip={() => setTourStep(null)}
+                />
+              </div>
+            )}
+            <LayersMenu
+              base={baseLayer}
+              onBaseChange={setBaseLayer}
+              mapOverlays={mapOverlays.state}
+              onToggleMapOverlay={mapOverlays.toggle}
+              onMapOverlayOpacityChange={mapOverlays.setOpacity}
+              overlays={overlays}
+              onToggleOverlay={handleToggleOverlay}
+              routeReady={previewCoords.length > 1}
+              windReady={weatherResult != null}
+              poisLoading={poisLoading}
+              shelterLoading={shelterLoading}
+              poiRadiusM={poiRadiusM}
+              onPoiRadiusChange={setPoiRadiusM}
+              tourStep={tourStep === "pois" && previewCoords.length <= 1 ? null : tourStep}
+              onTourNext={handleTourNext}
+              onTourBack={handleTourBack}
+              onTourSkip={() => setTourStep(null)}
+            />
+          </div>
+          {tourStep === "pois" && previewCoords.length <= 1 && (
+            <div className="w-64 max-w-[calc(100vw-1.5rem)]">
+              <RoutePlannerTourHint
+                step="pois"
+                onNext={handleTourNext}
+                onBack={handleTourBack}
+                onSkip={() => setTourStep(null)}
+              />
+            </div>
+          )}
           <div className="w-56 max-w-[calc(100vw-1.5rem)]">
             <RainRadarPanel {...radar.panelProps} />
           </div>
@@ -1401,6 +1430,10 @@ export function RoutePlannerPage() {
                   />
                 )
               }
+              tourStep={tourStep}
+              onTourNext={handleTourNext}
+              onTourBack={handleTourBack}
+              onTourSkip={() => setTourStep(null)}
             />
           </div>
         </div>
