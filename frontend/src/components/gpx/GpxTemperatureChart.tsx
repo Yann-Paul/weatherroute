@@ -410,8 +410,11 @@ function GpxCombinedDayTempChart({
 
   // For day 2+: replace the start boundary temp in sortedWPs with the night departure temp
   const effectiveSortedWPs =
-    adjStartTemp != null && sortedWPs.length > 0 && sortedWPs[0].km <= startKm + 0.1
-      ? [{ ...sortedWPs[0], temp: adjStartTemp }, ...sortedWPs.slice(1)]
+    adjStartTemp != null
+      ? [
+          { km: startKm, temp: adjStartTemp, type: "regular" as GpxWeatherPoint["type"] },
+          ...sortedWPs.filter((wp) => wp.km > startKm + 0.001),
+        ]
       : sortedWPs;
 
   // Night pts with explicit boundary points:

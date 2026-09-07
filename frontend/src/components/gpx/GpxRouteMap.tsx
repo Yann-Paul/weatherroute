@@ -193,6 +193,48 @@ function interpTempForGpx(
   return interpTemp - (ele - interpEle) * lapse;
 }
 
+/**
+ * Interpolate riding temperature by arrival time. This is important around
+ * an overnight stop: the same kilometre has a different forecast at 18:00
+ * and at the next day's departure, so spatial interpolation alone cannot
+ * represent both values.
+ */
+function interpTempForGpxAtTime(
+  km: number,
+  ele: number,
+  ms: number,
+  weatherPoints: GpxWeatherPoint[],
+): number | null {
+  const pts = weatherPoints
+    .filter((wp) => wp.temp != null && Number.isFinite(new Date(wp.arrivalTime).getTime()))
+    .map((wp) => ({
+      ms: new Date(wp.arrivalTime).getTime(),
+      temp: wp.temp!,
+      ele: wp.ele,
+      prcp: wp.prcp ?? 0,
+      isStop: wp.type === "stop",
+    }))
+    .sort((a, b) => a.ms - b.ms || (a.isStop ? -1 : b.isStop ? 1 : 0));
+  if (pts.length === 0) return interpTempForGpx(km, ele, weatherPoints);
+
+  const exact = pts.find((p) => Math.abs(p.ms - ms) < 1_000);
+  if (exact) {
+    const lapse = (1 - 0.4 * Math.min(1, exact.prcp / 5)) / 100;
+    return exact.temp - (ele - exact.ele) * lapse;
+  }
+
+  let upper = pts.findIndex((p) => p.ms >= ms);
+  if (upper < 0) upper = pts.length - 1;
+  if (upper === 0) upper = 1;
+  const p0 = pts[upper - 1], p1 = pts[upper];
+  const fraction = p1.ms > p0.ms ? Math.max(0, Math.min(1, (ms - p0.ms) / (p1.ms - p0.ms))) : 0;
+  const temp = p0.temp + fraction * (p1.temp - p0.temp);
+  const pointEle = p0.ele + fraction * (p1.ele - p0.ele);
+  const prcp = p0.prcp + fraction * (p1.prcp - p0.prcp);
+  const lapse = (1 - 0.4 * Math.min(1, prcp / 5)) / 100;
+  return temp - (ele - pointEle) * lapse;
+}
+
 // ─── FitTrack ─────────────────────────────────────────────────────────────────
 
 function FitTrack({ coordinates }: { coordinates: [number, number][] }) {
@@ -904,18 +946,6 @@ function GpxMiniTempChart({
         && wp.stopTime && wp.nextStartTime
       );
 
-      // Riding temp points (km → time → temp). Stop boundary values are
-      // added separately below because a sampled elevation point is not
-      // guaranteed to fall exactly at 18:00 or the next day's start time.
-      const ridePoints: { ms: number; temp: number }[] = drawProfile
-        .filter(([km]) => km >= kmMin && km <= kmMax)
-        .map(([km, ele]) => {
-          const temp = interpTempForGpx(km, ele, wps);
-          if (temp == null) return null;
-          return { ms: gpxArrivalTime(km, dailyConfigs!, startDate!).getTime(), temp };
-        })
-        .filter((p): p is { ms: number; temp: number } => p != null);
-
       interface NightSeg {
         pts: { ms: number; temp: number }[];
         stopMs: number;
@@ -945,6 +975,32 @@ function GpxMiniTempChart({
           nextStartTime: wp.nextStartTime,
         });
       }
+
+      // Add the exact departure forecast as a virtual route sample. Without
+      // it, the first sampled point of the next day could jump from the night
+      // endpoint to a spatially interpolated value at nearly the same time.
+      const timeWeatherPoints = [
+        ...wps,
+        ...nightSegs.flatMap((segment) => {
+          const stop = stopWps.find((wp) => wp.stopTime === segment.stopTime);
+          return stop && segment.nextStartTemp != null
+            ? [{ ...stop, arrivalTime: segment.nextStartTime, temp: segment.nextStartTemp }]
+            : [];
+        }),
+      ];
+
+      // Riding temp points (km → time → temp). Stop boundary values are
+      // included in the time interpolation at their exact 18:00/departure
+      // timestamps, even when the elevation profile has no sample there.
+      const ridePoints: { ms: number; temp: number }[] = drawProfile
+        .filter(([km]) => km >= kmMin && km <= kmMax)
+        .map(([km, ele]) => {
+          const ms = gpxArrivalTime(km, dailyConfigs!, startDate!).getTime();
+          const temp = interpTempForGpxAtTime(km, ele, ms, timeWeatherPoints);
+          if (temp == null) return null;
+          return { ms, temp };
+        })
+        .filter((p): p is { ms: number; temp: number } => p != null);
 
       const allMs = [
         ...ridePoints.map((p) => p.ms),
