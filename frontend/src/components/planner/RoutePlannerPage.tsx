@@ -1367,7 +1367,11 @@ export function RoutePlannerPage() {
           highlightSegment={highlightSegment}
         />
 
-        <div className="absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
+        <div
+          className={`absolute right-3 top-3 flex flex-col items-end gap-2 ${
+            tourStep === "layers" || tourStep === "pois" ? "z-[90]" : "z-20"
+          }`}
+        >
           <div className="flex items-start gap-2">
             {tourStep === "layers" && (
               <div className="w-64 max-w-[calc(100vw-5rem)]">
@@ -1415,7 +1419,9 @@ export function RoutePlannerPage() {
         </div>
 
         <div
-          className={`pointer-events-none absolute left-3 z-20 w-[380px] max-w-[min(92vw,calc(100vw-4.75rem))] ${
+          className={`pointer-events-none absolute left-3 w-[380px] max-w-[min(92vw,calc(100vw-4.75rem))] ${
+            tourStep && tourStep !== "layers" && tourStep !== "pois" ? "z-[80]" : "z-20"
+          } ${
             collapsed ? "top-3" : "top-3 bottom-[32vh] sm:bottom-3"
           }`}
         >

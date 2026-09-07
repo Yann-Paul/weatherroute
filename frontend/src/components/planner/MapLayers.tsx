@@ -603,7 +603,7 @@ export function LayersMenu({
       <PopoverContent
         align="end"
         sideOffset={8}
-        className="max-h-[min(70vh,560px)] w-60 overflow-y-auto p-3"
+        className="z-[90] max-h-[min(70vh,560px)] w-60 overflow-y-auto p-3"
       >
         <div className="space-y-3">
           <div className="space-y-1.5">

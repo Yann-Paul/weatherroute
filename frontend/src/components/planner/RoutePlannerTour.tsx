@@ -38,7 +38,7 @@ export function RoutePlannerTourHint({
     <div
       role="dialog"
       aria-live="polite"
-      className="w-64 max-w-full rounded-lg border border-primary/40 bg-card p-2.5 shadow-lg ring-1 ring-primary/10"
+      className="relative z-[100] w-64 max-w-full rounded-lg border border-primary/40 bg-card p-2.5 shadow-lg ring-1 ring-primary/10"
     >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
