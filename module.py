@@ -2794,7 +2794,9 @@ def parse_open_meteo_data(valid, data_list):
     """
     from datetime import date as _date
 
-    HOUR_STEPS = [0, 6, 12, 18, 24]
+    # Keep every hourly value for exact GPX arrival times. The six-hour
+    # values remain available as a subset for the existing forecast views.
+    HOUR_STEPS = range(25)
     LAPSE_RATE = 0.0065  # °C per metre (standard environmental lapse rate)
 
     if isinstance(data_list, dict):
@@ -2867,15 +2869,22 @@ def parse_open_meteo_data(valid, data_list):
 def interpolate_gpx_hourly(hourly, hour_frac):
     """Interpolate the parsed GPX weather data for an exact arrival hour.
 
-    GPX points can arrive at any minute, while the shared forecast parser
-    keeps five six-hour samples (including the following day's 00:00). Using
-    the nearest sample creates visible jumps at e.g. 15:00, so interpolate
-    numeric weather fields between the surrounding samples instead.
+    GPX points can arrive at any minute. The shared forecast parser keeps the
+    full hourly series for the target day (including the following day's
+    00:00), so use the surrounding hourly samples and interpolate fractional
+    hours between them. Older cached results with only six-hour samples are
+    still supported.
     """
     if not hourly:
         return {}
 
-    steps = [h for h in (0, 6, 12, 18, 24) if str(h) in hourly]
+    # Prefer the full hourly series. Older cached results may only contain
+    # the traditional 0/6/12/18/24 samples, which this also supports.
+    steps = sorted({
+        int(key)
+        for key in hourly
+        if str(key).isdigit() and 0 <= int(key) <= 24
+    })
     if not steps:
         return {}
 

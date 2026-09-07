@@ -46,7 +46,12 @@ function interpolateGpxHourly(
   hourFrac: number,
 ): ForecastHourData | undefined {
   if (!hourly) return undefined;
-  const steps = [0, 6, 12, 18, 24].filter((h) => hourly[String(h)] != null);
+  // Use the exact hourly forecast when available. Older cached responses
+  // may still contain only the 0/6/12/18/24 samples.
+  const steps = Object.keys(hourly)
+    .filter((key) => /^\d+$/.test(key) && Number(key) >= 0 && Number(key) <= 24)
+    .map(Number)
+    .sort((a, b) => a - b);
   if (steps.length === 0) return undefined;
   const hour = Math.max(0, Math.min(24, hourFrac));
   if (hour <= steps[0]) return hourly[String(steps[0])];

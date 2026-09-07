@@ -67,7 +67,6 @@ import { useJobStore } from "@/stores/jobStore";
 import { toast } from "sonner";
 import {
   GlobalPlanPanel,
-  Hint,
   PerDayPlanTable,
 } from "@/components/wizard/RoutePlanningSteps";
 import {
@@ -556,8 +555,23 @@ function ControlsPanel({
       {!collapsed && (
         <div className="relative min-h-0 flex-1 border-t border-border">
           <div className="h-full space-y-2.5 overflow-y-auto px-3 py-2.5 sm:space-y-3 sm:px-4 sm:py-3 max-sm:[&_input]:h-8 max-sm:[&_input]:text-xs max-sm:[&_[role=combobox]]:h-8 max-sm:[&_[role=combobox]]:text-xs max-sm:[&_label]:text-xs">
+          {tourStep === "analyze" && (
+            <div className="-mx-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-2 text-[11px] font-medium text-primary shadow-sm">
+              ↓ {t.routePlanner.tutorial.scrollToAnalyze}
+            </div>
+          )}
           {/* address / place search */}
           <AddressSearch onSelect={onAddressSelect} />
+          {tourStep === "points" && (
+            <div className="rounded-lg border-l-2 border-primary/60 pl-2">
+              <RoutePlannerTourHint
+                step="points"
+                onNext={onTourNext}
+                onBack={onTourBack}
+                onSkip={onTourSkip}
+              />
+            </div>
+          )}
 
           {/* profile + distance/ascent (mobile) + clear */}
           <div className="flex flex-wrap items-end gap-3">
@@ -575,6 +589,16 @@ function ControlsPanel({
                   ))}
                 </SelectContent>
               </Select>
+              {tourStep === "profile" && (
+                <div className="pt-1">
+                  <RoutePlannerTourHint
+                    step="profile"
+                    onNext={onTourNext}
+                    onBack={onTourBack}
+                    onSkip={onTourSkip}
+                  />
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-3 text-sm sm:hidden">
               <span>{distanceKm != null ? `${distanceKm.toFixed(1)} km` : previewLoading ? "…" : "—"}</span>
@@ -590,24 +614,7 @@ function ControlsPanel({
               </button>
             )}
           </div>
-          {tourStep === "profile" && (
-            <RoutePlannerTourHint
-              step="profile"
-              onNext={onTourNext}
-              onBack={onTourBack}
-              onSkip={onTourSkip}
-            />
-          )}
-          <Hint>{rp.mapHint}</Hint>
-
-          {tourStep === "points" && (
-            <RoutePlannerTourHint
-              step="points"
-              onNext={onTourNext}
-              onBack={onTourBack}
-              onSkip={onTourSkip}
-            />
-          )}
+          {tourStep === null && <p className="text-xs text-muted-foreground">{rp.mapHint}</p>}
 
           {previewError && (
             <Alert variant="destructive">
@@ -661,14 +668,6 @@ function ControlsPanel({
             {actionsDisabled && actionsDisabledHint && (
               <p className="text-center text-xs text-muted-foreground">{actionsDisabledHint}</p>
             )}
-            {tourStep === "save" && (
-              <RoutePlannerTourHint
-                step="save"
-                onNext={onTourNext}
-                onBack={onTourBack}
-                onSkip={onTourSkip}
-              />
-            )}
             <div className="flex flex-wrap items-center justify-end gap-2">
               <Button
                 type="button"
@@ -680,31 +679,58 @@ function ControlsPanel({
                 <Download className="h-4 w-4" />
                 {rp.downloadGpx}
               </Button>
-              <Button
-                type="button"
-                variant={saved ? "outline" : "secondary"}
-                onClick={onSaveRoute}
-                disabled={saveDisabled}
-                title={saveDisabled && !saved && !saving ? saveNotReadyHint : undefined}
-                className={[
-                  "gap-1.5 max-sm:h-8 max-sm:px-3 max-sm:text-xs",
-                  tourStep === "save" ? "ring-2 ring-primary ring-offset-2" : "",
-                ].join(" ")}
-              >
-                {saved ? (
-                  <><BookmarkCheck className="h-4 w-4" />{t.results.saved}</>
-                ) : (
-                  <><Bookmark className="h-4 w-4" />{saving ? "…" : t.results.save}</>
+              <div className="relative">
+                {tourStep === "save" && (
+                  <div className="absolute bottom-full right-0 z-20 mb-2 w-64 max-w-[calc(100vw-2rem)]">
+                    <RoutePlannerTourHint
+                      step="save"
+                      onNext={onTourNext}
+                      onBack={onTourBack}
+                      onSkip={onTourSkip}
+                    />
+                  </div>
                 )}
-              </Button>
-              <Button
-                type="button"
-                onClick={onFinalize}
-                disabled={actionsDisabled || finalizeBusy}
-                className="gap-1.5 max-sm:h-8 max-sm:px-3 max-sm:text-xs"
-              >
-                {finalizeBusy ? w.gpxAnalyzing : w.gpxAnalyze}
-              </Button>
+                <Button
+                  type="button"
+                  variant={saved ? "outline" : "secondary"}
+                  onClick={onSaveRoute}
+                  disabled={saveDisabled}
+                  title={saveDisabled && !saved && !saving ? saveNotReadyHint : undefined}
+                  className={[
+                    "gap-1.5 max-sm:h-8 max-sm:px-3 max-sm:text-xs",
+                    tourStep === "save" ? "ring-2 ring-primary ring-offset-2" : "",
+                  ].join(" ")}
+                >
+                  {saved ? (
+                    <><BookmarkCheck className="h-4 w-4" />{t.results.saved}</>
+                  ) : (
+                    <><Bookmark className="h-4 w-4" />{saving ? "…" : t.results.save}</>
+                  )}
+                </Button>
+              </div>
+              <div className="relative">
+                {tourStep === "analyze" && (
+                  <div className="absolute bottom-full right-0 z-20 mb-2 w-64 max-w-[calc(100vw-2rem)]">
+                    <RoutePlannerTourHint
+                      step="analyze"
+                      onNext={onTourNext}
+                      onBack={onTourBack}
+                      onSkip={onTourSkip}
+                    />
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  onClick={onFinalize}
+                  disabled={actionsDisabled || finalizeBusy}
+                  className={[
+                    "gap-1.5 max-sm:h-8 max-sm:px-3 max-sm:text-xs",
+                    tourStep === "analyze" ? "ring-2 ring-primary ring-offset-2" : "",
+                  ].join(" ")}
+                >
+                  {finalizeBusy ? w.gpxAnalyzing : w.gpxAnalyze}
+                </Button>
+              </div>
             </div>
           </div>
 

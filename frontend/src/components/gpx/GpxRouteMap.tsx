@@ -158,8 +158,24 @@ function interpTempForGpx(
   ele: number,
   weatherPoints: GpxWeatherPoint[]
 ): number | null {
-  const pts = weatherPoints.filter((wp) => wp.temp != null);
+  // Stop points are appended after the regular route points by the API.
+  // Sort them before interpolating so the direct stop forecast is also used
+  // at the exact day boundary instead of being treated as an out-of-order
+  // final sample.
+  const pts = weatherPoints
+    .filter((wp) => wp.temp != null)
+    .sort((a, b) =>
+      a.km - b.km || (a.type === "stop" ? -1 : b.type === "stop" ? 1 : 0)
+    );
   if (pts.length === 0) return null;
+  const exact =
+    pts.find((wp) => wp.type === "stop" && Math.abs(wp.km - km) < 0.001)
+    ?? pts.find((wp) => Math.abs(wp.km - km) < 0.001);
+  if (exact) {
+    const prcp = exact.prcp ?? 0;
+    const lapse = (1 - 0.4 * Math.min(1, prcp / 5)) / 100;
+    return exact.temp! - (ele - exact.ele) * lapse;
+  }
   if (pts.length === 1) {
     const lapse = (1 - 0.4 * Math.min(1, (pts[0].prcp ?? 0) / 5)) / 100;
     return pts[0].temp! - (ele - pts[0].ele) * lapse;
@@ -881,7 +897,16 @@ function GpxMiniTempChart({
     if (hasTime) {
       // ── TIME-BASED MODE: riding segments + overnight nightData ───────────────
 
-      // Riding temp points (km → time → temp)
+      // Stop wps with nightData within visible km range
+      const stopWps = wps.filter(
+        (wp) => wp.type === "stop"
+          && wp.km >= kmMin - 1 && wp.km <= kmMax + 1
+        && wp.stopTime && wp.nextStartTime
+      );
+
+      // Riding temp points (km → time → temp). Stop boundary values are
+      // added separately below because a sampled elevation point is not
+      // guaranteed to fall exactly at 18:00 or the next day's start time.
       const ridePoints: { ms: number; temp: number }[] = drawProfile
         .filter(([km]) => km >= kmMin && km <= kmMax)
         .map(([km, ele]) => {
@@ -891,24 +916,30 @@ function GpxMiniTempChart({
         })
         .filter((p): p is { ms: number; temp: number } => p != null);
 
-      // Stop wps with nightData within visible km range
-      const stopWps = wps.filter(
-        (wp) => wp.type === "stop"
-          && wp.km >= kmMin - 1 && wp.km <= kmMax + 1
-          && wp.stopTime && wp.nextStartTime
-      );
-
-      interface NightSeg { pts: { ms: number; temp: number }[]; stopMs: number; nextStartMs: number; nightLow: number | null; stopTime: string; nextStartTime: string }
+      interface NightSeg {
+        pts: { ms: number; temp: number }[];
+        stopMs: number;
+        nextStartMs: number;
+        stopTemp: number | null;
+        nextStartTemp: number | null;
+        nightLow: number | null;
+        stopTime: string;
+        nextStartTime: string;
+      }
       const nightSegs: NightSeg[] = [];
       for (const wp of stopWps) {
         if (!wp.stopTime || !wp.nextStartTime) continue;
         const pts = (wp.nightData as GpxNightHour[] | undefined ?? [])
           .map((d) => ({ ms: new Date(`${d.date}T${d.hour}:00`).getTime(), temp: d.temp ?? NaN }))
           .filter((p) => Number.isFinite(p.ms) && Number.isFinite(p.temp));
+        const stopMs = new Date(wp.stopTime).getTime();
+        const nextStartMs = new Date(wp.nextStartTime).getTime();
         nightSegs.push({
           pts,
-          stopMs: new Date(wp.stopTime).getTime(),
-          nextStartMs: new Date(wp.nextStartTime).getTime(),
+          stopMs,
+          nextStartMs,
+          stopTemp: wp.temp,
+          nextStartTemp: pts.length >= 2 ? interpNightMs(nextStartMs, pts) : null,
           nightLow: wp.nightLow ?? null,
           stopTime: wp.stopTime,
           nextStartTime: wp.nextStartTime,
@@ -933,6 +964,7 @@ function GpxMiniTempChart({
       const allTemps = [
         ...ridePoints.map((p) => p.temp),
         ...nightSegs.flatMap((s) => s.pts.map((p) => p.temp)),
+        ...nightSegs.flatMap((s) => [s.stopTemp, s.nextStartTemp].filter((t): t is number => t != null)),
       ];
       const tMin = Math.floor(Math.min(...allTemps)) - 2;
       const tMax = Math.ceil(Math.max(...allTemps)) + 2;
@@ -957,26 +989,32 @@ function GpxMiniTempChart({
           const lastRide = rideSegs[si][rideSegs[si].length - 1];
           const ns = nightSegs.find((n) => Math.abs(n.stopMs - lastRide.ms) < 2 * 3_600_000);
           if (ns && ns.pts.length >= 2) {
-            // Pause start: use riding day's last temp (= wp.temp at stop time)
-            // Pause end:   interpolate nightData at nextStartMs for correct boundary
-            const tempAtEnd = interpNightMs(ns.nextStartMs, ns.pts);
+            // Use the direct API values at both boundaries. A sampled route
+            // point can be before the actual stop location/time, so using
+            // lastRide.temp here caused a visible discontinuity at 18:00.
+            const tempAtStart = ns.stopTemp ?? interpNightMs(ns.stopMs, ns.pts) ?? lastRide.temp;
+            const tempAtEnd = ns.nextStartTemp ?? interpNightMs(ns.nextStartMs, ns.pts);
+            if (Math.abs(lastRide.ms - ns.stopMs) < 60_000) {
+              rideSegs[si] = [
+                ...rideSegs[si].slice(0, -1),
+                { ms: lastRide.ms, temp: tempAtStart },
+              ];
+            }
+            if (rideSegs[si + 1].length > 0 && Math.abs(rideSegs[si + 1][0].ms - ns.nextStartMs) < 60_000) {
+              rideSegs[si + 1] = rideSegs[si + 1].slice(1);
+            }
             const nightBoundary: { ms: number; temp: number }[] = [
-              { ms: ns.stopMs, temp: lastRide.temp },
+              { ms: ns.stopMs, temp: tempAtStart },
               ...ns.pts.filter((p) => p.ms > ns.stopMs + 60_000 && p.ms < ns.nextStartMs - 60_000),
               { ms: ns.nextStartMs, temp: tempAtEnd },
             ];
             unifiedPts.push(...nightBoundary);
-            // Override first riding point of next day to use the night's boundary temperature
-            rideSegs[si + 1] = [
-              { ms: rideSegs[si + 1][0].ms, temp: tempAtEnd },
-              ...rideSegs[si + 1].slice(1),
-            ];
           } else {
             // No nightData: straight interpolated line across the pause
             const stopMs = ns?.stopMs ?? lastRide.ms;
             const nextStartMs = ns?.nextStartMs ?? rideSegs[si + 1][0].ms;
-            unifiedPts.push({ ms: stopMs, temp: lastRide.temp });
-            unifiedPts.push({ ms: nextStartMs, temp: rideSegs[si + 1][0].temp });
+            unifiedPts.push({ ms: stopMs, temp: ns?.stopTemp ?? lastRide.temp });
+            unifiedPts.push({ ms: nextStartMs, temp: ns?.nextStartTemp ?? rideSegs[si + 1][0].temp });
           }
         }
       }

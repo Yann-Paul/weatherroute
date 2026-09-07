@@ -415,9 +415,11 @@ function GpxCombinedDayTempChart({
       : sortedWPs;
 
   // Night pts with explicit boundary points:
-  //   start = tNightStart with the stop-point temperature (= last riding temp)
-  //   end   = tNightEnd with nightData-interpolated temperature
-  const stopTemp = sortedWPs.length > 0 ? interpTempAtKm(endKm, sortedWPs) : null;
+  //   start = tNightStart with the direct stop forecast
+  //   end   = tNightEnd with the direct/interpolated departure forecast
+  // The stop forecast is queried directly at the actual stop time. Prefer it
+  // over a spatial interpolation from the surrounding route samples.
+  const stopTemp = stopPt?.temp ?? (sortedWPs.length > 0 ? interpTempAtKm(endKm, sortedWPs) : null);
   const nightEndTemp = nightPts.length >= 2 ? interpNightMs(tNightEnd, nightPts) : null;
   const nightPtsAdj: { ms: number; temp: number }[] =
     hasNight && nightPts.length >= 2 && stopTemp != null && nightEndTemp != null
