@@ -1643,7 +1643,7 @@ export function GpxRouteMap({
         zoom={8}
         className="h-[500px] w-full rounded-lg lg:h-[600px]"
       >
-        <MapControls showFullscreen />
+        <MapControls showLocate showFullscreen />
         <LiveLocationButton status={liveLocation.status} onToggle={liveLocation.toggle} className="top-2 left-2" />
         <LiveLocationMarker coords={liveLocation.coords} />
         {mapOverlays.state.topo.enabled && <TopoOverlayLayer opacity={mapOverlays.state.topo.opacity} />}

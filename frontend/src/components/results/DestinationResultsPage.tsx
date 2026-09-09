@@ -218,7 +218,7 @@ export function DestinationResultsPage() {
               theme={isDark ? "dark" : "light"}
               className="h-full w-full"
             >
-              <MapControls />
+              <MapControls showLocate />
 
               {/* All routes as faint background lines */}
               {results.routes.map((r: DestinationRoute, ri: number) =>

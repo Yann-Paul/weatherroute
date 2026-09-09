@@ -2,12 +2,30 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
 import maplibregl from "maplibre-gl";
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   ArrowLeft,
   Bookmark,
   BookmarkCheck,
   ChevronDown,
   ChevronUp,
   Download,
+  GripVertical,
+  ListOrdered,
   Loader2,
   Mountain,
   RefreshCw,
@@ -426,6 +444,113 @@ function RouteMapView({
 
 // ─── floating controls panel ───────────────────────────────────────────────
 
+function SortableWaypointRow({
+  point,
+  index,
+  isLast,
+  itemId,
+}: {
+  point: RoutePlannerPoint;
+  index: number;
+  isLast: boolean;
+  itemId: string;
+}) {
+  const t = useT();
+  const rp = t.routePlanner;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: itemId });
+  const label = index === 0 ? rp.pointStart : isLast ? rp.pointEnd : rp.pointVia(index);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+      className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5"
+    >
+      <button
+        type="button"
+        className="cursor-grab touch-none text-muted-foreground hover:text-foreground"
+        aria-label={rp.pointOrder.dragLabel}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+        {index + 1}
+      </span>
+      <div className="min-w-0">
+        <p className="text-xs font-medium">{label}</p>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {point.lat.toFixed(5)}, {point.lon.toFixed(5)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function WaypointOrderPanel({
+  points,
+  onReorder,
+}: {
+  points: RoutePlannerPoint[];
+  onReorder: (from: number, to: number) => void;
+}) {
+  const t = useT();
+  const rp = t.routePlanner;
+  const [open, setOpen] = useState(false);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const items = points.map((_, index) => `waypoint-${index}`);
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    onReorder(items.indexOf(active.id as string), items.indexOf(over.id as string));
+  }
+
+  if (points.length < 2) return null;
+
+  return (
+    <div className="rounded-lg border border-border">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left text-xs font-medium hover:bg-muted/60"
+      >
+        <span className="flex items-center gap-2">
+          <ListOrdered className="h-4 w-4 text-muted-foreground" />
+          {rp.pointOrder.heading}
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{points.length}</span>
+        </span>
+        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-border p-2.5">
+          <p className="text-[11px] leading-snug text-muted-foreground">{rp.pointOrder.hint}</p>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={items} strategy={verticalListSortingStrategy}>
+              <div className="space-y-1.5">
+                {points.map((point, index) => (
+                  <SortableWaypointRow
+                    key={items[index]}
+                    point={point}
+                    index={index}
+                    isLast={index === points.length - 1}
+                    itemId={items[index]}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ControlsPanel({
   onBack,
   profile,
@@ -437,6 +562,7 @@ function ControlsPanel({
   previewLoading,
   previewError,
   onClearPoints,
+  onReorderPoints,
   startDate,
   onDateChange,
   useGlobal,
@@ -478,6 +604,7 @@ function ControlsPanel({
   previewLoading: boolean;
   previewError: boolean;
   onClearPoints: () => void;
+  onReorderPoints: (from: number, to: number) => void;
   startDate: string;
   onDateChange: (d: string) => void;
   useGlobal: boolean;
@@ -562,6 +689,7 @@ function ControlsPanel({
           )}
           {/* address / place search */}
           <AddressSearch onSelect={onAddressSelect} />
+          <WaypointOrderPanel points={points} onReorder={onReorderPoints} />
           {tourStep === "points" && (
             <div className="rounded-lg border-l-2 border-primary/60 pl-2">
               <RoutePlannerTourHint
@@ -1158,6 +1286,16 @@ export function RoutePlannerPage() {
     setPendingPoint(null);
   }
 
+  function handleReorderPoints(from: number, to: number) {
+    setPoints((current) => {
+      if (from === to || from < 0 || to < 0 || from >= current.length || to >= current.length) return current;
+      const next = [...current];
+      const [point] = next.splice(from, 1);
+      next.splice(to, 0, point);
+      return next;
+    });
+  }
+
   // ── planning config changes
   function handleGlobalParam(param: Param, value: number) {
     const next = editParam(globalConfig, param, value);
@@ -1437,6 +1575,7 @@ export function RoutePlannerPage() {
               previewLoading={previewLoading}
               previewError={previewError}
               onClearPoints={handleClearPoints}
+              onReorderPoints={handleReorderPoints}
               startDate={startDate}
               onDateChange={setStartDate}
               useGlobal={useGlobal}

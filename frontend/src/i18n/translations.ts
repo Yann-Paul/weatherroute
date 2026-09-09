@@ -393,6 +393,11 @@ const de = {
     pointEnd: "Ziel",
     pointVia: (n: number) => `Via ${n}`,
     removePoint: "Entfernen",
+    pointOrder: {
+      heading: "Punktreihenfolge",
+      hint: "Ziehe am Griff, um die Reihenfolge der Route zu ändern.",
+      dragLabel: "Punkt verschieben",
+    },
     profileHeading: "Höhenprofil & Wetter",
     profileTabs: {
       weather: "Wetter",
@@ -1087,6 +1092,11 @@ const en = {
     pointEnd: "Destination",
     pointVia: (n: number) => `Via ${n}`,
     removePoint: "Remove",
+    pointOrder: {
+      heading: "Point order",
+      hint: "Drag the handle to change the route order.",
+      dragLabel: "Move point",
+    },
     profileHeading: "Elevation & weather",
     profileTabs: {
       weather: "Weather",

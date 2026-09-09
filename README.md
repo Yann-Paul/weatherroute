@@ -236,6 +236,51 @@ Siehe [Lokale BRouter-Instanz](#starten) für den optionalen Eigenbetrieb der Ro
 
 ---
 
+## Aktuelle Änderungen
+
+### Interaktives Tutorial im Streckenplaner
+
+Der Streckenplaner verfügt über ein optionales, schrittweises Tutorial. Es wird nur gestartet,
+wenn auf der Startseite die Tutorial-Option ausgewählt wurde. Die Hinweise erscheinen als kleine
+Boxen direkt an den zugehörigen Bedienelementen und werden nacheinander eingeblendet:
+
+1. Fahrprofil auswählen
+2. Kartenebene auswählen
+3. Streckenpunkte setzen
+4. POIs einstellen (erst ab mindestens zwei Streckenpunkten)
+5. Route analysieren
+6. Route speichern
+
+Für Schritt 5 weist das Tutorial zusätzlich darauf hin, im linken Panel nach unten zu scrollen.
+Die Tutorial-Boxen liegen auf mobilen Bildschirmen über den Karten- und Ebenen-Overlays, damit
+die Hinweise nicht verdeckt werden.
+
+### Stundenwerte und Temperaturinterpolation
+
+Für Live-Wettervorhersagen werden die verfügbaren stündlichen Open-Meteo-Werte verarbeitet. Werte
+für Zwischenzeiten werden linear zwischen den benachbarten Stunden interpoliert; Windrichtungen
+werden dabei kreisförmig interpoliert. Dadurch entstehen im Temperaturprofil keine künstlichen
+Sprünge, wenn sich die Streckenzeit beispielsweise von 14:59 auf 15:00 Uhr bewegt.
+
+Auch Tageswechsel und Übernachtungen werden berücksichtigt: Für einen Zeitraum wie 18:00 bis
+08:00 Uhr werden die Werte an beiden Grenzen in die Streckeninterpolation einbezogen. Die
+Temperatur am Abfahrtszeitpunkt nach der Nacht wird dadurch nicht fälschlich durch den ersten
+späteren Streckenpunkt ersetzt.
+
+Der Wettertab zeigt die direkten Vorhersagewerte der Wetterpunkte. Das Temperaturprofil auf der
+Karte verwendet dieselben Vorhersagedaten und berücksichtigt zusätzlich die Höhenlage. An einem
+identischen Ort und Zeitpunkt sollten die Werte daher übereinstimmen; bei Zwischenpunkten mit
+deutlichem Höhenunterschied kann das Kartenprofil wegen der Höhenkorrektur abweichen.
+
+### Fehlermeldung bei nicht routbaren Strecken
+
+Wenn die Routenvorschau (`POST /api/route-planner/preview`) keine Verbindung zwischen den
+ausgewählten Punkten berechnen kann oder der Routingdienst mit `502 Bad Gateway` antwortet,
+zeigt der Streckenplaner einen verständlichen Hinweis an. Darin wird empfohlen, neue Punkte zu
+wählen, die näher beieinander liegen und über ein zusammenhängendes Straßennetz erreichbar sind.
+
+---
+
 ## Berechnungsablauf
 
 ### Modus: Route planen

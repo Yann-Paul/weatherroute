@@ -1425,7 +1425,7 @@ const lang = useLangStore((s) => s.lang);
         <MapBoundsForecastTracker miniElev={miniElev} />
         <LiveLocationMarker coords={liveLocation.coords} />
 
-        <MapControls position="bottom-right" showFullscreen />
+        <MapControls position="bottom-right" showLocate showFullscreen />
         <LiveLocationButton status={liveLocation.status} onToggle={liveLocation.toggle} className="top-2 left-2" />
 
         {isFullscreen && (
