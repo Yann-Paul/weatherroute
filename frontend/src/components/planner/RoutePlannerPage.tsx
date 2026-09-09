@@ -1557,10 +1557,10 @@ export function RoutePlannerPage() {
         </div>
 
         <div
-          className={`pointer-events-none absolute left-3 w-[380px] max-w-[min(92vw,calc(100vw-4.75rem))] ${
+          className={`pointer-events-none absolute left-2 right-12 w-auto sm:left-3 sm:right-auto sm:w-[380px] sm:max-w-[min(92vw,calc(100vw-4.75rem))] ${
             tourStep && tourStep !== "layers" && tourStep !== "pois" ? "z-[80]" : "z-20"
           } ${
-            collapsed ? "top-3" : "top-3 bottom-[32vh] sm:bottom-3"
+            collapsed ? "top-12 sm:top-3" : "top-12 bottom-2 sm:top-3 sm:bottom-3"
           }`}
         >
           <div className="pointer-events-auto h-full">
