@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import type { FeatureCollection, LineString } from "geojson";
 import { ChevronRight, Layers, Loader2 } from "lucide-react";
@@ -267,11 +267,70 @@ function emptyPoiMap(): Record<PoiCategory, MapPoi[]> {
   }, {} as Record<PoiCategory, MapPoi[]>);
 }
 
+function poiKey(p: MapPoi): string {
+  return `${p.lat},${p.lon},${p.category}`;
+}
+
+/** Union of two POI lists for the same category, deduped by coordinates —
+ * used so a re-fetch only ever adds markers, never drops ones already
+ * shown (Overpass result order/caps aren't guaranteed stable across
+ * queries, and a route edit shouldn't blank the layer while it reloads). */
+function mergePois(existing: MapPoi[], fetched: MapPoi[]): MapPoi[] {
+  const seen = new Set(existing.map(poiKey));
+  const added = fetched.filter((p) => !seen.has(poiKey(p)));
+  return [...existing, ...added];
+}
+
+const DEG_TO_M = 111_320; // good enough at the few-km corridor widths POIs are searched in
+
+function pointToSegmentM(lat: number, lon: number, a: RoutePlannerPoint, b: RoutePlannerPoint): number {
+  const kx = Math.cos((lat * Math.PI) / 180);
+  const ax = a.lon * kx, ay = a.lat;
+  const bx = b.lon * kx, by = b.lat;
+  const px = lon * kx, py = lat;
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  const t = lenSq === 0 ? 0 : Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+  const cx = ax + t * dx, cy = ay + t * dy;
+  return Math.hypot(px - cx, py - cy) * DEG_TO_M;
+}
+
+/** Distance in meters from a point to a (thinned) route polyline — mirrors
+ * the backend's _point_to_polyline_m so the frontend can re-decide POI
+ * visibility instantly on a route/radius change, without waiting on a
+ * fresh API call. */
+function distanceToRouteM(poi: { lat: number; lon: number }, route: RoutePlannerPoint[]): number {
+  if (route.length === 0) return Infinity;
+  if (route.length === 1) return pointToSegmentM(poi.lat, poi.lon, route[0], route[0]);
+  let best = Infinity;
+  for (let i = 0; i < route.length - 1; i++) {
+    best = Math.min(best, pointToSegmentM(poi.lat, poi.lon, route[i], route[i + 1]));
+  }
+  return best;
+}
+
 /**
  * Fetches only the POI categories currently enabled, incrementally — turning
  * on one more category fetches just that category instead of re-running one
- * giant all-categories Overpass query. Already-fetched categories are cached
- * until the route itself changes.
+ * giant all-categories Overpass query.
+ *
+ * Every POI carries a `distanceM` (from the backend, see _point_to_polyline_m
+ * in api_app.py) that is never shown in the UI but drives visibility:
+ * `poisByCategory` is just the cached set filtered by `distanceM <= radiusM`,
+ * so moving the radius slider — in either direction — never needs a request,
+ * it only ever changes which of the already-fetched markers pass the filter.
+ * Growing the radius past what's been fetched does still need a request for
+ * the newly-reachable ring, whose result is merged into the cache (never
+ * replaces it, for the same "don't blank existing markers" reason as above).
+ *
+ * When the route itself changes, every cached POI's distance is instead
+ * re-measured against the new route right away (client-side, no request),
+ * so visibility can be re-decided immediately — a small route tweak doesn't
+ * have to wait on a round trip just to keep showing the same markers. That
+ * recompute also throws out anything now farther than the radius could ever
+ * reach. A background refetch of the enabled categories still follows, to
+ * pick up POIs newly in range that were never fetched before and to correct
+ * the client-side distance estimate with the backend's exact one.
  *
  * Each category is fetched as its own independent API/Overpass call (never
  * bundled with other categories into one query), even when several
@@ -294,35 +353,51 @@ export function usePoiOverlay(
   initial?: MapPoi[]
 ): { poisByCategory: Record<PoiCategory, MapPoi[]>; poisLoading: boolean } {
   const t = useT();
-  const [poisByCategory, setPoisByCategory] = useState<Record<PoiCategory, MapPoi[]>>(() => {
+  const [poisRaw, setPoisRaw] = useState<Record<PoiCategory, MapPoi[]>>(() => {
     if (!initial?.length) return emptyPoiMap();
     const seeded = emptyPoiMap();
     for (const poi of initial) seeded[poi.category] = [...seeded[poi.category], poi];
     return seeded;
   });
   const [poisLoading, setPoisLoading] = useState(false);
-  const loadedRef = useRef<Set<PoiCategory>>(
-    new Set(initial?.length ? initial.map((p) => p.category) : [])
+  // Radius each category was last fetched at; a category only needs a
+  // refetch once the requested radius exceeds it (or the route changed).
+  const fetchedRadiusRef = useRef<Record<string, number>>(
+    Object.fromEntries((initial ?? []).map((p) => [p.category, radiusM]))
   );
-  const querySigRef = useRef<string | null>(
-    initial?.length && points.length > 1 ? `${JSON.stringify(simplifyPoints(points))}|${radiusM}` : null
+  const routeSigRef = useRef<string | null>(
+    initial?.length && points.length > 1 ? JSON.stringify(simplifyPoints(points)) : null
   );
 
   const enabledCategories = POI_CATEGORIES.filter((c) => overlays[c]);
   const enabledKey = enabledCategories.join(",");
-  const querySig =
-    points.length > 1 ? `${JSON.stringify(simplifyPoints(points))}|${radiusM}` : null;
+  const routeSig = points.length > 1 ? JSON.stringify(simplifyPoints(points)) : null;
+
+  // Route changed: re-measure cached POIs against it instantly, and mark
+  // every category as needing a background refetch (handled below).
+  useEffect(() => {
+    if (!routeSig || routeSig === routeSigRef.current) return;
+    routeSigRef.current = routeSig;
+    const route = simplifyPoints(points);
+    fetchedRadiusRef.current = {};
+    setPoisRaw((prev) => {
+      const next = emptyPoiMap();
+      for (const cat of POI_CATEGORIES) {
+        next[cat] = prev[cat]
+          .map((p) => ({ ...p, distanceM: distanceToRouteM(p, route) }))
+          .filter((p) => (p.distanceM ?? 0) <= POI_RADIUS_MAX_M);
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeSig]);
 
   useEffect(() => {
-    if (!querySig || enabledCategories.length === 0) return;
+    if (!routeSig || enabledCategories.length === 0) return;
 
-    if (querySig !== querySigRef.current) {
-      querySigRef.current = querySig;
-      loadedRef.current = new Set();
-      setPoisByCategory(emptyPoiMap());
-    }
-
-    const missing = enabledCategories.filter((c) => !loadedRef.current.has(c));
+    const missing = enabledCategories.filter(
+      (c) => (fetchedRadiusRef.current[c] ?? -1) < radiusM
+    );
     if (missing.length === 0) return;
 
     const controller = new AbortController();
@@ -335,8 +410,8 @@ export function usePoiOverlay(
         fetchRoutePois(simplified, [category], radiusM, controller.signal)
           .then((result) => {
             if (cancelled) return;
-            loadedRef.current.add(category);
-            setPoisByCategory((prev) => ({ ...prev, [category]: result }));
+            fetchedRadiusRef.current[category] = radiusM;
+            setPoisRaw((prev) => ({ ...prev, [category]: mergePois(prev[category], result) }));
           })
           .catch(() => {
             if (!cancelled) toast.error(t.routePlanner.layers.poiError);
@@ -354,7 +429,15 @@ export function usePoiOverlay(
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [querySig, enabledKey]);
+  }, [routeSig, radiusM, enabledKey]);
+
+  const poisByCategory = useMemo(() => {
+    const visible = emptyPoiMap();
+    for (const cat of POI_CATEGORIES) {
+      visible[cat] = poisRaw[cat].filter((p) => (p.distanceM ?? 0) <= radiusM);
+    }
+    return visible;
+  }, [poisRaw, radiusM]);
 
   return { poisByCategory, poisLoading };
 }

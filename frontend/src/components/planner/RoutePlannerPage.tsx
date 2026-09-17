@@ -394,7 +394,7 @@ function RouteMapView({
               <div className="min-w-[120px] space-y-1.5 text-xs">
                 <p className="font-semibold">{label}</p>
                 <p className="text-muted-foreground">
-                  {pt.lat.toFixed(5)}, {pt.lon.toFixed(5)}
+                  {pt.label ?? `${pt.lat.toFixed(5)}, ${pt.lon.toFixed(5)}`}
                 </p>
                 <button
                   type="button"
@@ -419,7 +419,7 @@ function RouteMapView({
           <div className="min-w-[160px] space-y-2 pr-4 text-xs">
             <p className="font-semibold">{rp.addPoint.title}</p>
             <p className="text-muted-foreground">
-              {pendingPoint.lat.toFixed(5)}, {pendingPoint.lon.toFixed(5)}
+              {pendingPoint.label ?? `${pendingPoint.lat.toFixed(5)}, ${pendingPoint.lon.toFixed(5)}`}
             </p>
             <div className="flex flex-col gap-1.5">
               <Button type="button" size="sm" onClick={() => onConfirmPending("append")}>
@@ -481,7 +481,7 @@ function SortableWaypointRow({
       <div className="min-w-0">
         <p className="text-xs font-medium">{label}</p>
         <p className="truncate text-[11px] text-muted-foreground">
-          {point.lat.toFixed(5)}, {point.lon.toFixed(5)}
+          {point.label ?? `${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}`}
         </p>
       </div>
     </div>
@@ -1267,10 +1267,10 @@ export function RoutePlannerPage() {
   function handleAddressSelect(r: GeocodeResult) {
     setFocusTarget({ lat: r.lat, lon: r.lon });
     if (points.length < 2) {
-      setPoints((p) => [...p, { lat: r.lat, lon: r.lon }]);
+      setPoints((p) => [...p, { lat: r.lat, lon: r.lon, label: r.label }]);
       return;
     }
-    setPendingPoint({ lat: r.lat, lon: r.lon });
+    setPendingPoint({ lat: r.lat, lon: r.lon, label: r.label });
   }
 
   function handleDragPoint(i: number, lat: number, lon: number) {

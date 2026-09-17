@@ -330,6 +330,8 @@ export interface GpxJobResults {
 export interface RoutePlannerPoint {
   lat: number;
   lon: number;
+  /** Display name (e.g. from address search); absent for map clicks/drags. */
+  label?: string;
 }
 
 export interface RoutePreviewResult {
@@ -379,6 +381,9 @@ export interface MapPoi {
   subtype: string | null;
   /** Whitelisted OSM detail tags (fee, covered, opening_hours, …). */
   tags?: Record<string, string>;
+  /** Distance to the route in meters, from the backend. Internal only —
+   * used to decide visibility on radius/route changes, never shown in the UI. */
+  distanceM?: number;
 }
 
 export interface GeocodeResult {

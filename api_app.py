@@ -1350,6 +1350,29 @@ def _around_polyline(points: List[tuple], radius_m: int) -> str:
     return f"(around:{radius_m},{coords})"
 
 
+_DEG_TO_M = 111_320.0  # good enough at the few-km corridor widths POIs are searched in
+
+
+def _point_to_segment_m(lat: float, lon: float, a: tuple, b: tuple) -> float:
+    kx = math.cos(math.radians(lat))
+    ax, ay = a[1] * kx, a[0]
+    bx, by = b[1] * kx, b[0]
+    px, py = lon * kx, lat
+    dx, dy = bx - ax, by - ay
+    len_sq = dx * dx + dy * dy
+    t = 0.0 if len_sq == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / len_sq))
+    cx, cy = ax + t * dx, ay + t * dy
+    return math.hypot(px - cx, py - cy) * _DEG_TO_M
+
+
+def _point_to_polyline_m(lat: float, lon: float, points: List[tuple]) -> float:
+    """Minimum distance in meters from (lat, lon) to the polyline through
+    points (a list of (lat, lon) tuples)."""
+    if len(points) == 1:
+        return _haversine_km(lat, lon, points[0][0], points[0][1]) * 1000
+    return min(_point_to_segment_m(lat, lon, points[i], points[i + 1]) for i in range(len(points) - 1))
+
+
 def _fetch_overpass_mirror(url: str, query: str) -> dict:
     # short-ish (connect, read) timeout: a hanging instance must fail fast
     # so the hedge/fallback still feels interactive
@@ -1547,7 +1570,8 @@ def route_planner_pois(data: MapPoisRequest):
     radius_m = _POI_RADIUS_M if data.radiusM is None else data.radiusM
     radius_m = max(_POI_RADIUS_MIN_M, min(_POI_RADIUS_MAX_M, radius_m))
 
-    around = _around_polyline([(p.lat, p.lon) for p in data.points], radius_m)
+    route_latlons = _simplify_latlons([(p.lat, p.lon) for p in data.points])
+    around = _around_polyline(route_latlons, radius_m)
     selectors = []
     for cat in categories:
         for key, value, node_only, list_value, *extra in _POI_SELECTORS[cat]:
@@ -1584,6 +1608,9 @@ def route_planner_pois(data: MapPoisRequest):
             "name": tags.get("name"),
             "subtype": tags.get("shelter_type"),
             "tags": {k: str(tags[k]) for k in _POI_DETAIL_TAGS if tags.get(k)},
+            # Not shown in the UI — lets the frontend re-decide which POIs
+            # stay visible on a radius change without another round trip.
+            "distanceM": round(_point_to_polyline_m(lat, lon, route_latlons), 1),
         })
     return {"pois": pois}
 
