@@ -35,7 +35,7 @@ function TempBadge({ tmin, tmax, desired, isDark = true }: { tmin: number | null
   return (
     <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-mono font-medium"
       style={{ background: color + "33", color }}>
-      {tmin}° / {tmax}°
+      {tmin.toFixed(1)}° / {tmax.toFixed(1)}°
     </span>
   );
 }
@@ -290,9 +290,9 @@ export function DestinationResultsPage() {
                       <div className="min-w-[140px] space-y-0.5 p-2 text-xs">
                         <p className="font-semibold">{city.cityName}</p>
                         <p className="text-muted-foreground">{lang === "de" ? "Tag" : "Day"} {Math.ceil(city.dayNumber)}</p>
-                        {city.tmin != null && <p>🌡 {city.tmin}° / {city.tmax}°</p>}
-                        {city.prcp != null && <p className="flex items-center gap-1"><CloudRain className="h-3 w-3" />{city.prcp} mm</p>}
-                        {city.wspd != null && <p className="flex items-center gap-1"><Wind className="h-3 w-3" />{city.wspd} km/h</p>}
+                        {city.tmin != null && <p>🌡 {city.tmin.toFixed(1)}° / {city.tmax.toFixed(1)}°</p>}
+                        {city.prcp != null && <p className="flex items-center gap-1"><CloudRain className="h-3 w-3" />{city.prcp.toFixed(1)} mm</p>}
+                        {city.wspd != null && <p className="flex items-center gap-1"><Wind className="h-3 w-3" />{Math.round(city.wspd)} km/h</p>}
                       </div>
                     </MarkerPopup>
                   </MapMarker>
@@ -329,7 +329,7 @@ export function DestinationResultsPage() {
                 <p className="text-xs text-muted-foreground">
                   {Math.round(route.totalDays)} {lang === "de" ? "Tage" : "days"} ·{" "}
                   ~{Math.round(route.totalAirKm)} km {lang === "de" ? "Luftlinie" : "air distance"} ·{" "}
-                  Score: {route.score}
+                  Score: {route.score.toFixed(2)}
                 </p>
               </CardHeader>
               <CardContent>
@@ -360,10 +360,10 @@ export function DestinationResultsPage() {
                             <TempBadge tmin={city.tmin} tmax={city.tmax} desired={results.desiredHigh} isDark={isDark} />
                           </td>
                           <td className="px-2 py-1.5 tabular-nums text-muted-foreground">
-                            {city.prcp != null ? `${city.prcp}` : "—"}
+                            {city.prcp != null ? city.prcp.toFixed(1) : "—"}
                           </td>
                           <td className="px-2 py-1.5 tabular-nums text-muted-foreground">
-                            {city.wspd != null ? `${city.wspd}` : "—"}
+                            {city.wspd != null ? Math.round(city.wspd) : "—"}
                           </td>
                         </tr>
                       ))}

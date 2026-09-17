@@ -577,13 +577,13 @@ export function GpxElevationChart({
   const stats = (
     <div className="mt-2 flex flex-wrap gap-6 text-sm text-muted-foreground">
       <span>
-        {t.gpx.results.totalKm}: <strong>{elevation.totalKm} km</strong>
+        {t.gpx.results.totalKm}: <strong>{elevation.totalKm.toFixed(1)} km</strong>
       </span>
       <span>
-        {t.gpx.results.ascent}: <strong>↑{elevation.totalAscent} m</strong>
+        {t.gpx.results.ascent}: <strong>↑{Math.round(elevation.totalAscent)} m</strong>
       </span>
       <span>
-        {t.gpx.results.descent}: <strong>↓{elevation.totalDescent} m</strong>
+        {t.gpx.results.descent}: <strong>↓{Math.round(elevation.totalDescent)} m</strong>
       </span>
     </div>
   );

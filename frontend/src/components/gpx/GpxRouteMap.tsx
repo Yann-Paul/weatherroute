@@ -26,7 +26,7 @@ import type {
   RoutePlannerPoint,
   WindShelterResult,
 } from "@/api/types";
-import { tempToRgb } from "@/utils/tempColor";
+import { tempToRgb, uvIndexColor } from "@/utils/tempColor";
 import { windDegreesToDirection } from "@/utils/constants";
 import { buildGpx } from "@/utils/gpxExport";
 import { useJobStore } from "@/stores/jobStore";
@@ -508,10 +508,19 @@ export function GpxMarkers({
                           {hasTemp ? `${Math.round(pt.temp!)}°` : "?"}
                         </span>
                       </div>
-                      {pt.prcp != null && pt.prcp > 0.3 && (
-                        <div style={{ fontSize: "9px", display: "flex", alignItems: "center", justifyContent: "center", gap: "1px" }}>
-                          <CloudRain style={{ width: 9, height: 9, color: "#93c5fd", flexShrink: 0 }} />
-                          <span style={{ color: "#fff", textShadow }}>{pt.prcp.toFixed(1)} mm</span>
+                      {((pt.prcp != null && pt.prcp > 0.3) || (pt.uv != null && pt.uv >= 3)) && (
+                        <div style={{ fontSize: "9px", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                          {pt.prcp != null && pt.prcp > 0.3 && (
+                            <span style={{ display: "flex", alignItems: "center", gap: "1px" }}>
+                              <CloudRain style={{ width: 9, height: 9, color: "#93c5fd", flexShrink: 0 }} />
+                              <span style={{ color: "#fff", textShadow }}>{pt.prcp.toFixed(1)} mm</span>
+                            </span>
+                          )}
+                          {pt.uv != null && pt.uv >= 3 && (
+                            <span style={{ color: uvIndexColor(pt.uv), textShadow, fontWeight: 700 }}>
+                              UV{Math.round(pt.uv)}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -570,9 +579,14 @@ export function GpxMarkers({
                       <WxSymIcon type={wx.type} color={wx.color} size={12} />{pt.temp.toFixed(1)}°C
                       {pt.cloud != null && (
                         <span className="ml-1 font-normal text-muted-foreground">
-                          {pt.cloud}% Wolken
+                          {Math.round(pt.cloud)}% Wolken
                         </span>
                       )}
+                    </div>
+                  )}
+                  {pt.uv != null && (
+                    <div className="flex items-center gap-1" style={{ color: uvIndexColor(pt.uv) }}>
+                      <Sun className="h-3.5 w-3.5" />UV-Index {pt.uv.toFixed(1)}
                     </div>
                   )}
                   {pt.prcp != null && (

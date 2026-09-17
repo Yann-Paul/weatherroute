@@ -267,6 +267,17 @@ Auch Tageswechsel und Übernachtungen werden berücksichtigt: Für einen Zeitrau
 Temperatur am Abfahrtszeitpunkt nach der Nacht wird dadurch nicht fälschlich durch den ersten
 späteren Streckenpunkt ersetzt.
 
+### UV-Index in der Wettervorhersage
+
+Alle Live-Wettervorhersagen (Open-Meteo, stündlich `uv_index` / tagesweise `uv_index_max`)
+enthalten jetzt auch den UV-Index, farbcodiert nach WHO-Risikoskala (grün = niedrig bis
+violett = extrem):
+
+- **Streckenplaner**: Wetterpunkt-Popups auf der Karte sowie kompakte Kartenmarker ab UV-Index 3
+- **GPX-Routen-Upload**: Kartenmarker/-Popups und eine eigene Spalte in der Wettertabelle
+
+Für Übernachtungsstopps (GPX) wird kein UV-Wert berechnet, da dort nur Nachtstunden relevant sind.
+
 Der Wettertab zeigt die direkten Vorhersagewerte der Wetterpunkte. Das Temperaturprofil auf der
 Karte verwendet dieselben Vorhersagedaten und berücksichtigt zusätzlich die Höhenlage. An einem
 identischen Ort und Zeitpunkt sollten die Werte daher übereinstimmen; bei Zwischenpunkten mit

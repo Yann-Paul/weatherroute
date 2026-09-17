@@ -14,7 +14,7 @@ import { useResultsStore } from "@/stores/resultsStore";
 import { useLiveLocation, LiveLocationButton, LiveLocationMarker } from "@/components/planner/LiveLocation";
 import { useT } from "@/i18n/useT";
 import { useLangStore } from "@/i18n/store";
-import { dayToShortDE } from "@/utils/tempColor";
+import { dayToShortDE, uvIndexColor } from "@/utils/tempColor";
 import { useIsDark } from "@/stores/themeStore";
 import type { ForecastPoint, ForecastPointData, ForecastDailyData, ForecastHourData } from "@/api/types";
 
@@ -374,7 +374,7 @@ function ForecastMarkers({
                   </span>
                 )}
               </div>
-              {(d?.prcp != null || d?.sun != null) && (
+              {(d?.prcp != null || d?.sun != null || d?.uvMax != null) && (
                 <div style={{ fontSize: "9px", display: "flex", gap: "4px", justifyContent: "center" }}>
                   {d?.prcp != null && d.prcp > 0.1 && (
                     <span style={{ display: "flex", alignItems: "center", gap: "1px" }}>
@@ -386,6 +386,11 @@ function ForecastMarkers({
                     <span style={{ display: "flex", alignItems: "center", gap: "1px" }}>
                       <Sun style={{ width: 9, height: 9, color: "#fde68a", flexShrink: 0 }} />
                       <span style={{ color: "#fff", textShadow }}>{d.sun.toFixed(1)}h</span>
+                    </span>
+                  )}
+                  {d?.uvMax != null && d.uvMax >= 3 && (
+                    <span style={{ color: uvIndexColor(d.uvMax), textShadow, fontWeight: 700 }}>
+                      UV{Math.round(d.uvMax)}
                     </span>
                   )}
                 </div>
@@ -410,10 +415,19 @@ function ForecastMarkers({
                   {h?.temp != null ? `${Math.round(h.temp)}°` : "?"}
                 </span>
               </div>
-              {h?.prcp != null && h.prcp > 0.3 && (
-                <div style={{ fontSize: "9px", display: "flex", alignItems: "center", justifyContent: "center", gap: "1px" }}>
-                  <CloudRain style={{ width: 9, height: 9, color: "#93c5fd", flexShrink: 0 }} />
-                  <span style={{ color: "#fff", textShadow }}>{h.prcp.toFixed(1)} mm</span>
+              {((h?.prcp != null && h.prcp > 0.3) || (h?.uv != null && h.uv >= 3)) && (
+                <div style={{ fontSize: "9px", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                  {h?.prcp != null && h.prcp > 0.3 && (
+                    <span style={{ display: "flex", alignItems: "center", gap: "1px" }}>
+                      <CloudRain style={{ width: 9, height: 9, color: "#93c5fd", flexShrink: 0 }} />
+                      <span style={{ color: "#fff", textShadow }}>{h.prcp.toFixed(1)} mm</span>
+                    </span>
+                  )}
+                  {h?.uv != null && h.uv >= 3 && (
+                    <span style={{ color: uvIndexColor(h.uv), textShadow, fontWeight: 700 }}>
+                      UV{Math.round(h.uv)}
+                    </span>
+                  )}
                 </div>
               )}
             </>
@@ -1233,6 +1247,7 @@ const lang = useLangStore((s) => s.lang);
       if (d.prcp != null) lines.push(`${lbl("#60a5fa","☂ Regen:")} ${val(d.prcp.toFixed(1)+" mm/Tag")}<br>`);
       if (d.wspd != null) lines.push(`${lbl("#6b7280","☴ Windmax:")} ${val(d.wspd.toFixed(1)+" km/h")}<br>`);
       if (d.sun  != null) lines.push(`${lbl("#f59e0b","☀ Sonne:")} ${val(d.sun.toFixed(1)+" h")}<br>`);
+      if (d.uvMax != null) lines.push(`${lbl("#a855f7","🔆 UV max:")} <b style="color:${uvIndexColor(d.uvMax)}">${Math.round(d.uvMax)}</b><br>`);
     } else {
       const h = (fd.hourly?.[String(currentHour)] ?? {}) as ForecastHourData;
       lines.push(`<b style="color:#1e293b">${t.forecastMap.hourLabel(currentHour)}</b><br>`);
@@ -1250,6 +1265,7 @@ const lang = useLangStore((s) => s.lang);
       }
       if (h.cloud != null) lines.push(`${lbl("#94a3b8","☁:")} ${val(Math.round(h.cloud)+"%")}<br>`);
       if (h.sun   != null) lines.push(`${lbl("#f59e0b","☀:")} ${val(Math.round(h.sun)+" min")}<br>`);
+      if (h.uv    != null) lines.push(`${lbl("#a855f7","🔆 UV:")} <b style="color:${uvIndexColor(h.uv)}">${Math.round(h.uv)}</b><br>`);
     }
     lines.push("</div>");
     return lines.join("");

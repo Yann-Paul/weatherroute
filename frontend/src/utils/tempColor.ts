@@ -38,6 +38,15 @@ export function tempMidColor(isDark: boolean): string {
   return isDark ? "rgb(255,255,255)" : "rgb(160,160,160)";
 }
 
+/** WHO UV index risk scale: green (low) -> purple (extreme). */
+export function uvIndexColor(uv: number): string {
+  if (uv < 3) return "#65a30d";
+  if (uv < 6) return "#eab308";
+  if (uv < 8) return "#f97316";
+  if (uv < 11) return "#dc2626";
+  return "#a855f7";
+}
+
 const MONTHS_DE = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 const MONTHS_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];

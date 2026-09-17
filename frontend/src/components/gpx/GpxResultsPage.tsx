@@ -33,7 +33,7 @@ type RoadHighlight = { dimension: RoadDimension; category: string } | null;
 
 type ModelOverride = Record<string, {
   temp: number | null; prcp: number | null;
-  wspd: number | null; wdir: number | null; cloud: number | null;
+  wspd: number | null; wdir: number | null; cloud: number | null; uv: number | null;
 }>;
 
 function hourFracFromIso(iso: string): number {
@@ -79,6 +79,7 @@ function interpolateGpxHourly(
     wdir: interpolateDirection(a.wdir, b.wdir),
     cloud: interpolate(a.cloud, b.cloud),
     sun: interpolate(a.sun, b.sun),
+    uv: interpolate(a.uv, b.uv),
   };
 }
 
@@ -215,7 +216,7 @@ export function GpxResultsPage() {
               if (h) {
                 patched[p.idx] = {
                   ...patched[p.idx],
-                  temp: h.temp, prcp: h.prcp, wspd: h.wspd, wdir: h.wdir, cloud: h.cloud,
+                  temp: h.temp, prcp: h.prcp, wspd: h.wspd, wdir: h.wdir, cloud: h.cloud, uv: h.uv,
                   forecastPending: false,
                 };
               }
@@ -344,7 +345,7 @@ export function GpxResultsPage() {
             const pdata = data[String(i)];
             if (pdata?.ok) {
               const h = interpolateGpxHourly(pdata.hourly, hourFracFromIso(p.wp.arrivalTime));
-              if (h) overrides[String(p.idx)] = { temp: h.temp, prcp: h.prcp, wspd: h.wspd, wdir: h.wdir, cloud: h.cloud };
+              if (h) overrides[String(p.idx)] = { temp: h.temp, prcp: h.prcp, wspd: h.wspd, wdir: h.wdir, cloud: h.cloud, uv: h.uv };
             }
           });
           setModelCache((prev) => ({ ...prev, [model]: overrides }));
@@ -405,17 +406,17 @@ export function GpxResultsPage() {
       <div className="flex flex-wrap gap-4 text-sm">
         <div>
           <span className="text-muted-foreground">{t.gpx.results.totalKm}: </span>
-          <span className="font-semibold">{results.totalKm} km</span>
+          <span className="font-semibold">{results.totalKm.toFixed(1)} km</span>
         </div>
         {elevation && (
           <>
             <div>
               <span className="text-muted-foreground">{t.gpx.results.ascent}: </span>
-              <span className="font-semibold">↑{elevation.totalAscent} m</span>
+              <span className="font-semibold">↑{Math.round(elevation.totalAscent)} m</span>
             </div>
             <div>
               <span className="text-muted-foreground">{t.gpx.results.descent}: </span>
-              <span className="font-semibold">↓{elevation.totalDescent} m</span>
+              <span className="font-semibold">↓{Math.round(elevation.totalDescent)} m</span>
             </div>
           </>
         )}

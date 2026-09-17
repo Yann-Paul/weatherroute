@@ -191,6 +191,7 @@ export interface ForecastHourData {
   wdir: number | null;
   cloud: number | null;
   sun: number | null;
+  uv: number | null;
 }
 
 export interface ForecastDailyData {
@@ -199,6 +200,7 @@ export interface ForecastDailyData {
   sun: number | null;
   tmax: number | null;
   tmin: number | null;
+  uvMax: number | null;
 }
 
 export interface ForecastPointData {
@@ -265,6 +267,7 @@ export interface GpxForecastUpdate {
     wspd: number | null;
     wdir: number | null;
     cloud: number | null;
+    uv: number | null;
   }>;
 }
 
@@ -294,6 +297,7 @@ export interface GpxWeatherPoint {
   wspd: number | null;
   wdir: number | null;
   cloud: number | null;   // cloud cover % (forecast only)
+  uv: number | null;      // UV index (forecast only)
   isForecast: boolean;
   // True when the server couldn't reach Open-Meteo for this point and used a
   // degraded placeholder (or no data). The frontend retries via the browser.

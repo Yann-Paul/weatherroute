@@ -1059,6 +1059,7 @@ def gpx_forecast_by_model(job_id: str, model_name: str):
                 "wspd": h_data.get("wspd"),
                 "wdir": h_data.get("wdir"),
                 "cloud": h_data.get("cloud"),
+                "uv": h_data.get("uv"),
             }
     return {"weatherPointUpdates": updates}
 
@@ -3662,7 +3663,7 @@ def run_gpx_analysis(
                 "type": label,
                 "temp": None, "prcp": None,
                 "wspd": None, "wdir": None,
-                "cloud": None,
+                "cloud": None, "uv": None,
                 "isForecast": is_forecast,
                 "forecastPending": False,
             })
@@ -3697,6 +3698,7 @@ def run_gpx_analysis(
                         weather_points[pt_idx]["wspd"] = h_data.get("wspd")
                         weather_points[pt_idx]["wdir"] = h_data.get("wdir")
                         weather_points[pt_idx]["cloud"] = h_data.get("cloud")
+                        weather_points[pt_idx]["uv"] = h_data.get("uv")
                 for _ in pts_for_meteo:
                     on_progress()
             except OpenMeteoUnreachableError:
@@ -3794,7 +3796,7 @@ def run_gpx_analysis(
                     "prcp": stop_prcp,
                     "wspd": stop_wspd,
                     "wdir": None,
-                    "cloud": None,
+                    "cloud": None, "uv": None,
                     "isForecast": stop_is_forecast,
                     "forecastPending": False,
                     "dayNumber": stop_day_idx + 1,

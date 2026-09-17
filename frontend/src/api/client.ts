@@ -280,9 +280,9 @@ export async function submitDestinationDetailJob(data: {
 const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
 // Must match OPEN_METEO_HOURLY_FIELDS / OPEN_METEO_DAILY_FIELDS in module.py
 const OPEN_METEO_HOURLY_FIELDS =
-  "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration";
+  "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration,uv_index";
 const OPEN_METEO_DAILY_FIELDS =
-  "precipitation_sum,windspeed_10m_max,sunshine_duration,temperature_2m_max,temperature_2m_min";
+  "precipitation_sum,windspeed_10m_max,sunshine_duration,temperature_2m_max,temperature_2m_min,uv_index_max";
 // Must match the narrow hourly set used for GPX overnight stops in api_app.py
 const OPEN_METEO_STOP_HOURLY_FIELDS = "temperature_2m,precipitation,windspeed_10m";
 

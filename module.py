@@ -2726,8 +2726,8 @@ def select_forecast_points(profile, latlons, min_spacing_km=15, max_spacing_km=2
 
 
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
-OPEN_METEO_HOURLY_FIELDS = "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration"
-OPEN_METEO_DAILY_FIELDS = "precipitation_sum,windspeed_10m_max,sunshine_duration,temperature_2m_max,temperature_2m_min"
+OPEN_METEO_HOURLY_FIELDS = "temperature_2m,precipitation,windspeed_10m,winddirection_10m,cloudcover,sunshine_duration,uv_index"
+OPEN_METEO_DAILY_FIELDS = "precipitation_sum,windspeed_10m_max,sunshine_duration,temperature_2m_max,temperature_2m_min,uv_index_max"
 
 
 class OpenMeteoUnreachableError(Exception):
@@ -2823,6 +2823,7 @@ def parse_open_meteo_data(valid, data_list):
             hwdir  = data.get("hourly", {}).get("winddirection_10m", [])
             hcloud = data.get("hourly", {}).get("cloudcover", [])
             hsun   = data.get("hourly", {}).get("sunshine_duration", [])
+            huv    = data.get("hourly", {}).get("uv_index", [])
 
             dtimes = data.get("daily", {}).get("time", [])
             dprcp  = data.get("daily", {}).get("precipitation_sum", [])
@@ -2830,6 +2831,7 @@ def parse_open_meteo_data(valid, data_list):
             dsun   = data.get("daily", {}).get("sunshine_duration", [])
             dtmax  = data.get("daily", {}).get("temperature_2m_max", [])
             dtmin  = data.get("daily", {}).get("temperature_2m_min", [])
+            duv    = data.get("daily", {}).get("uv_index_max", [])
 
             next_str = (_date.fromisoformat(target) + timedelta(days=1)).isoformat()
 
@@ -2846,6 +2848,7 @@ def parse_open_meteo_data(valid, data_list):
                         "wdir":  hwdir[idx]  if idx < len(hwdir)  else None,
                         "cloud": hcloud[idx] if idx < len(hcloud) else None,
                         "sun":   sun_min,
+                        "uv":    huv[idx] if idx < len(huv) else None,
                     }
 
             daily_result = {}
@@ -2857,6 +2860,7 @@ def parse_open_meteo_data(valid, data_list):
                     "sun":  round(dsun[di] / 3600.0, 2) if di < len(dsun) and dsun[di] is not None else None,
                     "tmax": _tc(dtmax[di] if di < len(dtmax) else None),
                     "tmin": _tc(dtmin[di] if di < len(dtmin) else None),
+                    "uvMax": duv[di] if di < len(duv) else None,
                 }
 
             result[i] = {"ok": True, "hourly": hourly_result, "daily": daily_result}

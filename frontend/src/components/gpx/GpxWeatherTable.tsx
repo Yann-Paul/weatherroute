@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { GpxWeatherPoint } from "@/api/types";
-import { tempToRgb } from "@/utils/tempColor";
+import { tempToRgb, uvIndexColor } from "@/utils/tempColor";
 import { windDegreesToDirection } from "@/utils/constants";
 import { useT } from "@/i18n/useT";
 import { CloudRain, Cloud, Sun, Mountain, ArrowDown, ArrowRight, Play, Square, Moon } from "lucide-react";
@@ -66,6 +66,7 @@ export function GpxWeatherTable({ weatherPoints }: { weatherPoints: GpxWeatherPo
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Ankunft</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Temp</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Bewölkung</th>
+            <th className="px-3 py-2 text-left font-medium text-muted-foreground">UV</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground"><CloudRain className="inline h-3.5 w-3.5" /> mm/h</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Wind</th>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Quelle</th>
@@ -98,8 +99,11 @@ export function GpxWeatherTable({ weatherPoints }: { weatherPoints: GpxWeatherPo
                   <td className="px-3 py-1.5">
                     <span><WxSymbol prcp={wp.prcp} cloud={wp.cloud} /></span>
                     {wp.cloud != null && (
-                      <span className="ml-1 text-muted-foreground">{wp.cloud}%</span>
+                      <span className="ml-1 text-muted-foreground">{Math.round(wp.cloud)}%</span>
                     )}
+                  </td>
+                  <td className="px-3 py-1.5 tabular-nums font-semibold" style={{ color: wp.uv != null ? uvIndexColor(wp.uv) : undefined }}>
+                    {wp.uv != null ? wp.uv.toFixed(1) : "—"}
                   </td>
                   <td className="px-3 py-1.5 tabular-nums">
                     {wp.prcp != null ? wp.prcp.toFixed(2) : "—"}
@@ -132,6 +136,7 @@ export function GpxWeatherTable({ weatherPoints }: { weatherPoints: GpxWeatherPo
                     <td className="px-3 py-1">
                       <WxSymbol prcp={h.prcp} cloud={null} />
                     </td>
+                    <td className="px-3 py-1" />
                     <td className="px-3 py-1 tabular-nums">
                       {h.prcp != null ? h.prcp.toFixed(2) : "—"}
                     </td>
