@@ -290,7 +290,7 @@ export function DestinationResultsPage() {
                       <div className="min-w-[140px] space-y-0.5 p-2 text-xs">
                         <p className="font-semibold">{city.cityName}</p>
                         <p className="text-muted-foreground">{lang === "de" ? "Tag" : "Day"} {Math.ceil(city.dayNumber)}</p>
-                        {city.tmin != null && <p>🌡 {city.tmin.toFixed(1)}° / {city.tmax.toFixed(1)}°</p>}
+                        {city.tmin != null && city.tmax != null && <p>🌡 {city.tmin.toFixed(1)}° / {city.tmax.toFixed(1)}°</p>}
                         {city.prcp != null && <p className="flex items-center gap-1"><CloudRain className="h-3 w-3" />{city.prcp.toFixed(1)} mm</p>}
                         {city.wspd != null && <p className="flex items-center gap-1"><Wind className="h-3 w-3" />{Math.round(city.wspd)} km/h</p>}
                       </div>
