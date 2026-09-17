@@ -257,6 +257,32 @@
       "source_location": "L28"
     },
     {
+      "id": "frontend_src_components_planner_rainradar_rainviewerdata",
+      "label": "RainViewerData",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "RainRadar.tsx",
+      "file_type": "code",
+      "norm_label": "rainviewerdata",
+      "source_file": "frontend/src/components/planner/RainRadar.tsx",
+      "source_location": "L19"
+    },
+    {
+      "id": "frontend_src_components_planner_rainradar_rainviewerframe",
+      "label": "RainViewerFrame",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "RainRadar.tsx",
+      "file_type": "code",
+      "norm_label": "rainviewerframe",
+      "source_file": "frontend/src/components/planner/RainRadar.tsx",
+      "source_location": "L18"
+    },
+    {
       "id": "frontend_src_i18n_store_langstate",
       "label": "LangState",
       "_callable": true,
@@ -293,7 +319,7 @@
       "file_type": "code",
       "norm_label": "translations",
       "source_file": "frontend/src/i18n/translations.ts",
-      "source_location": "L1405"
+      "source_location": "L1401"
     },
     {
       "id": "frontend_src_stores_jobstore_jobstate",
@@ -361,17 +387,17 @@
       "source_location": "L7"
     },
     {
-      "id": "frontend_src_components_planner_citycombobox_citycomboboxprops",
-      "label": "CityComboboxProps",
+      "id": "frontend_src_components_progress_progresspage_stepstatus",
+      "label": "StepStatus",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 15,
       "community_name": "PlannerPage.tsx",
       "file_type": "code",
-      "norm_label": "citycomboboxprops",
-      "source_file": "frontend/src/components/planner/CityCombobox.tsx",
-      "source_location": "L22"
+      "norm_label": "stepstatus",
+      "source_file": "frontend/src/components/progress/ProgressPage.tsx",
+      "source_location": "L15"
     },
     {
       "id": "frontend_src_components_magicui_number_ticker_numbertickerprops",
@@ -861,7 +887,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "segmentprops",
       "source_file": "frontend/src/components/results/ElevationChart.tsx",
@@ -874,37 +900,11 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "props",
       "source_file": "frontend/src/components/results/ModelBadges.tsx",
       "source_location": "L12"
-    },
-    {
-      "id": "frontend_src_components_results_weathercell_weathercellprops",
-      "label": "WeatherCellProps",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "file_type": "code",
-      "norm_label": "weathercellprops",
-      "source_file": "frontend/src/components/results/WeatherCell.tsx",
-      "source_location": "L18"
-    },
-    {
-      "id": "frontend_src_components_results_weathergrid_gridrow",
-      "label": "GridRow",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "file_type": "code",
-      "norm_label": "gridrow",
-      "source_file": "frontend/src/components/results/WeatherGrid.tsx",
-      "source_location": "L22"
     },
     {
       "id": "module_openmeteounreachableerror",
@@ -918,45 +918,6 @@
       "norm_label": "openmeteounreachableerror",
       "source_file": "module.py",
       "source_location": "L2733"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxrouteeditor_editprofile",
-      "label": "EditProfile",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "editprofile",
-      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
-      "source_location": "L18"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxrouteeditor_gpxeditselection",
-      "label": "GpxEditSelection",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "gpxeditselection",
-      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
-      "source_location": "L20"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxrouteeditor_gpxeditstep",
-      "label": "gpxEditStep",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "gpxeditstep",
-      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
-      "source_location": "L34"
     },
     {
       "id": "frontend_src_components_gpx_gpxroutemap_roadhighlight",
@@ -983,6 +944,45 @@
       "norm_label": "wxtype",
       "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
       "source_location": "L366"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxrouteeditor_editprofile",
+      "label": "EditProfile",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "GpxRouteEditor.tsx",
+      "file_type": "code",
+      "norm_label": "editprofile",
+      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
+      "source_location": "L18"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxrouteeditor_gpxeditselection",
+      "label": "GpxEditSelection",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "GpxRouteEditor.tsx",
+      "file_type": "code",
+      "norm_label": "gpxeditselection",
+      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
+      "source_location": "L20"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxrouteeditor_gpxeditstep",
+      "label": "gpxEditStep",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "GpxRouteEditor.tsx",
+      "file_type": "code",
+      "norm_label": "gpxeditstep",
+      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
+      "source_location": "L34"
     },
     {
       "id": "frontend_src_lib_resultscachedb_cachedjobkind",
@@ -1164,7 +1164,7 @@
       "file_type": "code",
       "norm_label": "mappoisrequest",
       "source_file": "api_app.py",
-      "source_location": "L1557"
+      "source_location": "L1553"
     },
     {
       "id": "api_app_restorerouterequest",
@@ -1177,7 +1177,7 @@
       "file_type": "code",
       "norm_label": "restorerouterequest",
       "source_file": "api_app.py",
-      "source_location": "L3954"
+      "source_location": "L3950"
     },
     {
       "id": "api_app_roadinforequest",
@@ -1190,7 +1190,7 @@
       "file_type": "code",
       "norm_label": "roadinforequest",
       "source_file": "api_app.py",
-      "source_location": "L1821"
+      "source_location": "L1817"
     },
     {
       "id": "api_app_routeplannerjobrequest",
@@ -1203,7 +1203,7 @@
       "file_type": "code",
       "norm_label": "routeplannerjobrequest",
       "source_file": "api_app.py",
-      "source_location": "L1245"
+      "source_location": "L1241"
     },
     {
       "id": "api_app_routeplannerpoint",
@@ -1216,7 +1216,7 @@
       "file_type": "code",
       "norm_label": "routeplannerpoint",
       "source_file": "api_app.py",
-      "source_location": "L1215"
+      "source_location": "L1211"
     },
     {
       "id": "api_app_routeplannerpreviewrequest",
@@ -1229,7 +1229,7 @@
       "file_type": "code",
       "norm_label": "routeplannerpreviewrequest",
       "source_file": "api_app.py",
-      "source_location": "L1220"
+      "source_location": "L1216"
     },
     {
       "id": "api_app_saverouterequest",
@@ -1242,7 +1242,7 @@
       "file_type": "code",
       "norm_label": "saverouterequest",
       "source_file": "api_app.py",
-      "source_location": "L3947"
+      "source_location": "L3943"
     },
     {
       "id": "api_app_windshelterrequest",
@@ -1255,33 +1255,33 @@
       "file_type": "code",
       "norm_label": "windshelterrequest",
       "source_file": "api_app.py",
-      "source_location": "L1682"
+      "source_location": "L1678"
     },
     {
-      "id": "frontend_src_components_planner_rainradar_rainviewerdata",
-      "label": "RainViewerData",
+      "id": "frontend_src_components_results_weathercell_weathercellprops",
+      "label": "WeatherCellProps",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 40,
-      "community_name": "RainRadar.tsx",
+      "community_name": "WeatherGrid.tsx",
       "file_type": "code",
-      "norm_label": "rainviewerdata",
-      "source_file": "frontend/src/components/planner/RainRadar.tsx",
-      "source_location": "L19"
-    },
-    {
-      "id": "frontend_src_components_planner_rainradar_rainviewerframe",
-      "label": "RainViewerFrame",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 40,
-      "community_name": "RainRadar.tsx",
-      "file_type": "code",
-      "norm_label": "rainviewerframe",
-      "source_file": "frontend/src/components/planner/RainRadar.tsx",
+      "norm_label": "weathercellprops",
+      "source_file": "frontend/src/components/results/WeatherCell.tsx",
       "source_location": "L18"
+    },
+    {
+      "id": "frontend_src_components_results_weathergrid_gridrow",
+      "label": "GridRow",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "WeatherGrid.tsx",
+      "file_type": "code",
+      "norm_label": "gridrow",
+      "source_file": "frontend/src/components/results/WeatherGrid.tsx",
+      "source_location": "L22"
     },
     {
       "id": "frontend_src_components_planner_roadprofile_roaddimension",
@@ -1329,7 +1329,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "livecoords",
       "source_file": "frontend/src/components/planner/LiveLocation.tsx",
@@ -1342,7 +1342,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "livelocationstatus",
       "source_file": "frontend/src/components/planner/LiveLocation.tsx",
@@ -1355,7 +1355,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "errorcitymapprops",
       "source_file": "frontend/src/components/progress/ErrorCityMap.tsx",
@@ -1368,24 +1368,11 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "previewmapprops",
       "source_file": "frontend/src/components/progress/PreviewMap.tsx",
       "source_location": "L14"
-    },
-    {
-      "id": "frontend_src_components_progress_progresspage_stepstatus",
-      "label": "StepStatus",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 47,
-      "community_name": "react",
-      "file_type": "code",
-      "norm_label": "stepstatus",
-      "source_file": "frontend/src/components/progress/ProgressPage.tsx",
-      "source_location": "L15"
     },
     {
       "id": "frontend_src_components_results_temperaturechart_segmentprops",
@@ -2044,11 +2031,24 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "file_type": "code",
       "norm_label": "newherebannerprops",
       "source_file": "frontend/src/components/layout/NewHereBanner.tsx",
       "source_location": "L6"
+    },
+    {
+      "id": "frontend_src_components_planner_citycombobox_citycomboboxprops",
+      "label": "CityComboboxProps",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "citycomboboxprops",
+      "source_file": "frontend/src/components/planner/CityCombobox.tsx",
+      "source_location": "L22"
     },
     {
       "id": "frontend_src_components_planner_countrycombobox_countrycomboboxprops",
@@ -2057,7 +2057,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "file_type": "code",
       "norm_label": "countrycomboboxprops",
       "source_file": "frontend/src/components/planner/CountryCombobox.tsx",
@@ -2314,6 +2314,66 @@
       "norm_label": "useresolvedtheme()",
       "source_file": "frontend/src/components/ui/map.tsx",
       "source_location": "L46"
+    },
+    {
+      "id": "frontend_src_components_planner_rainradar_rainradarlayer",
+      "label": "RainRadarLayer()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "RainRadar.tsx",
+      "file_type": "code",
+      "norm_label": "rainradarlayer()",
+      "source_file": "frontend/src/components/planner/RainRadar.tsx",
+      "source_location": "L108"
+    },
+    {
+      "id": "frontend_src_components_planner_rainradar_rainradarpanel",
+      "label": "RainRadarPanel()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "RainRadar.tsx",
+      "file_type": "code",
+      "norm_label": "rainradarpanel()",
+      "source_file": "frontend/src/components/planner/RainRadar.tsx",
+      "source_location": "L158"
+    },
+    {
+      "id": "frontend_src_components_planner_rainradar_userainradar",
+      "label": "useRainRadar()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "RainRadar.tsx",
+      "file_type": "code",
+      "norm_label": "userainradar()",
+      "source_file": "frontend/src/components/planner/RainRadar.tsx",
+      "source_location": "L57"
+    },
+    {
+      "id": "frontend_src_components_planner_rainradar_userainviewerframes",
+      "label": "useRainViewerFrames()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "RainRadar.tsx",
+      "file_type": "code",
+      "norm_label": "userainviewerframes()",
+      "source_file": "frontend/src/components/planner/RainRadar.tsx",
+      "source_location": "L23"
+    },
+    {
+      "id": "frontend_src_components_planner_rainradar_userainviewerframes_load",
+      "label": "load()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "RainRadar.tsx",
+      "file_type": "code",
+      "norm_label": "load()",
+      "source_file": "frontend/src/components/planner/RainRadar.tsx",
+      "source_location": "L30"
     },
     {
       "id": "frontend_src_i18n_store_applylangtodocument",
@@ -2757,7 +2817,7 @@
       "file_type": "code",
       "norm_label": "_fetch_overpass_mirror()",
       "source_file": "api_app.py",
-      "source_location": "L1380"
+      "source_location": "L1376"
     },
     {
       "id": "api_app_overpass_query",
@@ -2769,7 +2829,7 @@
       "file_type": "code",
       "norm_label": "_overpass_query()",
       "source_file": "api_app.py",
-      "source_location": "L1398"
+      "source_location": "L1394"
     },
     {
       "id": "api_app_overpass_query_cache_result",
@@ -2781,7 +2841,7 @@
       "file_type": "code",
       "norm_label": "_cache_result()",
       "source_file": "api_app.py",
-      "source_location": "L1433"
+      "source_location": "L1429"
     },
     {
       "id": "api_app_overpass_query_cached",
@@ -2793,7 +2853,7 @@
       "file_type": "code",
       "norm_label": "_cached()",
       "source_file": "api_app.py",
-      "source_location": "L1412"
+      "source_location": "L1408"
     },
     {
       "id": "api_app_overpass_query_launch_next",
@@ -2805,7 +2865,7 @@
       "file_type": "code",
       "norm_label": "_launch_next()",
       "source_file": "api_app.py",
-      "source_location": "L1444"
+      "source_location": "L1440"
     },
     {
       "id": "api_app_fmt_elev",
@@ -2817,7 +2877,7 @@
       "file_type": "code",
       "norm_label": "_fmt_elev()",
       "source_file": "api_app.py",
-      "source_location": "L2291"
+      "source_location": "L2287"
     },
     {
       "id": "api_app_friendly_error",
@@ -2853,7 +2913,7 @@
       "file_type": "code",
       "norm_label": "run_calculation()",
       "source_file": "api_app.py",
-      "source_location": "L2315"
+      "source_location": "L2311"
     },
     {
       "id": "api_app_run_calculation_interp_ele",
@@ -2865,7 +2925,7 @@
       "file_type": "code",
       "norm_label": "_interp_ele()",
       "source_file": "api_app.py",
-      "source_location": "L2680"
+      "source_location": "L2676"
     },
     {
       "id": "api_app_run_calculation_make_chunk_cb",
@@ -2877,7 +2937,7 @@
       "file_type": "code",
       "norm_label": "make_chunk_cb()",
       "source_file": "api_app.py",
-      "source_location": "L2494"
+      "source_location": "L2490"
     },
     {
       "id": "api_app_run_calculation_make_chunk_cb_cb",
@@ -2889,7 +2949,7 @@
       "file_type": "code",
       "norm_label": "_cb()",
       "source_file": "api_app.py",
-      "source_location": "L2495"
+      "source_location": "L2491"
     },
     {
       "id": "api_app_run_calculation_update",
@@ -2901,7 +2961,7 @@
       "file_type": "code",
       "norm_label": "update()",
       "source_file": "api_app.py",
-      "source_location": "L2318"
+      "source_location": "L2314"
     },
     {
       "id": "api_app_run_destination_job",
@@ -2913,7 +2973,7 @@
       "file_type": "code",
       "norm_label": "run_destination_job()",
       "source_file": "api_app.py",
-      "source_location": "L2761"
+      "source_location": "L2757"
     },
     {
       "id": "api_app_run_destination_job_on_beam_progress",
@@ -2925,7 +2985,7 @@
       "file_type": "code",
       "norm_label": "on_beam_progress()",
       "source_file": "api_app.py",
-      "source_location": "L2779"
+      "source_location": "L2775"
     },
     {
       "id": "api_app_run_destination_job_on_hierarchical_progress",
@@ -2937,7 +2997,7 @@
       "file_type": "code",
       "norm_label": "on_hierarchical_progress()",
       "source_file": "api_app.py",
-      "source_location": "L2783"
+      "source_location": "L2779"
     },
     {
       "id": "api_app_run_destination_job_update",
@@ -2949,7 +3009,7 @@
       "file_type": "code",
       "norm_label": "update()",
       "source_file": "api_app.py",
-      "source_location": "L2765"
+      "source_location": "L2761"
     },
     {
       "id": "api_app_run_direct_osrm_job",
@@ -2961,7 +3021,7 @@
       "file_type": "code",
       "norm_label": "run_direct_osrm_job()",
       "source_file": "api_app.py",
-      "source_location": "L3013"
+      "source_location": "L3009"
     },
     {
       "id": "api_app_run_direct_osrm_job_chunk_cb",
@@ -2973,7 +3033,7 @@
       "file_type": "code",
       "norm_label": "_chunk_cb()",
       "source_file": "api_app.py",
-      "source_location": "L3096"
+      "source_location": "L3092"
     },
     {
       "id": "api_app_run_direct_osrm_job_in_forecast",
@@ -2985,7 +3045,7 @@
       "file_type": "code",
       "norm_label": "_in_forecast()",
       "source_file": "api_app.py",
-      "source_location": "L3161"
+      "source_location": "L3157"
     },
     {
       "id": "api_app_run_direct_osrm_job_interp_ele",
@@ -2997,7 +3057,7 @@
       "file_type": "code",
       "norm_label": "_interp_ele()",
       "source_file": "api_app.py",
-      "source_location": "L3290"
+      "source_location": "L3286"
     },
     {
       "id": "api_app_run_direct_osrm_job_update",
@@ -3009,7 +3069,7 @@
       "file_type": "code",
       "norm_label": "update()",
       "source_file": "api_app.py",
-      "source_location": "L3017"
+      "source_location": "L3013"
     },
     {
       "id": "api_app_run_elevation_worker",
@@ -3021,7 +3081,7 @@
       "file_type": "code",
       "norm_label": "_run_elevation_worker()",
       "source_file": "api_app.py",
-      "source_location": "L2059"
+      "source_location": "L2055"
     },
     {
       "id": "api_app_run_elevation_worker_fire_batch",
@@ -3033,7 +3093,7 @@
       "file_type": "code",
       "norm_label": "_fire_batch()",
       "source_file": "api_app.py",
-      "source_location": "L2093"
+      "source_location": "L2089"
     },
     {
       "id": "api_app_score_color",
@@ -3045,7 +3105,7 @@
       "file_type": "code",
       "norm_label": "_score_color()",
       "source_file": "api_app.py",
-      "source_location": "L1898"
+      "source_location": "L1894"
     },
     {
       "id": "module_compute_distances_from_chunks",
@@ -3084,30 +3144,6 @@
       "source_location": "L77"
     },
     {
-      "id": "frontend_src_components_planner_advancedpanel_advancedpanel",
-      "label": "AdvancedPanel()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "file_type": "code",
-      "norm_label": "advancedpanel()",
-      "source_file": "frontend/src/components/planner/AdvancedPanel.tsx",
-      "source_location": "L21"
-    },
-    {
-      "id": "frontend_src_components_planner_citycombobox_citycombobox",
-      "label": "CityCombobox()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "file_type": "code",
-      "norm_label": "citycombobox()",
-      "source_file": "frontend/src/components/planner/CityCombobox.tsx",
-      "source_location": "L30"
-    },
-    {
       "id": "frontend_src_components_planner_citylist_citylist",
       "label": "CityList()",
       "_callable": true,
@@ -3130,30 +3166,6 @@
       "norm_label": "handledragend()",
       "source_file": "frontend/src/components/planner/CityList.tsx",
       "source_location": "L127"
-    },
-    {
-      "id": "frontend_src_components_planner_citylist_sortablecityrow",
-      "label": "SortableCityRow()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "file_type": "code",
-      "norm_label": "sortablecityrow()",
-      "source_file": "frontend/src/components/planner/CityList.tsx",
-      "source_location": "L26"
-    },
-    {
-      "id": "frontend_src_components_planner_connectionlist_connectionlist",
-      "label": "ConnectionList()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "file_type": "code",
-      "norm_label": "connectionlist()",
-      "source_file": "frontend/src/components/planner/ConnectionList.tsx",
-      "source_location": "L8"
     },
     {
       "id": "frontend_src_components_planner_savedrouteslist_savedrouteslist",
@@ -3190,6 +3202,42 @@
       "norm_label": "handleopen()",
       "source_file": "frontend/src/components/planner/SavedRoutesList.tsx",
       "source_location": "L33"
+    },
+    {
+      "id": "frontend_src_components_progress_progresspage_getstepstatus",
+      "label": "getStepStatus()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 15,
+      "community_name": "PlannerPage.tsx",
+      "file_type": "code",
+      "norm_label": "getstepstatus()",
+      "source_file": "frontend/src/components/progress/ProgressPage.tsx",
+      "source_location": "L17"
+    },
+    {
+      "id": "frontend_src_components_progress_progresspage_progresspage",
+      "label": "ProgressPage()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 15,
+      "community_name": "PlannerPage.tsx",
+      "file_type": "code",
+      "norm_label": "progresspage()",
+      "source_file": "frontend/src/components/progress/ProgressPage.tsx",
+      "source_location": "L37"
+    },
+    {
+      "id": "frontend_src_components_progress_progresspage_progresspage_dopoll",
+      "label": "doPoll()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 15,
+      "community_name": "PlannerPage.tsx",
+      "file_type": "code",
+      "norm_label": "dopoll()",
+      "source_file": "frontend/src/components/progress/ProgressPage.tsx",
+      "source_location": "L71"
     },
     {
       "id": "frontend_src_components_results_destinationresultspage_destinationresultspage",
@@ -4445,7 +4493,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "elevationchart()",
       "source_file": "frontend/src/components/results/ElevationChart.tsx",
@@ -4457,7 +4505,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "elevationsegment()",
       "source_file": "frontend/src/components/results/ElevationChart.tsx",
@@ -4469,7 +4517,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "onmouseleave()",
       "source_file": "frontend/src/components/results/ElevationChart.tsx",
@@ -4481,7 +4529,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "onmousemove()",
       "source_file": "frontend/src/components/results/ElevationChart.tsx",
@@ -4493,7 +4541,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "getforecastendkm()",
       "source_file": "frontend/src/components/results/ElevationChart.tsx",
@@ -4505,7 +4553,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "interpforecastbykey()",
       "source_file": "frontend/src/components/results/ElevationChart.tsx",
@@ -4517,7 +4565,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "interptempatkm()",
       "source_file": "frontend/src/components/results/ElevationChart.tsx",
@@ -4529,7 +4577,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "modelbadges()",
       "source_file": "frontend/src/components/results/ModelBadges.tsx",
@@ -4541,7 +4589,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "resultsheader()",
       "source_file": "frontend/src/components/results/ResultsHeader.tsx",
@@ -4553,47 +4601,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "routelist()",
       "source_file": "frontend/src/components/results/RouteList.tsx",
       "source_location": "L8"
-    },
-    {
-      "id": "frontend_src_components_results_weathercell_infopanel",
-      "label": "InfoPanel()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "file_type": "code",
-      "norm_label": "infopanel()",
-      "source_file": "frontend/src/components/results/WeatherCell.tsx",
-      "source_location": "L26"
-    },
-    {
-      "id": "frontend_src_components_results_weathercell_infopanel_handle",
-      "label": "handle()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "file_type": "code",
-      "norm_label": "handle()",
-      "source_file": "frontend/src/components/results/WeatherCell.tsx",
-      "source_location": "L30"
-    },
-    {
-      "id": "frontend_src_components_results_weathergrid_weathergrid",
-      "label": "WeatherGrid()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "file_type": "code",
-      "norm_label": "weathergrid()",
-      "source_file": "frontend/src/components/results/WeatherGrid.tsx",
-      "source_location": "L31"
     },
     {
       "id": "api_app_build_forecast",
@@ -4605,7 +4617,7 @@
       "file_type": "code",
       "norm_label": "_build_forecast()",
       "source_file": "api_app.py",
-      "source_location": "L2253"
+      "source_location": "L2249"
     },
     {
       "id": "api_app_build_forecast_on_progress",
@@ -4617,7 +4629,7 @@
       "file_type": "code",
       "norm_label": "on_progress()",
       "source_file": "api_app.py",
-      "source_location": "L2271"
+      "source_location": "L2267"
     },
     {
       "id": "api_app_finish_forecast_result",
@@ -4629,7 +4641,7 @@
       "file_type": "code",
       "norm_label": "_finish_forecast_result()",
       "source_file": "api_app.py",
-      "source_location": "L2220"
+      "source_location": "L2216"
     },
     {
       "id": "api_app_gpx_forecast_by_model",
@@ -4665,7 +4677,7 @@
       "file_type": "code",
       "norm_label": "run_restore_job()",
       "source_file": "api_app.py",
-      "source_location": "L3962"
+      "source_location": "L3958"
     },
     {
       "id": "module_build_open_meteo_params",
@@ -4752,54 +4764,6 @@
       "source_location": "L2755"
     },
     {
-      "id": "frontend_src_components_gpx_gpxrouteeditor_editclickcapture",
-      "label": "EditClickCapture()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "editclickcapture()",
-      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
-      "source_location": "L43"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxrouteeditor_gpxeditmapelements",
-      "label": "GpxEditMapElements()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "gpxeditmapelements()",
-      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
-      "source_location": "L92"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxrouteeditor_gpxeditpanel",
-      "label": "GpxEditPanel()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "gpxeditpanel()",
-      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
-      "source_location": "L159"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxrouteeditor_sectionmarker",
-      "label": "SectionMarker()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "sectionmarker()",
-      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
-      "source_location": "L78"
-    },
-    {
       "id": "frontend_src_components_gpx_gpxroutemap_findnearesttrackidx",
       "label": "findNearestTrackIdx()",
       "_callable": true,
@@ -4834,18 +4798,6 @@
       "norm_label": "geobearing()",
       "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
       "source_location": "L82"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxroutemap_gpxarrivaltime",
-      "label": "gpxArrivalTime()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "gpxarrivaltime()",
-      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
-      "source_location": "L120"
     },
     {
       "id": "frontend_src_components_gpx_gpxroutemap_gpxboundstracker",
@@ -4896,78 +4848,6 @@
       "source_location": "L387"
     },
     {
-      "id": "frontend_src_components_gpx_gpxroutemap_gpxminielevchart",
-      "label": "GpxMiniElevChart()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "gpxminielevchart()",
-      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
-      "source_location": "L641"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxroutemap_gpxminielevchart_onchartmouseleave",
-      "label": "onChartMouseLeave()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "onchartmouseleave()",
-      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
-      "source_location": "L862"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxroutemap_gpxminielevchart_onchartmousemove",
-      "label": "onChartMouseMove()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "onchartmousemove()",
-      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
-      "source_location": "L795"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxroutemap_gpxminitempchart",
-      "label": "GpxMiniTempChart()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "gpxminitempchart()",
-      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
-      "source_location": "L898"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxroutemap_gpxminitempchart_onchartmouseleave",
-      "label": "onChartMouseLeave()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "onchartmouseleave()",
-      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
-      "source_location": "L1354"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxroutemap_gpxminitempchart_onchartmousemove",
-      "label": "onChartMouseMove()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "onchartmousemove()",
-      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
-      "source_location": "L1275"
-    },
-    {
       "id": "frontend_src_components_gpx_gpxroutemap_gpxroutemap",
       "label": "GpxRouteMap()",
       "_callable": true,
@@ -5014,54 +4894,6 @@
       "norm_label": "haversinedist()",
       "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
       "source_location": "L72"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxroutemap_interpnightms",
-      "label": "interpNightMs()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "interpnightms()",
-      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
-      "source_location": "L145"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxroutemap_interptempforgpx",
-      "label": "interpTempForGpx()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "interptempforgpx()",
-      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
-      "source_location": "L156"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxroutemap_interptempforgpxattime",
-      "label": "interpTempForGpxAtTime()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "interptempforgpxattime()",
-      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
-      "source_location": "L202"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxroutemap_markercolorsvg",
-      "label": "markerColorSvg()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "markercolorsvg()",
-      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
-      "source_location": "L633"
     },
     {
       "id": "frontend_src_components_gpx_gpxroutemap_showatstride",
@@ -5124,6 +4956,54 @@
       "source_location": "L378"
     },
     {
+      "id": "frontend_src_components_gpx_gpxrouteeditor_editclickcapture",
+      "label": "EditClickCapture()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "GpxRouteEditor.tsx",
+      "file_type": "code",
+      "norm_label": "editclickcapture()",
+      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
+      "source_location": "L43"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxrouteeditor_gpxeditmapelements",
+      "label": "GpxEditMapElements()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "GpxRouteEditor.tsx",
+      "file_type": "code",
+      "norm_label": "gpxeditmapelements()",
+      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
+      "source_location": "L92"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxrouteeditor_gpxeditpanel",
+      "label": "GpxEditPanel()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "GpxRouteEditor.tsx",
+      "file_type": "code",
+      "norm_label": "gpxeditpanel()",
+      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
+      "source_location": "L159"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxrouteeditor_sectionmarker",
+      "label": "SectionMarker()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "GpxRouteEditor.tsx",
+      "file_type": "code",
+      "norm_label": "sectionmarker()",
+      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
+      "source_location": "L78"
+    },
+    {
       "id": "api_app_elev_api",
       "label": "_elev_api()",
       "_callable": true,
@@ -5145,7 +5025,7 @@
       "file_type": "code",
       "norm_label": "find_nearest_city_id()",
       "source_file": "api_app.py",
-      "source_location": "L2042"
+      "source_location": "L2038"
     },
     {
       "id": "api_app_gpx_arrival_dt",
@@ -5157,7 +5037,7 @@
       "file_type": "code",
       "norm_label": "_gpx_arrival_dt()",
       "source_file": "api_app.py",
-      "source_location": "L3372"
+      "source_location": "L3368"
     },
     {
       "id": "api_app_gpx_subsample",
@@ -5169,7 +5049,7 @@
       "file_type": "code",
       "norm_label": "gpx_subsample()",
       "source_file": "api_app.py",
-      "source_location": "L1949"
+      "source_location": "L1945"
     },
     {
       "id": "api_app_haversine_km",
@@ -5181,7 +5061,7 @@
       "file_type": "code",
       "norm_label": "_haversine_km()",
       "source_file": "api_app.py",
-      "source_location": "L1916"
+      "source_location": "L1912"
     },
     {
       "id": "api_app_interp_profile_at_km",
@@ -5193,7 +5073,7 @@
       "file_type": "code",
       "norm_label": "_interp_profile_at_km()",
       "source_file": "api_app.py",
-      "source_location": "L3397"
+      "source_location": "L3393"
     },
     {
       "id": "api_app_parse_gpx",
@@ -5205,7 +5085,7 @@
       "file_type": "code",
       "norm_label": "parse_gpx()",
       "source_file": "api_app.py",
-      "source_location": "L1925"
+      "source_location": "L1921"
     },
     {
       "id": "api_app_parse_gpx_stop_raw",
@@ -5217,7 +5097,7 @@
       "file_type": "code",
       "norm_label": "_parse_gpx_stop_raw()",
       "source_file": "api_app.py",
-      "source_location": "L3421"
+      "source_location": "L3417"
     },
     {
       "id": "api_app_parse_gpx_stop_raw_interpolated_hw",
@@ -5229,7 +5109,7 @@
       "file_type": "code",
       "norm_label": "_interpolated_hw()",
       "source_file": "api_app.py",
-      "source_location": "L3445"
+      "source_location": "L3441"
     },
     {
       "id": "api_app_parse_gpx_stop_raw_tc",
@@ -5241,7 +5121,7 @@
       "file_type": "code",
       "norm_label": "_tc()",
       "source_file": "api_app.py",
-      "source_location": "L3429"
+      "source_location": "L3425"
     },
     {
       "id": "api_app_point_to_polyline_m",
@@ -5253,7 +5133,7 @@
       "file_type": "code",
       "norm_label": "_point_to_polyline_m()",
       "source_file": "api_app.py",
-      "source_location": "L1372"
+      "source_location": "L1368"
     },
     {
       "id": "api_app_point_to_segment_m",
@@ -5265,7 +5145,7 @@
       "file_type": "code",
       "norm_label": "_point_to_segment_m()",
       "source_file": "api_app.py",
-      "source_location": "L1360"
+      "source_location": "L1356"
     },
     {
       "id": "api_app_run_gpx_analysis",
@@ -5277,7 +5157,7 @@
       "file_type": "code",
       "norm_label": "run_gpx_analysis()",
       "source_file": "api_app.py",
-      "source_location": "L3548"
+      "source_location": "L3544"
     },
     {
       "id": "api_app_run_gpx_analysis_on_progress",
@@ -5289,7 +5169,7 @@
       "file_type": "code",
       "norm_label": "on_progress()",
       "source_file": "api_app.py",
-      "source_location": "L3713"
+      "source_location": "L3709"
     },
     {
       "id": "api_app_run_gpx_analysis_update",
@@ -5301,7 +5181,7 @@
       "file_type": "code",
       "norm_label": "update()",
       "source_file": "api_app.py",
-      "source_location": "L3558"
+      "source_location": "L3554"
     },
     {
       "id": "api_app_select_gpx_weather_points",
@@ -5313,7 +5193,7 @@
       "file_type": "code",
       "norm_label": "select_gpx_weather_points()",
       "source_file": "api_app.py",
-      "source_location": "L1984"
+      "source_location": "L1980"
     },
     {
       "id": "api_app_submit_gpx_job",
@@ -5628,6 +5508,138 @@
       "source_location": "L149"
     },
     {
+      "id": "frontend_src_components_gpx_gpxroutemap_gpxarrivaltime",
+      "label": "gpxArrivalTime()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": "GpxMiniTempChart",
+      "file_type": "code",
+      "norm_label": "gpxarrivaltime()",
+      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
+      "source_location": "L120"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxroutemap_gpxminielevchart",
+      "label": "GpxMiniElevChart()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": "GpxMiniTempChart",
+      "file_type": "code",
+      "norm_label": "gpxminielevchart()",
+      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
+      "source_location": "L641"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxroutemap_gpxminielevchart_onchartmouseleave",
+      "label": "onChartMouseLeave()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": "GpxMiniTempChart",
+      "file_type": "code",
+      "norm_label": "onchartmouseleave()",
+      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
+      "source_location": "L862"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxroutemap_gpxminielevchart_onchartmousemove",
+      "label": "onChartMouseMove()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": "GpxMiniTempChart",
+      "file_type": "code",
+      "norm_label": "onchartmousemove()",
+      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
+      "source_location": "L795"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxroutemap_gpxminitempchart",
+      "label": "GpxMiniTempChart()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": "GpxMiniTempChart",
+      "file_type": "code",
+      "norm_label": "gpxminitempchart()",
+      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
+      "source_location": "L898"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxroutemap_gpxminitempchart_onchartmouseleave",
+      "label": "onChartMouseLeave()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": "GpxMiniTempChart",
+      "file_type": "code",
+      "norm_label": "onchartmouseleave()",
+      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
+      "source_location": "L1354"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxroutemap_gpxminitempchart_onchartmousemove",
+      "label": "onChartMouseMove()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": "GpxMiniTempChart",
+      "file_type": "code",
+      "norm_label": "onchartmousemove()",
+      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
+      "source_location": "L1275"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxroutemap_interpnightms",
+      "label": "interpNightMs()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": "GpxMiniTempChart",
+      "file_type": "code",
+      "norm_label": "interpnightms()",
+      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
+      "source_location": "L145"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxroutemap_interptempforgpx",
+      "label": "interpTempForGpx()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": "GpxMiniTempChart",
+      "file_type": "code",
+      "norm_label": "interptempforgpx()",
+      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
+      "source_location": "L156"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxroutemap_interptempforgpxattime",
+      "label": "interpTempForGpxAtTime()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": "GpxMiniTempChart",
+      "file_type": "code",
+      "norm_label": "interptempforgpxattime()",
+      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
+      "source_location": "L202"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxroutemap_markercolorsvg",
+      "label": "markerColorSvg()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": "GpxMiniTempChart",
+      "file_type": "code",
+      "norm_label": "markercolorsvg()",
+      "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
+      "source_location": "L633"
+    },
+    {
       "id": "api_app_auto_start_day_direct",
       "label": "_auto_start_day_direct()",
       "_callable": true,
@@ -5637,7 +5649,7 @@
       "file_type": "code",
       "norm_label": "_auto_start_day_direct()",
       "source_file": "api_app.py",
-      "source_location": "L2962"
+      "source_location": "L2958"
     },
     {
       "id": "api_app_auto_start_day_direct_score_start",
@@ -5649,7 +5661,7 @@
       "file_type": "code",
       "norm_label": "_score_start()",
       "source_file": "api_app.py",
-      "source_location": "L2973"
+      "source_location": "L2969"
     },
     {
       "id": "api_app_gpx_stop_climate_night_series",
@@ -5661,7 +5673,7 @@
       "file_type": "code",
       "norm_label": "_gpx_stop_climate_night_series()",
       "source_file": "api_app.py",
-      "source_location": "L3499"
+      "source_location": "L3495"
     },
     {
       "id": "api_app_gpx_stop_climate_night_series_climate_slot_entry",
@@ -5673,7 +5685,7 @@
       "file_type": "code",
       "norm_label": "_climate_slot_entry()",
       "source_file": "api_app.py",
-      "source_location": "L3518"
+      "source_location": "L3514"
     },
     {
       "id": "module_beam_search_route",
@@ -6213,7 +6225,7 @@
       "file_type": "code",
       "norm_label": "_around_polyline()",
       "source_file": "api_app.py",
-      "source_location": "L1347"
+      "source_location": "L1343"
     },
     {
       "id": "api_app_export_saved_route",
@@ -6225,7 +6237,7 @@
       "file_type": "code",
       "norm_label": "export_saved_route()",
       "source_file": "api_app.py",
-      "source_location": "L3988"
+      "source_location": "L3984"
     },
     {
       "id": "api_app_forecast_parse",
@@ -6309,7 +6321,7 @@
       "file_type": "code",
       "norm_label": "oepnv_tile()",
       "source_file": "api_app.py",
-      "source_location": "L1629"
+      "source_location": "L1625"
     },
     {
       "id": "api_app_poi_category",
@@ -6321,7 +6333,7 @@
       "file_type": "code",
       "norm_label": "_poi_category()",
       "source_file": "api_app.py",
-      "source_location": "L1538"
+      "source_location": "L1534"
     },
     {
       "id": "api_app_point_in_ring",
@@ -6333,7 +6345,7 @@
       "file_type": "code",
       "norm_label": "_point_in_ring()",
       "source_file": "api_app.py",
-      "source_location": "L1647"
+      "source_location": "L1643"
     },
     {
       "id": "api_app_point_seg_dist_m",
@@ -6345,7 +6357,7 @@
       "file_type": "code",
       "norm_label": "_point_seg_dist_m()",
       "source_file": "api_app.py",
-      "source_location": "L1804"
+      "source_location": "L1800"
     },
     {
       "id": "api_app_resolve_brouter_profile",
@@ -6357,7 +6369,7 @@
       "file_type": "code",
       "norm_label": "_resolve_brouter_profile()",
       "source_file": "api_app.py",
-      "source_location": "L1211"
+      "source_location": "L1207"
     },
     {
       "id": "api_app_resolve_city_name",
@@ -6381,7 +6393,7 @@
       "file_type": "code",
       "norm_label": "restore_saved_route()",
       "source_file": "api_app.py",
-      "source_location": "L4010"
+      "source_location": "L4006"
     },
     {
       "id": "api_app_road_category",
@@ -6393,7 +6405,7 @@
       "file_type": "code",
       "norm_label": "_road_category()",
       "source_file": "api_app.py",
-      "source_location": "L1800"
+      "source_location": "L1796"
     },
     {
       "id": "api_app_route_planner_pois",
@@ -6405,7 +6417,7 @@
       "file_type": "code",
       "norm_label": "route_planner_pois()",
       "source_file": "api_app.py",
-      "source_location": "L1564"
+      "source_location": "L1560"
     },
     {
       "id": "api_app_route_planner_preview",
@@ -6417,7 +6429,7 @@
       "file_type": "code",
       "norm_label": "route_planner_preview()",
       "source_file": "api_app.py",
-      "source_location": "L1226"
+      "source_location": "L1222"
     },
     {
       "id": "api_app_route_planner_road_info",
@@ -6429,7 +6441,7 @@
       "file_type": "code",
       "norm_label": "route_planner_road_info()",
       "source_file": "api_app.py",
-      "source_location": "L1826"
+      "source_location": "L1822"
     },
     {
       "id": "api_app_route_planner_wind_shelter",
@@ -6441,7 +6453,7 @@
       "file_type": "code",
       "norm_label": "route_planner_wind_shelter()",
       "source_file": "api_app.py",
-      "source_location": "L1687"
+      "source_location": "L1683"
     },
     {
       "id": "api_app_sample_polyline",
@@ -6453,7 +6465,7 @@
       "file_type": "code",
       "norm_label": "_sample_polyline()",
       "source_file": "api_app.py",
-      "source_location": "L1663"
+      "source_location": "L1659"
     },
     {
       "id": "api_app_search_cities",
@@ -6489,7 +6501,7 @@
       "file_type": "code",
       "norm_label": "serve_spa()",
       "source_file": "api_app.py",
-      "source_location": "L4047"
+      "source_location": "L4043"
     },
     {
       "id": "api_app_simplify_latlons",
@@ -6501,7 +6513,7 @@
       "file_type": "code",
       "norm_label": "_simplify_latlons()",
       "source_file": "api_app.py",
-      "source_location": "L1335"
+      "source_location": "L1331"
     },
     {
       "id": "api_app_snap_to_grid",
@@ -6513,7 +6525,7 @@
       "file_type": "code",
       "norm_label": "_snap_to_grid()",
       "source_file": "api_app.py",
-      "source_location": "L1343"
+      "source_location": "L1339"
     },
     {
       "id": "api_app_submit_destination_detail_job",
@@ -6561,7 +6573,7 @@
       "file_type": "code",
       "norm_label": "submit_route_planner_job()",
       "source_file": "api_app.py",
-      "source_location": "L1253"
+      "source_location": "L1249"
     },
     {
       "id": "api_app_surface_category",
@@ -6573,7 +6585,7 @@
       "file_type": "code",
       "norm_label": "_surface_category()",
       "source_file": "api_app.py",
-      "source_location": "L1773"
+      "source_location": "L1769"
     },
     {
       "id": "module_brouter_route_multi",
@@ -6600,64 +6612,40 @@
       "source_location": "L2010"
     },
     {
-      "id": "frontend_src_components_planner_rainradar_rainradarlayer",
-      "label": "RainRadarLayer()",
+      "id": "frontend_src_components_results_weathercell_infopanel",
+      "label": "InfoPanel()",
       "_callable": true,
       "_origin": "ast",
       "community": 40,
-      "community_name": "RainRadar.tsx",
+      "community_name": "WeatherGrid.tsx",
       "file_type": "code",
-      "norm_label": "rainradarlayer()",
-      "source_file": "frontend/src/components/planner/RainRadar.tsx",
-      "source_location": "L108"
+      "norm_label": "infopanel()",
+      "source_file": "frontend/src/components/results/WeatherCell.tsx",
+      "source_location": "L26"
     },
     {
-      "id": "frontend_src_components_planner_rainradar_rainradarpanel",
-      "label": "RainRadarPanel()",
+      "id": "frontend_src_components_results_weathercell_infopanel_handle",
+      "label": "handle()",
       "_callable": true,
       "_origin": "ast",
       "community": 40,
-      "community_name": "RainRadar.tsx",
+      "community_name": "WeatherGrid.tsx",
       "file_type": "code",
-      "norm_label": "rainradarpanel()",
-      "source_file": "frontend/src/components/planner/RainRadar.tsx",
-      "source_location": "L158"
-    },
-    {
-      "id": "frontend_src_components_planner_rainradar_userainradar",
-      "label": "useRainRadar()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 40,
-      "community_name": "RainRadar.tsx",
-      "file_type": "code",
-      "norm_label": "userainradar()",
-      "source_file": "frontend/src/components/planner/RainRadar.tsx",
-      "source_location": "L57"
-    },
-    {
-      "id": "frontend_src_components_planner_rainradar_userainviewerframes",
-      "label": "useRainViewerFrames()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 40,
-      "community_name": "RainRadar.tsx",
-      "file_type": "code",
-      "norm_label": "userainviewerframes()",
-      "source_file": "frontend/src/components/planner/RainRadar.tsx",
-      "source_location": "L23"
-    },
-    {
-      "id": "frontend_src_components_planner_rainradar_userainviewerframes_load",
-      "label": "load()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 40,
-      "community_name": "RainRadar.tsx",
-      "file_type": "code",
-      "norm_label": "load()",
-      "source_file": "frontend/src/components/planner/RainRadar.tsx",
+      "norm_label": "handle()",
+      "source_file": "frontend/src/components/results/WeatherCell.tsx",
       "source_location": "L30"
+    },
+    {
+      "id": "frontend_src_components_results_weathergrid_weathergrid",
+      "label": "WeatherGrid()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "WeatherGrid.tsx",
+      "file_type": "code",
+      "norm_label": "weathergrid()",
+      "source_file": "frontend/src/components/results/WeatherGrid.tsx",
+      "source_location": "L31"
     },
     {
       "id": "frontend_src_components_gpx_gpxelevationchart_daychart",
@@ -7049,7 +7037,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "livelocationbutton()",
       "source_file": "frontend/src/components/planner/LiveLocation.tsx",
@@ -7061,7 +7049,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "livelocationmarker()",
       "source_file": "frontend/src/components/planner/LiveLocation.tsx",
@@ -7073,7 +7061,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "uselivelocation()",
       "source_file": "frontend/src/components/planner/LiveLocation.tsx",
@@ -7085,7 +7073,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "errorcitymap()",
       "source_file": "frontend/src/components/progress/ErrorCityMap.tsx",
@@ -7097,7 +7085,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "fitbounds()",
       "source_file": "frontend/src/components/progress/ErrorCityMap.tsx",
@@ -7109,7 +7097,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "fitbounds()",
       "source_file": "frontend/src/components/progress/PreviewMap.tsx",
@@ -7121,47 +7109,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "previewmap()",
       "source_file": "frontend/src/components/progress/PreviewMap.tsx",
       "source_location": "L29"
-    },
-    {
-      "id": "frontend_src_components_progress_progresspage_getstepstatus",
-      "label": "getStepStatus()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 47,
-      "community_name": "react",
-      "file_type": "code",
-      "norm_label": "getstepstatus()",
-      "source_file": "frontend/src/components/progress/ProgressPage.tsx",
-      "source_location": "L17"
-    },
-    {
-      "id": "frontend_src_components_progress_progresspage_progresspage",
-      "label": "ProgressPage()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 47,
-      "community_name": "react",
-      "file_type": "code",
-      "norm_label": "progresspage()",
-      "source_file": "frontend/src/components/progress/ProgressPage.tsx",
-      "source_location": "L37"
-    },
-    {
-      "id": "frontend_src_components_progress_progresspage_progresspage_dopoll",
-      "label": "doPoll()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 47,
-      "community_name": "react",
-      "file_type": "code",
-      "norm_label": "dopoll()",
-      "source_file": "frontend/src/components/progress/ProgressPage.tsx",
-      "source_location": "L71"
     },
     {
       "id": "frontend_src_components_results_resultspage_buildroutename",
@@ -7282,6 +7234,30 @@
       "norm_label": "scheduleforecastpoll()",
       "source_file": "frontend/src/components/results/ResultsPage.tsx",
       "source_location": "L118"
+    },
+    {
+      "id": "frontend_src_components_layout_topbar_topbar",
+      "label": "TopBar()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "TemperatureChart.tsx",
+      "file_type": "code",
+      "norm_label": "topbar()",
+      "source_file": "frontend/src/components/layout/TopBar.tsx",
+      "source_location": "L8"
+    },
+    {
+      "id": "frontend_src_components_layout_topbar_topbar_toggletheme",
+      "label": "toggleTheme()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "TemperatureChart.tsx",
+      "file_type": "code",
+      "norm_label": "toggletheme()",
+      "source_file": "frontend/src/components/layout/TopBar.tsx",
+      "source_location": "L18"
     },
     {
       "id": "frontend_src_components_results_temperaturechart_getforecastendkm",
@@ -7929,7 +7905,7 @@
       "file_type": "code",
       "norm_label": "_prepare_forecast_points()",
       "source_file": "api_app.py",
-      "source_location": "L2177"
+      "source_location": "L2173"
     },
     {
       "id": "module_select_forecast_points",
@@ -8669,35 +8645,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "file_type": "code",
       "norm_label": "newherebanner()",
       "source_file": "frontend/src/components/layout/NewHereBanner.tsx",
       "source_location": "L10"
-    },
-    {
-      "id": "frontend_src_components_layout_topbar_topbar",
-      "label": "TopBar()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "ref_i18n_uset",
-      "file_type": "code",
-      "norm_label": "topbar()",
-      "source_file": "frontend/src/components/layout/TopBar.tsx",
-      "source_location": "L8"
-    },
-    {
-      "id": "frontend_src_components_layout_topbar_topbar_toggletheme",
-      "label": "toggleTheme()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "ref_i18n_uset",
-      "file_type": "code",
-      "norm_label": "toggletheme()",
-      "source_file": "frontend/src/components/layout/TopBar.tsx",
-      "source_location": "L18"
     },
     {
       "id": "frontend_src_components_planner_addresssearch_addresssearch",
@@ -8705,11 +8657,59 @@
       "_callable": true,
       "_origin": "ast",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "file_type": "code",
       "norm_label": "addresssearch()",
       "source_file": "frontend/src/components/planner/AddressSearch.tsx",
       "source_location": "L24"
+    },
+    {
+      "id": "frontend_src_components_planner_advancedpanel_advancedpanel",
+      "label": "AdvancedPanel()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "advancedpanel()",
+      "source_file": "frontend/src/components/planner/AdvancedPanel.tsx",
+      "source_location": "L21"
+    },
+    {
+      "id": "frontend_src_components_planner_citycombobox_citycombobox",
+      "label": "CityCombobox()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "citycombobox()",
+      "source_file": "frontend/src/components/planner/CityCombobox.tsx",
+      "source_location": "L30"
+    },
+    {
+      "id": "frontend_src_components_planner_citylist_sortablecityrow",
+      "label": "SortableCityRow()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "sortablecityrow()",
+      "source_file": "frontend/src/components/planner/CityList.tsx",
+      "source_location": "L26"
+    },
+    {
+      "id": "frontend_src_components_planner_connectionlist_connectionlist",
+      "label": "ConnectionList()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "connectionlist()",
+      "source_file": "frontend/src/components/planner/ConnectionList.tsx",
+      "source_location": "L8"
     },
     {
       "id": "frontend_src_components_planner_countrycombobox_countrycombobox",
@@ -8717,7 +8717,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "file_type": "code",
       "norm_label": "countrycombobox()",
       "source_file": "frontend/src/components/planner/CountryCombobox.tsx",
@@ -8896,6 +8896,17 @@
       "source_location": "L35"
     },
     {
+      "id": "frontend_src_components_planner_rainradar",
+      "label": "RainRadar.tsx",
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "RainRadar.tsx",
+      "file_type": "code",
+      "norm_label": "rainradar.tsx",
+      "source_file": "frontend/src/components/planner/RainRadar.tsx",
+      "source_location": "L1"
+    },
+    {
       "id": "frontend_src_i18n_store",
       "label": "store.ts",
       "_origin": "ast",
@@ -8948,7 +8959,7 @@
       "file_type": "code",
       "norm_label": "en",
       "source_file": "frontend/src/i18n/translations.ts",
-      "source_location": "L704"
+      "source_location": "L702"
     },
     {
       "id": "frontend_src_i18n_uset",
@@ -9435,7 +9446,7 @@
       "source_location": "L47"
     },
     {
-      "id": "api_app_rationale_1399",
+      "id": "api_app_rationale_1395",
       "label": "POST a query to Overpass, with a small in-memory TTL cache. Query *sessions*\u2026",
       "_origin": "ast",
       "community": 13,
@@ -9443,10 +9454,10 @@
       "file_type": "rationale",
       "norm_label": "post a query to overpass, with a small in-memory ttl cache. query *sessions*...",
       "source_file": "api_app.py",
-      "source_location": "L1399"
+      "source_location": "L1395"
     },
     {
-      "id": "api_app_rationale_1899",
+      "id": "api_app_rationale_1895",
       "label": "Normalized score (0=good, 1=bad) to hex color.",
       "_origin": "ast",
       "community": 14,
@@ -9454,10 +9465,10 @@
       "file_type": "rationale",
       "norm_label": "normalized score (0=good, 1=bad) to hex color.",
       "source_file": "api_app.py",
-      "source_location": "L1899"
+      "source_location": "L1895"
     },
     {
-      "id": "api_app_rationale_2060",
+      "id": "api_app_rationale_2056",
       "label": "Background thread: consumes (seg_idx, chunk) tuples from seg_queue, samples\u2026",
       "_origin": "ast",
       "community": 14,
@@ -9465,10 +9476,10 @@
       "file_type": "rationale",
       "norm_label": "background thread: consumes (seg_idx, chunk) tuples from seg_queue, samples...",
       "source_file": "api_app.py",
-      "source_location": "L2060"
+      "source_location": "L2056"
     },
     {
-      "id": "api_app_rationale_2292",
+      "id": "api_app_rationale_2288",
       "label": "Format elevation data dict into the JSON result shape.",
       "_origin": "ast",
       "community": 14,
@@ -9476,10 +9487,10 @@
       "file_type": "rationale",
       "norm_label": "format elevation data dict into the json result shape.",
       "source_file": "api_app.py",
-      "source_location": "L2292"
+      "source_location": "L2288"
     },
     {
-      "id": "api_app_rationale_2762",
+      "id": "api_app_rationale_2758",
       "label": "Find destination cities + beam-search routes, then OSRM + elevation + forecast.",
       "_origin": "ast",
       "community": 14,
@@ -9487,10 +9498,10 @@
       "file_type": "rationale",
       "norm_label": "find destination cities + beam-search routes, then osrm + elevation + forecast.",
       "source_file": "api_app.py",
-      "source_location": "L2762"
+      "source_location": "L2758"
     },
     {
-      "id": "api_app_rationale_3014",
+      "id": "api_app_rationale_3010",
       "label": "Direct OSRM route: connect cities A\u2192B\u2192C in input order, no graph algorithm.",
       "_origin": "ast",
       "community": 14,
@@ -9498,7 +9509,7 @@
       "file_type": "rationale",
       "norm_label": "direct osrm route: connect cities a\u2192b\u2192c in input order, no graph algorithm.",
       "source_file": "api_app.py",
-      "source_location": "L3014"
+      "source_location": "L3010"
     },
     {
       "id": "api_app_rationale_695",
@@ -9556,50 +9567,6 @@
       "source_location": "L78"
     },
     {
-      "id": "frontend_src_components_planner_advancedpanel",
-      "label": "AdvancedPanel.tsx",
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "file_type": "code",
-      "norm_label": "advancedpanel.tsx",
-      "source_file": "frontend/src/components/planner/AdvancedPanel.tsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "frontend_src_components_planner_citycombobox",
-      "label": "CityCombobox.tsx",
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "file_type": "code",
-      "norm_label": "citycombobox.tsx",
-      "source_file": "frontend/src/components/planner/CityCombobox.tsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "frontend_src_components_planner_citylist",
-      "label": "CityList.tsx",
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "file_type": "code",
-      "norm_label": "citylist.tsx",
-      "source_file": "frontend/src/components/planner/CityList.tsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "frontend_src_components_planner_connectionlist",
-      "label": "ConnectionList.tsx",
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "file_type": "code",
-      "norm_label": "connectionlist.tsx",
-      "source_file": "frontend/src/components/planner/ConnectionList.tsx",
-      "source_location": "L1"
-    },
-    {
       "id": "frontend_src_components_planner_plannerpage",
       "label": "PlannerPage.tsx",
       "_origin": "ast",
@@ -9622,6 +9589,17 @@
       "source_location": "L1"
     },
     {
+      "id": "frontend_src_components_progress_progresspage",
+      "label": "ProgressPage.tsx",
+      "_origin": "ast",
+      "community": 15,
+      "community_name": "PlannerPage.tsx",
+      "file_type": "code",
+      "norm_label": "progresspage.tsx",
+      "source_file": "frontend/src/components/progress/ProgressPage.tsx",
+      "source_location": "L1"
+    },
+    {
       "id": "frontend_src_components_results_destinationresultspage",
       "label": "DestinationResultsPage.tsx",
       "_origin": "ast",
@@ -9633,26 +9611,15 @@
       "source_location": "L1"
     },
     {
-      "id": "ref_dnd_kit_core",
-      "label": "@dnd-kit/core",
+      "id": "ref_react_router",
+      "label": "react-router",
       "_origin": "ast",
       "community": 15,
       "community_name": "PlannerPage.tsx",
       "file_type": "concept",
-      "norm_label": "@dnd-kit/core",
+      "norm_label": "react-router",
       "source_file": "frontend/package.json",
-      "source_location": "L13"
-    },
-    {
-      "id": "ref_dnd_kit_sortable",
-      "label": "@dnd-kit/sortable",
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "file_type": "concept",
-      "norm_label": "@dnd-kit/sortable",
-      "source_file": "frontend/package.json",
-      "source_location": "L14"
+      "source_location": "L36"
     },
     {
       "id": "frontend_package_dependencies",
@@ -11023,7 +10990,7 @@
       "label": "ElevationChart.tsx",
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "elevationchart.tsx",
       "source_file": "frontend/src/components/results/ElevationChart.tsx",
@@ -11034,7 +11001,7 @@
       "label": "ModelBadges.tsx",
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "modelbadges.tsx",
       "source_file": "frontend/src/components/results/ModelBadges.tsx",
@@ -11045,7 +11012,7 @@
       "label": "MODELS",
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "models",
       "source_file": "frontend/src/components/results/ModelBadges.tsx",
@@ -11056,7 +11023,7 @@
       "label": "ResultsHeader.tsx",
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "resultsheader.tsx",
       "source_file": "frontend/src/components/results/ResultsHeader.tsx",
@@ -11067,7 +11034,7 @@
       "label": "ResultsPage.tsx",
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "resultspage.tsx",
       "source_file": "frontend/src/components/results/ResultsPage.tsx",
@@ -11078,66 +11045,11 @@
       "label": "RouteList.tsx",
       "_origin": "ast",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "file_type": "code",
       "norm_label": "routelist.tsx",
       "source_file": "frontend/src/components/results/RouteList.tsx",
       "source_location": "L1"
-    },
-    {
-      "id": "frontend_src_components_results_weathercell",
-      "label": "WeatherCell.tsx",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "file_type": "code",
-      "norm_label": "weathercell.tsx",
-      "source_file": "frontend/src/components/results/WeatherCell.tsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "frontend_src_components_results_weathercell_example",
-      "label": "EXAMPLE",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "file_type": "code",
-      "norm_label": "example",
-      "source_file": "frontend/src/components/results/WeatherCell.tsx",
-      "source_location": "L8"
-    },
-    {
-      "id": "frontend_src_components_results_weathercell_weathercell",
-      "label": "WeatherCell",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "file_type": "code",
-      "norm_label": "weathercell",
-      "source_file": "frontend/src/components/results/WeatherCell.tsx",
-      "source_location": "L144"
-    },
-    {
-      "id": "frontend_src_components_results_weathergrid",
-      "label": "WeatherGrid.tsx",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "file_type": "code",
-      "norm_label": "weathergrid.tsx",
-      "source_file": "frontend/src/components/results/WeatherGrid.tsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "frontend_src_components_results_weathergrid_currentyear",
-      "label": "currentYear",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "file_type": "code",
-      "norm_label": "currentyear",
-      "source_file": "frontend/src/components/results/WeatherGrid.tsx",
-      "source_location": "L29"
     },
     {
       "id": "exception",
@@ -11151,7 +11063,7 @@
       "source_location": ""
     },
     {
-      "id": "api_app_rationale_2221",
+      "id": "api_app_rationale_2217",
       "label": "Assemble the final forecast payload from prepared ctx + fetched/parsed per-\u2026",
       "_origin": "ast",
       "community": 25,
@@ -11159,10 +11071,10 @@
       "file_type": "rationale",
       "norm_label": "assemble the final forecast payload from prepared ctx + fetched/parsed per-...",
       "source_file": "api_app.py",
-      "source_location": "L2221"
+      "source_location": "L2217"
     },
     {
-      "id": "api_app_rationale_2255",
+      "id": "api_app_rationale_2251",
       "label": "Build forecast_data from elevation data. Also used when restoring saved routes.\u2026",
       "_origin": "ast",
       "community": 25,
@@ -11170,10 +11082,10 @@
       "file_type": "rationale",
       "norm_label": "build forecast_data from elevation data. also used when restoring saved routes....",
       "source_file": "api_app.py",
-      "source_location": "L2255"
+      "source_location": "L2251"
     },
     {
-      "id": "api_app_rationale_3963",
+      "id": "api_app_rationale_3959",
       "label": "Background thread: expose saved result immediately (preview), then refresh\u2026",
       "_origin": "ast",
       "community": 25,
@@ -11181,7 +11093,7 @@
       "file_type": "rationale",
       "norm_label": "background thread: expose saved result immediately (preview), then refresh...",
       "source_file": "api_app.py",
-      "source_location": "L3963"
+      "source_location": "L3959"
     },
     {
       "id": "module_rationale_2734",
@@ -11250,39 +11162,6 @@
       "source_location": "L2929"
     },
     {
-      "id": "frontend_src_components_gpx_gpxrouteeditor",
-      "label": "GpxRouteEditor.tsx",
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "gpxrouteeditor.tsx",
-      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxrouteeditor_edit_profiles",
-      "label": "EDIT_PROFILES",
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "edit_profiles",
-      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
-      "source_location": "L17"
-    },
-    {
-      "id": "frontend_src_components_gpx_gpxrouteeditor_empty_edit_selection",
-      "label": "EMPTY_EDIT_SELECTION",
-      "_origin": "ast",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
-      "file_type": "code",
-      "norm_label": "empty_edit_selection",
-      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
-      "source_location": "L26"
-    },
-    {
       "id": "frontend_src_components_gpx_gpxroutemap",
       "label": "GpxRouteMap.tsx",
       "_origin": "ast",
@@ -11292,6 +11171,39 @@
       "norm_label": "gpxroutemap.tsx",
       "source_file": "frontend/src/components/gpx/GpxRouteMap.tsx",
       "source_location": "L1"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxrouteeditor",
+      "label": "GpxRouteEditor.tsx",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "GpxRouteEditor.tsx",
+      "file_type": "code",
+      "norm_label": "gpxrouteeditor.tsx",
+      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxrouteeditor_edit_profiles",
+      "label": "EDIT_PROFILES",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "GpxRouteEditor.tsx",
+      "file_type": "code",
+      "norm_label": "edit_profiles",
+      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
+      "source_location": "L17"
+    },
+    {
+      "id": "frontend_src_components_gpx_gpxrouteeditor_empty_edit_selection",
+      "label": "EMPTY_EDIT_SELECTION",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "GpxRouteEditor.tsx",
+      "file_type": "code",
+      "norm_label": "empty_edit_selection",
+      "source_file": "frontend/src/components/gpx/GpxRouteEditor.tsx",
+      "source_location": "L26"
     },
     {
       "id": "test_poi_distance",
@@ -11316,7 +11228,7 @@
       "source_location": ""
     },
     {
-      "id": "api_app_rationale_1373",
+      "id": "api_app_rationale_1369",
       "label": "Minimum distance in meters from (lat, lon) to the polyline through points (a\u2026",
       "_origin": "ast",
       "community": 28,
@@ -11324,10 +11236,10 @@
       "file_type": "rationale",
       "norm_label": "minimum distance in meters from (lat, lon) to the polyline through points (a...",
       "source_file": "api_app.py",
-      "source_location": "L1373"
+      "source_location": "L1369"
     },
     {
-      "id": "api_app_rationale_1926",
+      "id": "api_app_rationale_1922",
       "label": "Parse GPX XML, return list of (lat, lon) tuples.",
       "_origin": "ast",
       "community": 28,
@@ -11335,10 +11247,10 @@
       "file_type": "rationale",
       "norm_label": "parse gpx xml, return list of (lat, lon) tuples.",
       "source_file": "api_app.py",
-      "source_location": "L1926"
+      "source_location": "L1922"
     },
     {
-      "id": "api_app_rationale_1950",
+      "id": "api_app_rationale_1946",
       "label": "Subsample lat/lon list to n_target evenly distributed points. Returns\u2026",
       "_origin": "ast",
       "community": 28,
@@ -11346,10 +11258,10 @@
       "file_type": "rationale",
       "norm_label": "subsample lat/lon list to n_target evenly distributed points. returns...",
       "source_file": "api_app.py",
-      "source_location": "L1950"
+      "source_location": "L1946"
     },
     {
-      "id": "api_app_rationale_1987",
+      "id": "api_app_rationale_1983",
       "label": "Select weather points along the GPX profile. Strategy: - 'regular' every\u2026",
       "_origin": "ast",
       "community": 28,
@@ -11357,10 +11269,10 @@
       "file_type": "rationale",
       "norm_label": "select weather points along the gpx profile. strategy: - 'regular' every...",
       "source_file": "api_app.py",
-      "source_location": "L1987"
+      "source_location": "L1983"
     },
     {
-      "id": "api_app_rationale_2043",
+      "id": "api_app_rationale_2039",
       "label": "Return the city_id of the nearest node in the graph.",
       "_origin": "ast",
       "community": 28,
@@ -11368,10 +11280,10 @@
       "file_type": "rationale",
       "norm_label": "return the city_id of the nearest node in the graph.",
       "source_file": "api_app.py",
-      "source_location": "L2043"
+      "source_location": "L2039"
     },
     {
-      "id": "api_app_rationale_3373",
+      "id": "api_app_rationale_3369",
       "label": "Return the arrival datetime for a point at distance `km` along the route. Each\u2026",
       "_origin": "ast",
       "community": 28,
@@ -11379,10 +11291,10 @@
       "file_type": "rationale",
       "norm_label": "return the arrival datetime for a point at distance `km` along the route. each...",
       "source_file": "api_app.py",
-      "source_location": "L3373"
+      "source_location": "L3369"
     },
     {
-      "id": "api_app_rationale_3400",
+      "id": "api_app_rationale_3396",
       "label": "Linearly interpolate (lat, lon, ele) at km_target along the elevation profile.",
       "_origin": "ast",
       "community": 28,
@@ -11390,10 +11302,10 @@
       "file_type": "rationale",
       "norm_label": "linearly interpolate (lat, lon, ele) at km_target along the elevation profile.",
       "source_file": "api_app.py",
-      "source_location": "L3400"
+      "source_location": "L3396"
     },
     {
-      "id": "api_app_rationale_3422",
+      "id": "api_app_rationale_3418",
       "label": "Turn one raw Open-Meteo response (narrow hourly set: temp/precip/wind) into\u2026",
       "_origin": "ast",
       "community": 28,
@@ -11401,7 +11313,7 @@
       "file_type": "rationale",
       "norm_label": "turn one raw open-meteo response (narrow hourly set: temp/precip/wind) into...",
       "source_file": "api_app.py",
-      "source_location": "L3422"
+      "source_location": "L3418"
     },
     {
       "id": "api_app_rationale_70",
@@ -11668,7 +11580,7 @@
       "source_location": "L1"
     },
     {
-      "id": "api_app_rationale_2963",
+      "id": "api_app_rationale_2959",
       "label": "Find optimal start day for a direct-order OSRM route. Evaluates 52 weekly\u2026",
       "_origin": "ast",
       "community": 32,
@@ -11676,10 +11588,10 @@
       "file_type": "rationale",
       "norm_label": "find optimal start day for a direct-order osrm route. evaluates 52 weekly...",
       "source_file": "api_app.py",
-      "source_location": "L2963"
+      "source_location": "L2959"
     },
     {
-      "id": "api_app_rationale_3500",
+      "id": "api_app_rationale_3496",
       "label": "Climate-normals estimate of (temp, prcp, wspd, night_data) for a GPX overnight\u2026",
       "_origin": "ast",
       "community": 32,
@@ -11687,7 +11599,7 @@
       "file_type": "rationale",
       "norm_label": "climate-normals estimate of (temp, prcp, wspd, night_data) for a gpx overnight...",
       "source_file": "api_app.py",
-      "source_location": "L3500"
+      "source_location": "L3496"
     },
     {
       "id": "module_rationale_245",
@@ -12306,7 +12218,7 @@
       "source_location": "L1130"
     },
     {
-      "id": "api_app_rationale_1227",
+      "id": "api_app_rationale_1223",
       "label": "Live route preview while the user places/drags waypoints on the map.",
       "_origin": "ast",
       "community": 4,
@@ -12314,10 +12226,10 @@
       "file_type": "rationale",
       "norm_label": "live route preview while the user places/drags waypoints on the map.",
       "source_file": "api_app.py",
-      "source_location": "L1227"
+      "source_location": "L1223"
     },
     {
-      "id": "api_app_rationale_1254",
+      "id": "api_app_rationale_1250",
       "label": "Re-fetch the final route from BRouter server-side, then run it through the same\u2026",
       "_origin": "ast",
       "community": 4,
@@ -12325,10 +12237,10 @@
       "file_type": "rationale",
       "norm_label": "re-fetch the final route from brouter server-side, then run it through the same...",
       "source_file": "api_app.py",
-      "source_location": "L1254"
+      "source_location": "L1250"
     },
     {
-      "id": "api_app_rationale_1336",
+      "id": "api_app_rationale_1332",
       "label": "Thin a polyline to at most max_points, always keeping the endpoints.",
       "_origin": "ast",
       "community": 4,
@@ -12336,10 +12248,10 @@
       "file_type": "rationale",
       "norm_label": "thin a polyline to at most max_points, always keeping the endpoints.",
       "source_file": "api_app.py",
-      "source_location": "L1336"
+      "source_location": "L1332"
     },
     {
-      "id": "api_app_rationale_1348",
+      "id": "api_app_rationale_1344",
       "label": "Build an Overpass 'around' filter from a thinned, grid-snapped polyline.\u2026",
       "_origin": "ast",
       "community": 4,
@@ -12347,10 +12259,10 @@
       "file_type": "rationale",
       "norm_label": "build an overpass 'around' filter from a thinned, grid-snapped polyline....",
       "source_file": "api_app.py",
-      "source_location": "L1348"
+      "source_location": "L1344"
     },
     {
-      "id": "api_app_rationale_1565",
+      "id": "api_app_rationale_1561",
       "label": "POIs (see _POI_SELECTORS: shelters, drinking water, fuel stations,\u2026",
       "_origin": "ast",
       "community": 4,
@@ -12358,10 +12270,10 @@
       "file_type": "rationale",
       "norm_label": "pois (see _poi_selectors: shelters, drinking water, fuel stations,...",
       "source_file": "api_app.py",
-      "source_location": "L1565"
+      "source_location": "L1561"
     },
     {
-      "id": "api_app_rationale_1648",
+      "id": "api_app_rationale_1644",
       "label": "Ray-casting point-in-polygon test; ring is a list of (lat, lon).",
       "_origin": "ast",
       "community": 4,
@@ -12369,10 +12281,10 @@
       "file_type": "rationale",
       "norm_label": "ray-casting point-in-polygon test; ring is a list of (lat, lon).",
       "source_file": "api_app.py",
-      "source_location": "L1648"
+      "source_location": "L1644"
     },
     {
-      "id": "api_app_rationale_1664",
+      "id": "api_app_rationale_1660",
       "label": "Pick vertices along a polyline roughly every step_km. Returns (lat, lon,\u2026",
       "_origin": "ast",
       "community": 4,
@@ -12380,10 +12292,10 @@
       "file_type": "rationale",
       "norm_label": "pick vertices along a polyline roughly every step_km. returns (lat, lon,...",
       "source_file": "api_app.py",
-      "source_location": "L1664"
+      "source_location": "L1660"
     },
     {
-      "id": "api_app_rationale_1688",
+      "id": "api_app_rationale_1684",
       "label": "Landcover-based wind-shelter analysis: fetches forest and built-up polygons\u2026",
       "_origin": "ast",
       "community": 4,
@@ -12391,10 +12303,10 @@
       "file_type": "rationale",
       "norm_label": "landcover-based wind-shelter analysis: fetches forest and built-up polygons...",
       "source_file": "api_app.py",
-      "source_location": "L1688"
+      "source_location": "L1684"
     },
     {
-      "id": "api_app_rationale_1807",
+      "id": "api_app_rationale_1803",
       "label": "Point-to-segment distance in meters (planar approx, cos(lat)-corrected like the\u2026",
       "_origin": "ast",
       "community": 4,
@@ -12402,10 +12314,10 @@
       "file_type": "rationale",
       "norm_label": "point-to-segment distance in meters (planar approx, cos(lat)-corrected like the...",
       "source_file": "api_app.py",
-      "source_location": "L1807"
+      "source_location": "L1803"
     },
     {
-      "id": "api_app_rationale_1827",
+      "id": "api_app_rationale_1823",
       "label": "Surface (asphalt/gravel/unpaved) and road-class (motorway/primary/...) profile\u2026",
       "_origin": "ast",
       "community": 4,
@@ -12413,10 +12325,10 @@
       "file_type": "rationale",
       "norm_label": "surface (asphalt/gravel/unpaved) and road-class (motorway/primary/...) profile...",
       "source_file": "api_app.py",
-      "source_location": "L1827"
+      "source_location": "L1823"
     },
     {
-      "id": "api_app_rationale_3989",
+      "id": "api_app_rationale_3985",
       "label": "Bundle a completed job into a self-contained blob for the frontend to store\u2026",
       "_origin": "ast",
       "community": 4,
@@ -12424,10 +12336,10 @@
       "file_type": "rationale",
       "norm_label": "bundle a completed job into a self-contained blob for the frontend to store...",
       "source_file": "api_app.py",
-      "source_location": "L3989"
+      "source_location": "L3985"
     },
     {
-      "id": "api_app_rationale_4011",
+      "id": "api_app_rationale_4007",
       "label": "Rehydrate a locally-stored route blob into a fresh in-memory job and refresh\u2026",
       "_origin": "ast",
       "community": 4,
@@ -12435,7 +12347,7 @@
       "file_type": "rationale",
       "norm_label": "rehydrate a locally-stored route blob into a fresh in-memory job and refresh...",
       "source_file": "api_app.py",
-      "source_location": "L4011"
+      "source_location": "L4007"
     },
     {
       "id": "api_app_rationale_625",
@@ -12482,15 +12394,59 @@
       "source_location": "L1973"
     },
     {
-      "id": "frontend_src_components_planner_rainradar",
-      "label": "RainRadar.tsx",
+      "id": "frontend_src_components_results_weathercell",
+      "label": "WeatherCell.tsx",
       "_origin": "ast",
       "community": 40,
-      "community_name": "RainRadar.tsx",
+      "community_name": "WeatherGrid.tsx",
       "file_type": "code",
-      "norm_label": "rainradar.tsx",
-      "source_file": "frontend/src/components/planner/RainRadar.tsx",
+      "norm_label": "weathercell.tsx",
+      "source_file": "frontend/src/components/results/WeatherCell.tsx",
       "source_location": "L1"
+    },
+    {
+      "id": "frontend_src_components_results_weathercell_example",
+      "label": "EXAMPLE",
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "WeatherGrid.tsx",
+      "file_type": "code",
+      "norm_label": "example",
+      "source_file": "frontend/src/components/results/WeatherCell.tsx",
+      "source_location": "L8"
+    },
+    {
+      "id": "frontend_src_components_results_weathercell_weathercell",
+      "label": "WeatherCell",
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "WeatherGrid.tsx",
+      "file_type": "code",
+      "norm_label": "weathercell",
+      "source_file": "frontend/src/components/results/WeatherCell.tsx",
+      "source_location": "L144"
+    },
+    {
+      "id": "frontend_src_components_results_weathergrid",
+      "label": "WeatherGrid.tsx",
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "WeatherGrid.tsx",
+      "file_type": "code",
+      "norm_label": "weathergrid.tsx",
+      "source_file": "frontend/src/components/results/WeatherGrid.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "frontend_src_components_results_weathergrid_currentyear",
+      "label": "currentYear",
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "WeatherGrid.tsx",
+      "file_type": "code",
+      "norm_label": "currentyear",
+      "source_file": "frontend/src/components/results/WeatherGrid.tsx",
+      "source_location": "L29"
     },
     {
       "id": "frontend_src_components_gpx_gpxelevationchart",
@@ -12574,7 +12530,7 @@
       "label": "LiveLocation.tsx",
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "livelocation.tsx",
       "source_file": "frontend/src/components/planner/LiveLocation.tsx",
@@ -12585,7 +12541,7 @@
       "label": "ErrorCityMap.tsx",
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "errorcitymap.tsx",
       "source_file": "frontend/src/components/progress/ErrorCityMap.tsx",
@@ -12596,21 +12552,10 @@
       "label": "PreviewMap.tsx",
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "code",
       "norm_label": "previewmap.tsx",
       "source_file": "frontend/src/components/progress/PreviewMap.tsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "frontend_src_components_progress_progresspage",
-      "label": "ProgressPage.tsx",
-      "_origin": "ast",
-      "community": 47,
-      "community_name": "react",
-      "file_type": "code",
-      "norm_label": "progresspage.tsx",
-      "source_file": "frontend/src/components/progress/ProgressPage.tsx",
       "source_location": "L1"
     },
     {
@@ -12618,22 +12563,22 @@
       "label": "maplibre-gl",
       "_origin": "ast",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "file_type": "concept",
       "norm_label": "maplibre-gl",
       "source_file": "frontend/package.json",
       "source_location": "L33"
     },
     {
-      "id": "ref_react",
-      "label": "react",
+      "id": "frontend_src_components_layout_topbar",
+      "label": "TopBar.tsx",
       "_origin": "ast",
-      "community": 47,
-      "community_name": "react",
-      "file_type": "concept",
-      "norm_label": "react",
-      "source_file": "frontend/package.json",
-      "source_location": "L34"
+      "community": 49,
+      "community_name": "TemperatureChart.tsx",
+      "file_type": "code",
+      "norm_label": "topbar.tsx",
+      "source_file": "frontend/src/components/layout/TopBar.tsx",
+      "source_location": "L1"
     },
     {
       "id": "frontend_src_components_results_temperaturechart",
@@ -13516,7 +13461,7 @@
       "source_location": "L1"
     },
     {
-      "id": "api_app_rationale_2178",
+      "id": "api_app_rationale_2174",
       "label": "Compute the list of forecast points (with target_date) plus everything needed\u2026",
       "_origin": "ast",
       "community": 64,
@@ -13524,7 +13469,7 @@
       "file_type": "rationale",
       "norm_label": "compute the list of forecast points (with target_date) plus everything needed...",
       "source_file": "api_app.py",
-      "source_location": "L2178"
+      "source_location": "L2174"
     },
     {
       "id": "api_app_rationale_479",
@@ -13762,21 +13707,10 @@
       "label": "NewHereBanner.tsx",
       "_origin": "ast",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "file_type": "code",
       "norm_label": "newherebanner.tsx",
       "source_file": "frontend/src/components/layout/NewHereBanner.tsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "frontend_src_components_layout_topbar",
-      "label": "TopBar.tsx",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "ref_i18n_uset",
-      "file_type": "code",
-      "norm_label": "topbar.tsx",
-      "source_file": "frontend/src/components/layout/TopBar.tsx",
       "source_location": "L1"
     },
     {
@@ -13784,10 +13718,54 @@
       "label": "AddressSearch.tsx",
       "_origin": "ast",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "file_type": "code",
       "norm_label": "addresssearch.tsx",
       "source_file": "frontend/src/components/planner/AddressSearch.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "frontend_src_components_planner_advancedpanel",
+      "label": "AdvancedPanel.tsx",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "advancedpanel.tsx",
+      "source_file": "frontend/src/components/planner/AdvancedPanel.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "frontend_src_components_planner_citycombobox",
+      "label": "CityCombobox.tsx",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "citycombobox.tsx",
+      "source_file": "frontend/src/components/planner/CityCombobox.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "frontend_src_components_planner_citylist",
+      "label": "CityList.tsx",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "citylist.tsx",
+      "source_file": "frontend/src/components/planner/CityList.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "frontend_src_components_planner_connectionlist",
+      "label": "ConnectionList.tsx",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "connectionlist.tsx",
+      "source_file": "frontend/src/components/planner/ConnectionList.tsx",
       "source_location": "L1"
     },
     {
@@ -13795,22 +13773,44 @@
       "label": "CountryCombobox.tsx",
       "_origin": "ast",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "file_type": "code",
       "norm_label": "countrycombobox.tsx",
       "source_file": "frontend/src/components/planner/CountryCombobox.tsx",
       "source_location": "L1"
     },
     {
-      "id": "ref_react_router",
-      "label": "react-router",
+      "id": "ref_dnd_kit_core",
+      "label": "@dnd-kit/core",
       "_origin": "ast",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "file_type": "concept",
-      "norm_label": "react-router",
+      "norm_label": "@dnd-kit/core",
       "source_file": "frontend/package.json",
-      "source_location": "L36"
+      "source_location": "L13"
+    },
+    {
+      "id": "ref_dnd_kit_sortable",
+      "label": "@dnd-kit/sortable",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "react",
+      "file_type": "concept",
+      "norm_label": "@dnd-kit/sortable",
+      "source_file": "frontend/package.json",
+      "source_location": "L14"
+    },
+    {
+      "id": "ref_react",
+      "label": "react",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "react",
+      "file_type": "concept",
+      "norm_label": "react",
+      "source_file": "frontend/package.json",
+      "source_location": "L34"
     },
     {
       "id": "frontend_src_components_ui_popover",
@@ -14206,7 +14206,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "code",
       "norm_label": "post /api/route-planner/jobs",
@@ -14221,7 +14221,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "code",
       "norm_label": "post /api/route-planner/pois",
@@ -14236,7 +14236,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "code",
       "norm_label": "post /api/route-planner/preview",
@@ -14251,7 +14251,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "code",
       "norm_label": "post /api/route-planner/wind-shelter",
@@ -14266,7 +14266,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "code",
       "norm_label": "brouter docker compose service",
@@ -14281,7 +14281,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "brouter",
@@ -14296,7 +14296,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "cyclosm",
@@ -14311,7 +14311,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "wald-overlay",
@@ -14326,7 +14326,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "gpx-analyse",
@@ -14341,7 +14341,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "grid-gerasterter overpass-cache",
@@ -14356,7 +14356,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "stundenwerte- und temperaturinterpolation",
@@ -14371,7 +14371,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "interaktives tutorial (streckenplaner)",
@@ -14386,7 +14386,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "kartenebenen",
@@ -14401,7 +14401,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "memomaps opnvkarte",
@@ -14416,7 +14416,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "mirror-racing (overpass hedged request)",
@@ -14431,7 +14431,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "open-meteo",
@@ -14446,7 +14446,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "opentopomap",
@@ -14461,7 +14461,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "openstreetmap standardkarte",
@@ -14476,7 +14476,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "overpass api",
@@ -14491,7 +14491,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "overpass serialisierung (globaler lock)",
@@ -14506,7 +14506,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "photon",
@@ -14521,7 +14521,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "poi-overlays",
@@ -14536,7 +14536,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "regenradar-overlay",
@@ -14551,7 +14551,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "rainviewer",
@@ -14566,7 +14566,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "ergebnisseite",
@@ -14581,7 +14581,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "route bearbeiten",
@@ -14596,7 +14596,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "streckenplaner",
@@ -14611,7 +14611,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "route aufteilen",
@@ -14626,7 +14626,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "fehlermeldung bei nicht routbaren strecken",
@@ -14641,7 +14641,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "uv-index in der wettervorhersage",
@@ -14656,7 +14656,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "wettermodell-umschalter",
@@ -14671,7 +14671,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "windexposition overlay",
@@ -14686,7 +14686,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "fastapi",
@@ -14701,7 +14701,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "overpass-zuverlassigkeit (streckenplaner-overlays)",
@@ -14716,7 +14716,7 @@
       "author": null,
       "captured_at": null,
       "community": 1,
-      "community_name": "Streckenplaner",
+      "community_name": "RainRadar.tsx",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "rainviewer rein client-seitige architektur",
@@ -15367,6 +15367,18 @@
       "type": "external"
     },
     {
+      "id": "ref_components_ui_switch",
+      "label": "ref_components_ui_switch",
+      "_origin": "semantic",
+      "community": 1,
+      "community_name": "RainRadar.tsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_components_ui_switch",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "ref_zustand_middleware",
       "label": "ref_zustand_middleware",
       "_origin": "semantic",
@@ -15439,18 +15451,6 @@
       "type": "external"
     },
     {
-      "id": "ref_components_ui_button",
-      "label": "ref_components_ui_button",
-      "_origin": "semantic",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_components_ui_button",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "ref_components_ui_card",
       "label": "ref_components_ui_card",
       "_origin": "semantic",
@@ -15463,50 +15463,14 @@
       "type": "external"
     },
     {
-      "id": "ref_components_ui_collapsible",
-      "label": "ref_components_ui_collapsible",
+      "id": "ref_i18n_store",
+      "label": "ref_i18n_store",
       "_origin": "semantic",
       "community": 15,
       "community_name": "PlannerPage.tsx",
       "external": true,
       "file_type": "concept",
-      "norm_label": "ref_components_ui_collapsible",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "ref_components_ui_label",
-      "label": "ref_components_ui_label",
-      "_origin": "semantic",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_components_ui_label",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "ref_components_ui_numeric_input",
-      "label": "ref_components_ui_numeric_input",
-      "_origin": "semantic",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_components_ui_numeric_input",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "ref_components_ui_skeleton",
-      "label": "ref_components_ui_skeleton",
-      "_origin": "semantic",
-      "community": 15,
-      "community_name": "PlannerPage.tsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_components_ui_skeleton",
+      "norm_label": "ref_i18n_store",
       "source_file": "",
       "type": "external"
     },
@@ -15835,6 +15799,18 @@
       "type": "external"
     },
     {
+      "id": "ref_components_ui_skeleton",
+      "label": "ref_components_ui_skeleton",
+      "_origin": "semantic",
+      "community": 21,
+      "community_name": "lucide-react",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_components_ui_skeleton",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "ref_components_ui_tabs",
       "label": "ref_components_ui_tabs",
       "_origin": "semantic",
@@ -15967,23 +15943,11 @@
       "type": "external"
     },
     {
-      "id": "ref_api_types",
-      "label": "ref_api_types",
-      "_origin": "semantic",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_api_types",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "ref_components_magicui_number_ticker",
       "label": "ref_components_magicui_number_ticker",
       "_origin": "semantic",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_components_magicui_number_ticker",
@@ -15995,22 +15959,10 @@
       "label": "ref_components_ui_badge",
       "_origin": "semantic",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_components_ui_badge",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "ref_components_ui_select",
-      "label": "ref_components_ui_select",
-      "_origin": "semantic",
-      "community": 24,
-      "community_name": "ref_api_types",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_components_ui_select",
       "source_file": "",
       "type": "external"
     },
@@ -16019,7 +15971,7 @@
       "label": "ref_components_ui_separator",
       "_origin": "semantic",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_components_ui_separator",
@@ -16031,7 +15983,7 @@
       "label": "ref_stores_resultsstore",
       "_origin": "semantic",
       "community": 24,
-      "community_name": "ref_api_types",
+      "community_name": "ResultsPage.tsx",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_stores_resultsstore",
@@ -16078,8 +16030,8 @@
       "id": "ref_components_ui_checkbox",
       "label": "ref_components_ui_checkbox",
       "_origin": "semantic",
-      "community": 26,
-      "community_name": "GpxRouteMap.tsx",
+      "community": 27,
+      "community_name": "GpxRouteEditor.tsx",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_components_ui_checkbox",
@@ -16279,26 +16231,38 @@
       "type": "external"
     },
     {
-      "id": "ref_components_ui_slider",
-      "label": "ref_components_ui_slider",
+      "id": "ref_components_ui_label",
+      "label": "ref_components_ui_label",
       "_origin": "semantic",
       "community": 40,
-      "community_name": "RainRadar.tsx",
+      "community_name": "WeatherGrid.tsx",
       "external": true,
       "file_type": "concept",
-      "norm_label": "ref_components_ui_slider",
+      "norm_label": "ref_components_ui_label",
       "source_file": "",
       "type": "external"
     },
     {
-      "id": "ref_components_ui_switch",
-      "label": "ref_components_ui_switch",
+      "id": "ref_components_ui_select",
+      "label": "ref_components_ui_select",
       "_origin": "semantic",
       "community": 40,
-      "community_name": "RainRadar.tsx",
+      "community_name": "WeatherGrid.tsx",
       "external": true,
       "file_type": "concept",
-      "norm_label": "ref_components_ui_switch",
+      "norm_label": "ref_components_ui_select",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "ref_components_ui_slider",
+      "label": "ref_components_ui_slider",
+      "_origin": "semantic",
+      "community": 40,
+      "community_name": "WeatherGrid.tsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_components_ui_slider",
       "source_file": "",
       "type": "external"
     },
@@ -16343,10 +16307,22 @@
       "label": "ref_components_ui_map",
       "_origin": "semantic",
       "community": 47,
-      "community_name": "react",
+      "community_name": "ref_components_ui_map",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_components_ui_map",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "ref_stores_themestore",
+      "label": "ref_stores_themestore",
+      "_origin": "semantic",
+      "community": 49,
+      "community_name": "TemperatureChart.tsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_stores_themestore",
       "source_file": "",
       "type": "external"
     },
@@ -16387,14 +16363,62 @@
       "type": "external"
     },
     {
+      "id": "ref_api_types",
+      "label": "ref_api_types",
+      "_origin": "semantic",
+      "community": 8,
+      "community_name": "react",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_api_types",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "ref_components_ui_button",
+      "label": "ref_components_ui_button",
+      "_origin": "semantic",
+      "community": 8,
+      "community_name": "react",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_components_ui_button",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "ref_components_ui_collapsible",
+      "label": "ref_components_ui_collapsible",
+      "_origin": "semantic",
+      "community": 8,
+      "community_name": "react",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_components_ui_collapsible",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "ref_components_ui_command",
       "label": "ref_components_ui_command",
       "_origin": "semantic",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_components_ui_command",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "ref_components_ui_numeric_input",
+      "label": "ref_components_ui_numeric_input",
+      "_origin": "semantic",
+      "community": 8,
+      "community_name": "react",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_components_ui_numeric_input",
       "source_file": "",
       "type": "external"
     },
@@ -16403,22 +16427,10 @@
       "label": "ref_components_ui_popover",
       "_origin": "semantic",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_components_ui_popover",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "ref_i18n_store",
-      "label": "ref_i18n_store",
-      "_origin": "semantic",
-      "community": 8,
-      "community_name": "ref_i18n_uset",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_i18n_store",
       "source_file": "",
       "type": "external"
     },
@@ -16427,22 +16439,10 @@
       "label": "ref_i18n_uset",
       "_origin": "semantic",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_i18n_uset",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "ref_stores_themestore",
-      "label": "ref_stores_themestore",
-      "_origin": "semantic",
-      "community": 8,
-      "community_name": "ref_i18n_uset",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_stores_themestore",
       "source_file": "",
       "type": "external"
     },
@@ -16451,7 +16451,7 @@
       "label": "ref_utils_countries",
       "_origin": "semantic",
       "community": 8,
-      "community_name": "ref_i18n_uset",
+      "community_name": "react",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_utils_countries",
@@ -16625,7 +16625,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1351",
+      "source_location": "L1347",
       "weight": 1.0
     },
     {
@@ -16637,7 +16637,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1351",
+      "source_location": "L1347",
       "weight": 1.0
     },
     {
@@ -16649,7 +16649,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2979",
+      "source_location": "L2975",
       "weight": 1.0
     },
     {
@@ -16661,7 +16661,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2980",
+      "source_location": "L2976",
       "weight": 1.0
     },
     {
@@ -16673,7 +16673,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2979",
+      "source_location": "L2975",
       "weight": 1.0
     },
     {
@@ -16685,7 +16685,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2980",
+      "source_location": "L2976",
       "weight": 1.0
     },
     {
@@ -16697,7 +16697,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2262",
+      "source_location": "L2258",
       "weight": 1.0
     },
     {
@@ -16709,7 +16709,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2278",
+      "source_location": "L2274",
       "weight": 1.0
     },
     {
@@ -16721,7 +16721,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2278",
+      "source_location": "L2274",
       "weight": 1.0
     },
     {
@@ -16733,7 +16733,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2279",
+      "source_location": "L2275",
       "weight": 1.0
     },
     {
@@ -16745,7 +16745,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2282",
+      "source_location": "L2278",
       "weight": 1.0
     },
     {
@@ -16769,7 +16769,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2050",
+      "source_location": "L2046",
       "weight": 1.0
     },
     {
@@ -16925,7 +16925,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3505",
+      "source_location": "L3501",
       "weight": 1.0
     },
     {
@@ -16937,7 +16937,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3523",
+      "source_location": "L3519",
       "weight": 1.0
     },
     {
@@ -16949,7 +16949,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1956",
+      "source_location": "L1952",
       "weight": 1.0
     },
     {
@@ -16997,7 +16997,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1376",
+      "source_location": "L1372",
       "weight": 1.0
     },
     {
@@ -17009,7 +17009,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1377",
+      "source_location": "L1373",
       "weight": 1.0
     },
     {
@@ -17021,7 +17021,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2198",
+      "source_location": "L2194",
       "weight": 1.0
     },
     {
@@ -17033,7 +17033,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2200",
+      "source_location": "L2196",
       "weight": 1.0
     },
     {
@@ -17069,7 +17069,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1577",
+      "source_location": "L1573",
       "weight": 1.0
     },
     {
@@ -17081,7 +17081,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1578",
+      "source_location": "L1574",
       "weight": 1.0
     },
     {
@@ -17093,7 +17093,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1592",
+      "source_location": "L1588",
       "weight": 1.0
     },
     {
@@ -17105,7 +17105,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1599",
+      "source_location": "L1595",
       "weight": 1.0
     },
     {
@@ -17117,7 +17117,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1617",
+      "source_location": "L1613",
       "weight": 1.0
     },
     {
@@ -17129,7 +17129,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1231",
+      "source_location": "L1227",
       "weight": 1.0
     },
     {
@@ -17141,7 +17141,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1233",
+      "source_location": "L1229",
       "weight": 1.0
     },
     {
@@ -17153,7 +17153,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1838",
+      "source_location": "L1834",
       "weight": 1.0
     },
     {
@@ -17165,7 +17165,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1841",
+      "source_location": "L1837",
       "weight": 1.0
     },
     {
@@ -17177,7 +17177,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1858",
+      "source_location": "L1854",
       "weight": 1.0
     },
     {
@@ -17189,7 +17189,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1859",
+      "source_location": "L1855",
       "weight": 1.0
     },
     {
@@ -17201,7 +17201,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1866",
+      "source_location": "L1862",
       "weight": 1.0
     },
     {
@@ -17213,7 +17213,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1878",
+      "source_location": "L1874",
       "weight": 1.0
     },
     {
@@ -17225,7 +17225,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1700",
+      "source_location": "L1696",
       "weight": 1.0
     },
     {
@@ -17237,7 +17237,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1708",
+      "source_location": "L1704",
       "weight": 1.0
     },
     {
@@ -17249,7 +17249,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1736",
+      "source_location": "L1732",
       "weight": 1.0
     },
     {
@@ -17261,7 +17261,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1741",
+      "source_location": "L1737",
       "weight": 1.0
     },
     {
@@ -17273,7 +17273,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2326",
+      "source_location": "L2322",
       "weight": 1.0
     },
     {
@@ -17285,7 +17285,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2329",
+      "source_location": "L2325",
       "weight": 1.0
     },
     {
@@ -17297,7 +17297,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2334",
+      "source_location": "L2330",
       "weight": 1.0
     },
     {
@@ -17309,7 +17309,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2348",
+      "source_location": "L2344",
       "weight": 1.0
     },
     {
@@ -17321,7 +17321,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2382",
+      "source_location": "L2378",
       "weight": 1.0
     },
     {
@@ -17333,7 +17333,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2411",
+      "source_location": "L2407",
       "weight": 1.0
     },
     {
@@ -17345,7 +17345,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2414",
+      "source_location": "L2410",
       "weight": 1.0
     },
     {
@@ -17357,7 +17357,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2502",
+      "source_location": "L2498",
       "weight": 1.0
     },
     {
@@ -17369,7 +17369,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2520",
+      "source_location": "L2516",
       "weight": 1.0
     },
     {
@@ -17381,7 +17381,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2534",
+      "source_location": "L2530",
       "weight": 1.0
     },
     {
@@ -17393,7 +17393,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2707",
+      "source_location": "L2703",
       "weight": 1.0
     },
     {
@@ -17405,7 +17405,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2716",
+      "source_location": "L2712",
       "weight": 1.0
     },
     {
@@ -17417,7 +17417,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2753",
+      "source_location": "L2749",
       "weight": 1.0
     },
     {
@@ -17429,7 +17429,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2775",
+      "source_location": "L2771",
       "weight": 1.0
     },
     {
@@ -17441,7 +17441,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2808",
+      "source_location": "L2804",
       "weight": 1.0
     },
     {
@@ -17453,7 +17453,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2814",
+      "source_location": "L2810",
       "weight": 1.0
     },
     {
@@ -17465,7 +17465,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2830",
+      "source_location": "L2826",
       "weight": 1.0
     },
     {
@@ -17477,7 +17477,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2857",
+      "source_location": "L2853",
       "weight": 1.0
     },
     {
@@ -17489,7 +17489,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2886",
+      "source_location": "L2882",
       "weight": 1.0
     },
     {
@@ -17501,7 +17501,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2908",
+      "source_location": "L2904",
       "weight": 1.0
     },
     {
@@ -17513,7 +17513,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2954",
+      "source_location": "L2950",
       "weight": 1.0
     },
     {
@@ -17525,7 +17525,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2781",
+      "source_location": "L2777",
       "weight": 1.0
     },
     {
@@ -17537,7 +17537,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2785",
+      "source_location": "L2781",
       "weight": 1.0
     },
     {
@@ -17549,7 +17549,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3025",
+      "source_location": "L3021",
       "weight": 1.0
     },
     {
@@ -17561,7 +17561,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3060",
+      "source_location": "L3056",
       "weight": 1.0
     },
     {
@@ -17573,7 +17573,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3101",
+      "source_location": "L3097",
       "weight": 1.0
     },
     {
@@ -17585,7 +17585,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3109",
+      "source_location": "L3105",
       "weight": 1.0
     },
     {
@@ -17597,7 +17597,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3171",
+      "source_location": "L3167",
       "weight": 1.0
     },
     {
@@ -17609,7 +17609,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3172",
+      "source_location": "L3168",
       "weight": 1.0
     },
     {
@@ -17621,7 +17621,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3191",
+      "source_location": "L3187",
       "weight": 1.0
     },
     {
@@ -17633,7 +17633,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3318",
+      "source_location": "L3314",
       "weight": 1.0
     },
     {
@@ -17645,7 +17645,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3327",
+      "source_location": "L3323",
       "weight": 1.0
     },
     {
@@ -17657,7 +17657,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3364",
+      "source_location": "L3360",
       "weight": 1.0
     },
     {
@@ -17669,7 +17669,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2145",
+      "source_location": "L2141",
       "weight": 1.0
     },
     {
@@ -17681,7 +17681,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2124",
+      "source_location": "L2120",
       "weight": 1.0
     },
     {
@@ -17693,7 +17693,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3580",
+      "source_location": "L3576",
       "weight": 1.0
     },
     {
@@ -17705,7 +17705,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3590",
+      "source_location": "L3586",
       "weight": 1.0
     },
     {
@@ -17717,7 +17717,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3595",
+      "source_location": "L3591",
       "weight": 1.0
     },
     {
@@ -17729,7 +17729,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3629",
+      "source_location": "L3625",
       "weight": 1.0
     },
     {
@@ -17741,7 +17741,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3663",
+      "source_location": "L3659",
       "weight": 1.0
     },
     {
@@ -17753,7 +17753,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3678",
+      "source_location": "L3674",
       "weight": 1.0
     },
     {
@@ -17765,7 +17765,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3720",
+      "source_location": "L3716",
       "weight": 1.0
     },
     {
@@ -17777,7 +17777,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3720",
+      "source_location": "L3716",
       "weight": 1.0
     },
     {
@@ -17789,7 +17789,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3721",
+      "source_location": "L3717",
       "weight": 1.0
     },
     {
@@ -17801,7 +17801,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3726",
+      "source_location": "L3722",
       "weight": 1.0
     },
     {
@@ -17813,7 +17813,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3756",
+      "source_location": "L3752",
       "weight": 1.0
     },
     {
@@ -17825,7 +17825,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3759",
+      "source_location": "L3755",
       "weight": 1.0
     },
     {
@@ -17837,7 +17837,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3795",
+      "source_location": "L3791",
       "weight": 1.0
     },
     {
@@ -17849,7 +17849,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3812",
+      "source_location": "L3808",
       "weight": 1.0
     },
     {
@@ -17861,7 +17861,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3862",
+      "source_location": "L3858",
       "weight": 1.0
     },
     {
@@ -17873,7 +17873,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3972",
+      "source_location": "L3968",
       "weight": 1.0
     },
     {
@@ -17885,7 +17885,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1670",
+      "source_location": "L1666",
       "weight": 1.0
     },
     {
@@ -17933,7 +17933,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1259",
+      "source_location": "L1255",
       "weight": 1.0
     },
     {
@@ -17945,7 +17945,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1261",
+      "source_location": "L1257",
       "weight": 1.0
     },
     {
@@ -21401,7 +21401,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2973",
+      "source_location": "L2969",
       "weight": 1.0
     },
     {
@@ -21413,7 +21413,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2271",
+      "source_location": "L2267",
       "weight": 1.0
     },
     {
@@ -21425,7 +21425,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3518",
+      "source_location": "L3514",
       "weight": 1.0
     },
     {
@@ -21437,7 +21437,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1412",
+      "source_location": "L1408",
       "weight": 1.0
     },
     {
@@ -21449,7 +21449,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L1444",
+      "source_location": "L1440",
       "weight": 1.0
     },
     {
@@ -21461,7 +21461,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3429",
+      "source_location": "L3425",
       "weight": 1.0
     },
     {
@@ -21473,7 +21473,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3445",
+      "source_location": "L3441",
       "weight": 1.0
     },
     {
@@ -21485,7 +21485,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2318",
+      "source_location": "L2314",
       "weight": 1.0
     },
     {
@@ -21497,7 +21497,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2494",
+      "source_location": "L2490",
       "weight": 1.0
     },
     {
@@ -21509,7 +21509,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2680",
+      "source_location": "L2676",
       "weight": 1.0
     },
     {
@@ -21521,7 +21521,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2765",
+      "source_location": "L2761",
       "weight": 1.0
     },
     {
@@ -21533,7 +21533,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3017",
+      "source_location": "L3013",
       "weight": 1.0
     },
     {
@@ -21545,7 +21545,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3161",
+      "source_location": "L3157",
       "weight": 1.0
     },
     {
@@ -21557,7 +21557,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3290",
+      "source_location": "L3286",
       "weight": 1.0
     },
     {
@@ -21569,7 +21569,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L2093",
+      "source_location": "L2089",
       "weight": 1.0
     },
     {
@@ -21581,7 +21581,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3558",
+      "source_location": "L3554",
       "weight": 1.0
     },
     {
@@ -21593,7 +21593,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "api_app.py",
-      "source_location": "L3713",
+      "source_location": "L3709",
       "weight": 1.0
     },
     {
@@ -22001,7 +22001,7 @@
       "confidence_score": 1.0,
       "context": "decorator",
       "source_file": "api_app.py",
-      "source_location": "L3987",
+      "source_location": "L3983",
       "weight": 1.0
     },
     {
@@ -22097,7 +22097,7 @@
       "confidence_score": 1.0,
       "context": "decorator",
       "source_file": "api_app.py",
-      "source_location": "L1628",
+      "source_location": "L1624",
       "weight": 1.0
     },
     {
@@ -22109,7 +22109,7 @@
       "confidence_score": 1.0,
       "context": "decorator",
       "source_file": "api_app.py",
-      "source_location": "L4009",
+      "source_location": "L4005",
       "weight": 1.0
     },
     {
@@ -22121,7 +22121,7 @@
       "confidence_score": 1.0,
       "context": "decorator",
       "source_file": "api_app.py",
-      "source_location": "L1563",
+      "source_location": "L1559",
       "weight": 1.0
     },
     {
@@ -22133,7 +22133,7 @@
       "confidence_score": 1.0,
       "context": "decorator",
       "source_file": "api_app.py",
-      "source_location": "L1225",
+      "source_location": "L1221",
       "weight": 1.0
     },
     {
@@ -22145,7 +22145,7 @@
       "confidence_score": 1.0,
       "context": "decorator",
       "source_file": "api_app.py",
-      "source_location": "L1825",
+      "source_location": "L1821",
       "weight": 1.0
     },
     {
@@ -22157,7 +22157,7 @@
       "confidence_score": 1.0,
       "context": "decorator",
       "source_file": "api_app.py",
-      "source_location": "L1686",
+      "source_location": "L1682",
       "weight": 1.0
     },
     {
@@ -22193,7 +22193,7 @@
       "confidence_score": 1.0,
       "context": "decorator",
       "source_file": "api_app.py",
-      "source_location": "L4046",
+      "source_location": "L4042",
       "weight": 1.0
     },
     {
@@ -22253,7 +22253,7 @@
       "confidence_score": 1.0,
       "context": "decorator",
       "source_file": "api_app.py",
-      "source_location": "L1252",
+      "source_location": "L1248",
       "weight": 1.0
     },
     {
@@ -22801,7 +22801,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "api_app.py",
-      "source_location": "L4059",
+      "source_location": "L4055",
       "weight": 1.0
     },
     {
@@ -31183,7 +31183,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "api_app.py",
-      "source_location": "L3988",
+      "source_location": "L3984",
       "weight": 1.0
     },
     {
@@ -31219,7 +31219,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "api_app.py",
-      "source_location": "L4010",
+      "source_location": "L4006",
       "weight": 1.0
     },
     {
@@ -31231,7 +31231,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "api_app.py",
-      "source_location": "L1564",
+      "source_location": "L1560",
       "weight": 1.0
     },
     {
@@ -31243,7 +31243,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "api_app.py",
-      "source_location": "L1226",
+      "source_location": "L1222",
       "weight": 1.0
     },
     {
@@ -31255,7 +31255,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "api_app.py",
-      "source_location": "L1826",
+      "source_location": "L1822",
       "weight": 1.0
     },
     {
@@ -31267,7 +31267,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "api_app.py",
-      "source_location": "L1687",
+      "source_location": "L1683",
       "weight": 1.0
     },
     {
@@ -31327,7 +31327,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "api_app.py",
-      "source_location": "L1253",
+      "source_location": "L1249",
       "weight": 1.0
     },
     {
@@ -31460,7 +31460,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1211",
+      "source_location": "L1207",
       "weight": 1.0
     },
     {
@@ -31471,7 +31471,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1215",
+      "source_location": "L1211",
       "weight": 1.0
     },
     {
@@ -31482,7 +31482,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1220",
+      "source_location": "L1216",
       "weight": 1.0
     },
     {
@@ -31493,7 +31493,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1226",
+      "source_location": "L1222",
       "weight": 1.0
     },
     {
@@ -31504,7 +31504,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1245",
+      "source_location": "L1241",
       "weight": 1.0
     },
     {
@@ -31515,7 +31515,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1253",
+      "source_location": "L1249",
       "weight": 1.0
     },
     {
@@ -31526,7 +31526,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1335",
+      "source_location": "L1331",
       "weight": 1.0
     },
     {
@@ -31537,7 +31537,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1343",
+      "source_location": "L1339",
       "weight": 1.0
     },
     {
@@ -31548,7 +31548,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1347",
+      "source_location": "L1343",
       "weight": 1.0
     },
     {
@@ -31559,7 +31559,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1360",
+      "source_location": "L1356",
       "weight": 1.0
     },
     {
@@ -31570,7 +31570,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1372",
+      "source_location": "L1368",
       "weight": 1.0
     },
     {
@@ -31581,7 +31581,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1380",
+      "source_location": "L1376",
       "weight": 1.0
     },
     {
@@ -31592,7 +31592,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1398",
+      "source_location": "L1394",
       "weight": 1.0
     },
     {
@@ -31614,7 +31614,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1538",
+      "source_location": "L1534",
       "weight": 1.0
     },
     {
@@ -31625,7 +31625,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1557",
+      "source_location": "L1553",
       "weight": 1.0
     },
     {
@@ -31636,7 +31636,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1564",
+      "source_location": "L1560",
       "weight": 1.0
     },
     {
@@ -31658,7 +31658,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1629",
+      "source_location": "L1625",
       "weight": 1.0
     },
     {
@@ -31669,7 +31669,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1647",
+      "source_location": "L1643",
       "weight": 1.0
     },
     {
@@ -31680,7 +31680,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1663",
+      "source_location": "L1659",
       "weight": 1.0
     },
     {
@@ -31691,7 +31691,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1682",
+      "source_location": "L1678",
       "weight": 1.0
     },
     {
@@ -31702,7 +31702,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1687",
+      "source_location": "L1683",
       "weight": 1.0
     },
     {
@@ -31713,7 +31713,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1773",
+      "source_location": "L1769",
       "weight": 1.0
     },
     {
@@ -31724,7 +31724,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1800",
+      "source_location": "L1796",
       "weight": 1.0
     },
     {
@@ -31735,7 +31735,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1804",
+      "source_location": "L1800",
       "weight": 1.0
     },
     {
@@ -31746,7 +31746,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1821",
+      "source_location": "L1817",
       "weight": 1.0
     },
     {
@@ -31757,7 +31757,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1826",
+      "source_location": "L1822",
       "weight": 1.0
     },
     {
@@ -31779,7 +31779,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1898",
+      "source_location": "L1894",
       "weight": 1.0
     },
     {
@@ -31790,7 +31790,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1916",
+      "source_location": "L1912",
       "weight": 1.0
     },
     {
@@ -31801,7 +31801,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1925",
+      "source_location": "L1921",
       "weight": 1.0
     },
     {
@@ -31812,7 +31812,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1949",
+      "source_location": "L1945",
       "weight": 1.0
     },
     {
@@ -31823,7 +31823,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1984",
+      "source_location": "L1980",
       "weight": 1.0
     },
     {
@@ -31845,7 +31845,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2042",
+      "source_location": "L2038",
       "weight": 1.0
     },
     {
@@ -31856,7 +31856,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2059",
+      "source_location": "L2055",
       "weight": 1.0
     },
     {
@@ -31867,7 +31867,18 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2177",
+      "source_location": "L2173",
+      "weight": 1.0
+    },
+    {
+      "source": "api_app",
+      "target": "api_app_finish_forecast_result",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "api_app.py",
+      "source_location": "L2216",
       "weight": 1.0
     },
     {
@@ -31883,24 +31894,13 @@
     },
     {
       "source": "api_app",
-      "target": "api_app_finish_forecast_result",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "api_app.py",
-      "source_location": "L2220",
-      "weight": 1.0
-    },
-    {
-      "source": "api_app",
       "target": "api_app_build_forecast",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2253",
+      "source_location": "L2249",
       "weight": 1.0
     },
     {
@@ -31911,7 +31911,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2291",
+      "source_location": "L2287",
       "weight": 1.0
     },
     {
@@ -31922,7 +31922,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2315",
+      "source_location": "L2311",
       "weight": 1.0
     },
     {
@@ -31944,7 +31944,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2761",
+      "source_location": "L2757",
       "weight": 1.0
     },
     {
@@ -31955,7 +31955,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2962",
+      "source_location": "L2958",
       "weight": 1.0
     },
     {
@@ -31966,7 +31966,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3013",
+      "source_location": "L3009",
       "weight": 1.0
     },
     {
@@ -31999,7 +31999,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3372",
+      "source_location": "L3368",
       "weight": 1.0
     },
     {
@@ -32010,7 +32010,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3397",
+      "source_location": "L3393",
       "weight": 1.0
     },
     {
@@ -32021,7 +32021,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3421",
+      "source_location": "L3417",
       "weight": 1.0
     },
     {
@@ -32043,7 +32043,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3499",
+      "source_location": "L3495",
       "weight": 1.0
     },
     {
@@ -32054,7 +32054,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3548",
+      "source_location": "L3544",
       "weight": 1.0
     },
     {
@@ -32065,7 +32065,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3947",
+      "source_location": "L3943",
       "weight": 1.0
     },
     {
@@ -32076,7 +32076,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3954",
+      "source_location": "L3950",
       "weight": 1.0
     },
     {
@@ -32087,7 +32087,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3962",
+      "source_location": "L3958",
       "weight": 1.0
     },
     {
@@ -32098,7 +32098,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3988",
+      "source_location": "L3984",
       "weight": 1.0
     },
     {
@@ -32109,7 +32109,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L4010",
+      "source_location": "L4006",
       "weight": 1.0
     },
     {
@@ -32120,7 +32120,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L4047",
+      "source_location": "L4043",
       "weight": 1.0
     },
     {
@@ -32307,7 +32307,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1433",
+      "source_location": "L1429",
       "weight": 1.0
     },
     {
@@ -39138,7 +39138,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/i18n/translations.ts",
-      "source_location": "L1405",
+      "source_location": "L1401",
       "weight": 1.0
     },
     {
@@ -39160,7 +39160,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/i18n/translations.ts",
-      "source_location": "L704",
+      "source_location": "L702",
       "weight": 1.0
     },
     {
@@ -41289,7 +41289,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1557",
+      "source_location": "L1553",
       "weight": 1.0
     },
     {
@@ -41300,7 +41300,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3954",
+      "source_location": "L3950",
       "weight": 1.0
     },
     {
@@ -41311,7 +41311,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1821",
+      "source_location": "L1817",
       "weight": 1.0
     },
     {
@@ -41322,7 +41322,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1245",
+      "source_location": "L1241",
       "weight": 1.0
     },
     {
@@ -41333,7 +41333,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1215",
+      "source_location": "L1211",
       "weight": 1.0
     },
     {
@@ -41344,7 +41344,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1220",
+      "source_location": "L1216",
       "weight": 1.0
     },
     {
@@ -41355,7 +41355,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3947",
+      "source_location": "L3943",
       "weight": 1.0
     },
     {
@@ -41366,7 +41366,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1682",
+      "source_location": "L1678",
       "weight": 1.0
     },
     {
@@ -41414,179 +41414,179 @@
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1227",
+      "source": "api_app_rationale_1223",
       "target": "api_app_route_planner_preview",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1227",
+      "source_location": "L1223",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1254",
+      "source": "api_app_rationale_1250",
       "target": "api_app_submit_route_planner_job",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1254",
+      "source_location": "L1250",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1336",
+      "source": "api_app_rationale_1332",
       "target": "api_app_simplify_latlons",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1336",
+      "source_location": "L1332",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1348",
+      "source": "api_app_rationale_1344",
       "target": "api_app_around_polyline",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1348",
+      "source_location": "L1344",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1373",
+      "source": "api_app_rationale_1369",
       "target": "api_app_point_to_polyline_m",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1373",
+      "source_location": "L1369",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1399",
+      "source": "api_app_rationale_1395",
       "target": "api_app_overpass_query",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1399",
+      "source_location": "L1395",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1565",
+      "source": "api_app_rationale_1561",
       "target": "api_app_route_planner_pois",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1565",
+      "source_location": "L1561",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1648",
+      "source": "api_app_rationale_1644",
       "target": "api_app_point_in_ring",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1648",
+      "source_location": "L1644",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1664",
+      "source": "api_app_rationale_1660",
       "target": "api_app_sample_polyline",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1664",
+      "source_location": "L1660",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1688",
+      "source": "api_app_rationale_1684",
       "target": "api_app_route_planner_wind_shelter",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1688",
+      "source_location": "L1684",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1807",
+      "source": "api_app_rationale_1803",
       "target": "api_app_point_seg_dist_m",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1807",
+      "source_location": "L1803",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1827",
+      "source": "api_app_rationale_1823",
       "target": "api_app_route_planner_road_info",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1827",
+      "source_location": "L1823",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1899",
+      "source": "api_app_rationale_1895",
       "target": "api_app_score_color",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1899",
+      "source_location": "L1895",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1926",
+      "source": "api_app_rationale_1922",
       "target": "api_app_parse_gpx",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1926",
+      "source_location": "L1922",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1950",
+      "source": "api_app_rationale_1946",
       "target": "api_app_gpx_subsample",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1950",
+      "source_location": "L1946",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_1987",
+      "source": "api_app_rationale_1983",
       "target": "api_app_select_gpx_weather_points",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L1987",
+      "source_location": "L1983",
       "weight": 1.0
     },
     {
@@ -41601,47 +41601,47 @@
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_2043",
+      "source": "api_app_rationale_2039",
       "target": "api_app_find_nearest_city_id",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2043",
+      "source_location": "L2039",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_2060",
+      "source": "api_app_rationale_2056",
       "target": "api_app_run_elevation_worker",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2060",
+      "source_location": "L2056",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_2178",
+      "source": "api_app_rationale_2174",
       "target": "api_app_prepare_forecast_points",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2178",
+      "source_location": "L2174",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_2221",
+      "source": "api_app_rationale_2217",
       "target": "api_app_finish_forecast_result",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2221",
+      "source_location": "L2217",
       "weight": 1.0
     },
     {
@@ -41656,25 +41656,25 @@
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_2255",
+      "source": "api_app_rationale_2251",
       "target": "api_app_build_forecast",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2255",
+      "source_location": "L2251",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_2292",
+      "source": "api_app_rationale_2288",
       "target": "api_app_fmt_elev",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2292",
+      "source_location": "L2288",
       "weight": 1.0
     },
     {
@@ -41689,36 +41689,36 @@
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_2762",
+      "source": "api_app_rationale_2758",
       "target": "api_app_run_destination_job",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2762",
+      "source_location": "L2758",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_2963",
+      "source": "api_app_rationale_2959",
       "target": "api_app_auto_start_day_direct",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L2963",
+      "source_location": "L2959",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_3014",
+      "source": "api_app_rationale_3010",
       "target": "api_app_run_direct_osrm_job",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3014",
+      "source_location": "L3010",
       "weight": 1.0
     },
     {
@@ -41744,36 +41744,47 @@
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_3373",
+      "source": "api_app_rationale_3369",
       "target": "api_app_gpx_arrival_dt",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3373",
+      "source_location": "L3369",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_3400",
+      "source": "api_app_rationale_3396",
       "target": "api_app_interp_profile_at_km",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3400",
+      "source_location": "L3396",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_3422",
+      "source": "api_app_rationale_3418",
       "target": "api_app_parse_gpx_stop_raw",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3422",
+      "source_location": "L3418",
+      "weight": 1.0
+    },
+    {
+      "source": "api_app_rationale_3496",
+      "target": "api_app_gpx_stop_climate_night_series",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "api_app.py",
+      "source_location": "L3496",
       "weight": 1.0
     },
     {
@@ -41788,47 +41799,36 @@
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_3500",
-      "target": "api_app_gpx_stop_climate_night_series",
-      "relation": "rationale_for",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "api_app.py",
-      "source_location": "L3500",
-      "weight": 1.0
-    },
-    {
-      "source": "api_app_rationale_3963",
+      "source": "api_app_rationale_3959",
       "target": "api_app_run_restore_job",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3963",
+      "source_location": "L3959",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_3989",
+      "source": "api_app_rationale_3985",
       "target": "api_app_export_saved_route",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L3989",
+      "source_location": "L3985",
       "weight": 1.0
     },
     {
-      "source": "api_app_rationale_4011",
+      "source": "api_app_rationale_4007",
       "target": "api_app_restore_saved_route",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "api_app.py",
-      "source_location": "L4011",
+      "source_location": "L4007",
       "weight": 1.0
     },
     {
@@ -42500,7 +42500,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "api_app.py",
-      "source_location": "L1446",
+      "source_location": "L1442",
       "weight": 1.0
     },
     {
@@ -42512,7 +42512,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "api_app.py",
-      "source_location": "L1447",
+      "source_location": "L1443",
       "weight": 1.0
     },
     {
@@ -42524,7 +42524,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "api_app.py",
-      "source_location": "L4029",
+      "source_location": "L4025",
       "weight": 1.0
     },
     {
@@ -42536,7 +42536,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "api_app.py",
-      "source_location": "L2474",
+      "source_location": "L2470",
       "weight": 1.0
     },
     {
@@ -42548,7 +42548,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "api_app.py",
-      "source_location": "L2811",
+      "source_location": "L2807",
       "weight": 1.0
     },
     {
@@ -42560,7 +42560,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "api_app.py",
-      "source_location": "L2817",
+      "source_location": "L2813",
       "weight": 1.0
     },
     {
@@ -42572,7 +42572,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "api_app.py",
-      "source_location": "L3086",
+      "source_location": "L3082",
       "weight": 1.0
     },
     {
@@ -42584,7 +42584,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "api_app.py",
-      "source_location": "L3104",
+      "source_location": "L3100",
       "weight": 1.0
     },
     {
@@ -42656,7 +42656,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "api_app.py",
-      "source_location": "L1287",
+      "source_location": "L1283",
       "weight": 1.0
     },
     {
@@ -42740,7 +42740,7 @@
       "confidence_score": 0.85,
       "context": "return",
       "source_file": "api_app.py",
-      "source_location": "L2500",
+      "source_location": "L2496",
       "weight": 1.0
     },
     {
@@ -42751,7 +42751,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "api_app.py",
-      "source_location": "L2283",
+      "source_location": "L2279",
       "weight": 0.8
     },
     {
@@ -42784,7 +42784,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "api_app.py",
-      "source_location": "L3735",
+      "source_location": "L3731",
       "weight": 0.8
     },
     {

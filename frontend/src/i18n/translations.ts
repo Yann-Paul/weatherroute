@@ -62,6 +62,8 @@ const de = {
       fastbike: "Rennrad / Schnell",
       mtb: "Mountainbike (MTB)",
       safety: "Sicherheit (bevorzugt Radwege)",
+      jogging: "Joggen (Fußwege, ebene Strecke)",
+      hiking: "Wandern (Berg- und Wanderwege)",
     },
   },
   cityList: {
@@ -761,6 +763,8 @@ const en = {
       fastbike: "Road bike / Fast",
       mtb: "Mountain bike (MTB)",
       safety: "Safety (prefers cycle paths)",
+      jogging: "Jogging (footpaths, flat)",
+      hiking: "Hiking (mountain & hiking trails)",
     },
   },
   cityList: {

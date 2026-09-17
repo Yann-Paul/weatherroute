@@ -9,8 +9,13 @@ function escapeXml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// COROS DURA drops routes with more than ~200 waypoints; keep the nearest ones.
+export const MAX_GPX_WAYPOINTS = 200;
+
 function buildWaypoints(pois: MapPoi[]): string {
-  return pois
+  return [...pois]
+    .sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity))
+    .slice(0, MAX_GPX_WAYPOINTS)
     .map((p) => {
       const label = p.name ?? p.subtype ?? p.category;
       return `  <wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">

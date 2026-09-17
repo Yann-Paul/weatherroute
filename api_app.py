@@ -1201,6 +1201,10 @@ _ROUTE_PLANNER_PROFILES = {
     'fastbike': 'fastbike',
     'mtb': 'MTB',
     'safety': 'safety',
+    # foot profiles: BRouter has no dedicated jogging profile, hiking-beta is
+    # its general pedestrian routing (paths, avoids busy roads).
+    'jogging': 'hiking-beta',
+    'hiking': 'hiking-mountain',
 }
 
 

@@ -130,7 +130,7 @@ import {
   type RoadDimension,
 } from "@/components/planner/RoadProfile";
 
-const PROFILES = ["trekking", "fastbike", "mtb", "safety"] as const;
+const PROFILES = ["trekking", "fastbike", "mtb", "safety", "jogging", "hiking"] as const;
 type Profile = (typeof PROFILES)[number];
 
 type WeatherStatus = "idle" | "pending" | "running" | "done" | "error";

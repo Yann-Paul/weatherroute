@@ -1,12 +1,12 @@
 # Graph Report - weatherroute-master  (2026-09-17)
 
 ## Corpus Check
-- 111 files · ~493,089 words
+- 111 files · ~493,043 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 12 file(s) not represented in the graph (top: (none) 6, .bat 3, .gexf 1)
 
 ## Summary
-- 1387 nodes · 2358 edges · 86 communities (66 shown, 20 thin omitted)
+- 1387 nodes · 2358 edges · 88 communities (68 shown, 20 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 39 edges (avg confidence: 0.84)
 - Token cost: 0 input · 0 output
 
@@ -17,14 +17,14 @@
 
 ## Community Hubs (Navigation)
 - map.tsx
-- Streckenplaner
+- RainRadar.tsx
 - GpxWizardPage.tsx
 - savedRoutesDb.ts
 - api_app.py
 - MapLayers.tsx
 - types.ts
 - ForecastMap.tsx
-- ref_i18n_uset
+- react
 - App.tsx
 - themeStore.ts
 - package.json
@@ -40,12 +40,14 @@
 - lucide-react
 - compilerOptions
 - RoutePlannerPage.tsx
-- ref_api_types
+- ResultsPage.tsx
 - _build_forecast
 - GpxRouteMap.tsx
+- GpxRouteEditor.tsx
 - run_gpx_analysis
 - compilerOptions
 - request
+- GpxMiniTempChart
 - get_interpolated_weather
 - button.tsx
 - devDependencies
@@ -54,12 +56,12 @@
 - tooltip.tsx
 - geocode_and_register_city
 - GpxTemperatureChart.tsx
-- RainRadar.tsx
+- WeatherGrid.tsx
 - GpxElevationChart.tsx
 - RoadProfile.tsx
 - GpxPage.tsx
 - GpxResultsPage
-- react
+- ref_components_ui_map
 - ResultsPage
 - TemperatureChart.tsx
 - gpxExport.ts
@@ -135,15 +137,15 @@
 - **Beam-Search Scoring Pipeline** — backend_module_beam_search_route, backend_module_score_candidate, readme_direction_penalty_concept, readme_continuity_penalty_concept [INFERRED 0.85]
 - **Ziel-Finden Two-Phase Pipeline** — backend_module_find_destination_cities, backend_module_beam_search_route, backend_module_hierarchical_waypoint_route, backend_module_optimized_travel_planner [INFERRED 0.85]
 
-## Communities (86 total, 20 thin omitted)
+## Communities (88 total, 20 thin omitted)
 
 ### Community 0 - "map.tsx"
 Cohesion: 0.06
 Nodes (39): CompassButton(), CONTENT_LAYER_PREFIXES, defaultStyles, getDocumentTheme(), getSystemTheme(), getViewport(), Map, MapClusterLayer() (+31 more)
 
-### Community 1 - "Streckenplaner"
-Cohesion: 0.07
-Nodes (35): POST /api/route-planner/jobs, POST /api/route-planner/pois, POST /api/route-planner/preview, POST /api/route-planner/wind-shelter, BRouter Docker Compose Service, BRouter, CyclOSM, Wald-Overlay (+27 more)
+### Community 1 - "RainRadar.tsx"
+Cohesion: 0.05
+Nodes (40): POST /api/route-planner/jobs, POST /api/route-planner/pois, POST /api/route-planner/preview, POST /api/route-planner/wind-shelter, BRouter Docker Compose Service, RainViewerData, RainViewerFrame, useRainRadar() (+32 more)
 
 ### Community 2 - "GpxWizardPage.tsx"
 Cohesion: 0.09
@@ -169,9 +171,9 @@ Nodes (35): CityEntry, CLIENT_FALLBACK_NEEDED, Connection, CountrySearchResult, 
 Cohesion: 0.11
 Nodes (33): climateInterp(), climateInterpTemp(), ClimateMarkers(), ClimateMarkersProps, ClimatePoint, climateWdirAt(), compassDir16(), eleAtKm() (+25 more)
 
-### Community 8 - "ref_i18n_uset"
-Cohesion: 0.13
-Nodes (11): NewHereBannerProps, TopBar(), CountryCombobox(), CountryComboboxProps, ref_components_ui_command, ref_components_ui_popover, ref_i18n_store, ref_i18n_uset (+3 more)
+### Community 8 - "react"
+Cohesion: 0.14
+Nodes (18): NewHereBannerProps, AdvancedPanel(), CityCombobox(), CityComboboxProps, ConnectionList(), CountryCombobox(), CountryComboboxProps, ref_api_types (+10 more)
 
 ### Community 9 - "App.tsx"
 Cohesion: 0.06
@@ -198,8 +200,8 @@ Cohesion: 0.08
 Nodes (26): _fmt_elev(), _friendly_error(), Normalized score (0=good, 1=bad) to hex color., Background thread: consumes (seg_idx, chunk) tuples from seg_queue, samples…, Format elevation data dict into the JSON result shape., Find destination cities + beam-search routes, then OSRM + elevation + forecast., Direct OSRM route: connect cities A→B→C in input order, no graph algorithm., Register pending nominatim cities in the background thread with progress… (+18 more)
 
 ### Community 15 - "PlannerPage.tsx"
-Cohesion: 0.12
-Nodes (21): AdvancedPanel(), CityCombobox(), CityComboboxProps, CityList(), ConnectionList(), SavedRoutesList(), DestinationResultsPage(), ref_api_client (+13 more)
+Cohesion: 0.15
+Nodes (15): CityList(), SavedRoutesList(), getStepStatus(), ProgressPage(), StepStatus, DestinationResultsPage(), ref_api_client, ref_components_magicui_shimmer_button (+7 more)
 
 ### Community 16 - "dependencies"
 Cohesion: 0.07
@@ -222,8 +224,8 @@ Cohesion: 0.04
 Nodes (74): collections, datetime, heapq, itertools, json, math, assemble_elevation_profile(), build_combined_elevation_profile() (+66 more)
 
 ### Community 21 - "lucide-react"
-Cohesion: 0.11
-Nodes (17): GpxModelBadges(), MODELS, Props, ModelOverride, RoadHighlight, GpxWeatherTable(), Mode, RouteSplitControlProps (+9 more)
+Cohesion: 0.10
+Nodes (18): GpxModelBadges(), MODELS, Props, ModelOverride, RoadHighlight, GpxWeatherTable(), Mode, RouteSplitControlProps (+10 more)
 
 ### Community 22 - "compilerOptions"
 Cohesion: 0.08
@@ -233,17 +235,21 @@ Nodes (23): compilerOptions, allowImportingTsExtensions, baseUrl, erasableSyntax
 Cohesion: 0.09
 Nodes (14): ControlsPanel(), GERMANY_CENTER, Profile, PROFILES, ProfileTab, RoadHighlight, WaypointOrderPanel(), WeatherStatus (+6 more)
 
-### Community 24 - "ref_api_types"
-Cohesion: 0.10
-Nodes (25): ElevationChart(), ElevationSegment(), onMouseMove(), getForecastEndKm(), interpForecastByKey(), interpTempAtKm(), SegmentProps, ModelBadges() (+17 more)
+### Community 24 - "ResultsPage.tsx"
+Cohesion: 0.16
+Nodes (16): ElevationChart(), ElevationSegment(), onMouseMove(), getForecastEndKm(), interpForecastByKey(), interpTempAtKm(), SegmentProps, ModelBadges() (+8 more)
 
 ### Community 25 - "_build_forecast"
 Cohesion: 0.12
 Nodes (21): _build_forecast(), _finish_forecast_result(), gpx_forecast_by_model(), job_forecast_by_model(), Assemble the final forecast payload from prepared ctx + fetched/parsed per-…, Build forecast_data from elevation data. Also used when restoring saved routes.…, Background thread: expose saved result immediately (preview), then refresh…, run_restore_job() (+13 more)
 
 ### Community 26 - "GpxRouteMap.tsx"
-Cohesion: 0.07
-Nodes (33): EDIT_PROFILES, EditProfile, EMPTY_EDIT_SELECTION, GpxEditMapElements(), GpxEditPanel(), GpxEditSelection, gpxEditStep, findNearestTrackIdx() (+25 more)
+Cohesion: 0.12
+Nodes (16): findNearestTrackIdx(), geoBearing(), GpxBoundsTracker(), GpxMarkers(), GpxRouteMap(), handleEditMapClick(), haversineDist(), RoadHighlight (+8 more)
+
+### Community 27 - "GpxRouteEditor.tsx"
+Cohesion: 0.18
+Nodes (8): EDIT_PROFILES, EditProfile, EMPTY_EDIT_SELECTION, GpxEditMapElements(), GpxEditPanel(), GpxEditSelection, gpxEditStep, ref_components_ui_checkbox
 
 ### Community 28 - "run_gpx_analysis"
 Cohesion: 0.07
@@ -256,6 +262,10 @@ Nodes (19): compilerOptions, allowImportingTsExtensions, erasableSyntaxOnly, lib
 ### Community 30 - "request"
 Cohesion: 0.12
 Nodes (17): fetchRoadInfo(), fetchWindShelter(), getDestinationResults(), getGpxModelForecast(), getGpxResults(), getJobResults(), getJobStatus(), getModelForecast() (+9 more)
+
+### Community 31 - "GpxMiniTempChart"
+Cohesion: 0.29
+Nodes (9): gpxArrivalTime(), GpxMiniElevChart(), onChartMouseMove(), GpxMiniTempChart(), onChartMouseMove(), interpNightMs(), interpTempForGpx(), interpTempForGpxAtTime() (+1 more)
 
 ### Community 32 - "get_interpolated_weather"
 Cohesion: 0.14
@@ -285,9 +295,9 @@ Nodes (13): _build_graph_coord_cache(), _copy_nearest_temperatures(), _fetch_cli
 Cohesion: 0.31
 Nodes (10): DayTempChart(), handleMouseMove(), getCssColors(), gpxArrivalTime(), GpxCombinedDayTempChart(), handleMouseMove(), GpxTemperatureChart(), interpNightMs() (+2 more)
 
-### Community 40 - "RainRadar.tsx"
-Cohesion: 0.22
-Nodes (6): RainViewerData, RainViewerFrame, useRainRadar(), useRainViewerFrames(), ref_components_ui_slider, ref_components_ui_switch
+### Community 40 - "WeatherGrid.tsx"
+Cohesion: 0.17
+Nodes (10): EXAMPLE, InfoPanel(), WeatherCell, WeatherCellProps, currentYear, GridRow, WeatherGrid(), ref_components_ui_label (+2 more)
 
 ### Community 41 - "GpxElevationChart.tsx"
 Cohesion: 0.26
@@ -305,17 +315,17 @@ Nodes (9): DayConfig, DEFAULT, GlobalConfigPanel(), isParamDerived(), Param, par
 Cohesion: 0.24
 Nodes (5): GpxResultsPage(), handleSelectModel(), runFallback(), hourFracFromIso(), interpolateGpxHourly()
 
-### Community 47 - "react"
+### Community 47 - "ref_components_ui_map"
 Cohesion: 0.13
-Nodes (12): LiveCoords, LiveLocationStatus, ErrorCityMap(), ErrorCityMapProps, PreviewMap(), PreviewMapProps, getStepStatus(), ProgressPage() (+4 more)
+Nodes (8): LiveCoords, LiveLocationStatus, ErrorCityMap(), ErrorCityMapProps, PreviewMap(), PreviewMapProps, ref_components_ui_map, maplibre-gl
 
 ### Community 48 - "ResultsPage"
 Cohesion: 0.27
 Nodes (9): buildRouteName(), ResultsPage(), fetchResults(), handleSave(), loadFromCacheOrFail(), pollElevation(), pollForecast(), scheduleElevationPoll() (+1 more)
 
 ### Community 49 - "TemperatureChart.tsx"
-Cohesion: 0.36
-Nodes (7): getForecastEndKm(), interpForecastByKey(), interpTempAtKm(), SegmentProps, TemperatureChart(), TempSegment(), onMouseMove()
+Cohesion: 0.22
+Nodes (9): TopBar(), getForecastEndKm(), interpForecastByKey(), interpTempAtKm(), SegmentProps, TemperatureChart(), TempSegment(), onMouseMove() (+1 more)
 
 ### Community 50 - "gpxExport.ts"
 Cohesion: 0.33
@@ -409,17 +419,17 @@ Nodes (3): PlannerPage(), handleSubmit(), validate()
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `react` connect `react` to `map.tsx`, `GpxWizardPage.tsx`, `MapLayers.tsx`, `ForecastMap.tsx`, `ref_i18n_uset`, `App.tsx`, `themeStore.ts`, `package.json`, `PlannerPage.tsx`, `ref_lib_utils`, `WizardPage.tsx`, `lucide-react`, `RoutePlannerPage.tsx`, `ref_api_types`, `GpxRouteMap.tsx`, `button.tsx`, `alert.tsx`, `tooltip.tsx`, `GpxTemperatureChart.tsx`, `RainRadar.tsx`, `GpxElevationChart.tsx`, `RoadProfile.tsx`, `GpxPage.tsx`, `TemperatureChart.tsx`, `command.tsx`, `table.tsx`, `select.tsx`, `card.tsx`, `tabs.tsx`, `popover.tsx`?**
-  _High betweenness centrality (0.155) - this node is a cross-community bridge._
-- **Why does `lucide-react` connect `lucide-react` to `map.tsx`, `GpxWizardPage.tsx`, `MapLayers.tsx`, `ForecastMap.tsx`, `ref_i18n_uset`, `package.json`, `PlannerPage.tsx`, `ref_lib_utils`, `WizardPage.tsx`, `RoutePlannerPage.tsx`, `ref_api_types`, `GpxRouteMap.tsx`, `GpxTemperatureChart.tsx`, `RainRadar.tsx`, `GpxElevationChart.tsx`, `RoadProfile.tsx`, `GpxPage.tsx`, `react`, `TemperatureChart.tsx`, `command.tsx`, `select.tsx`, `StepIndicator.tsx`?**
-  _High betweenness centrality (0.083) - this node is a cross-community bridge._
-- **Why does `Regenradar-Overlay` connect `Streckenplaner` to `RainRadar.tsx`?**
-  _High betweenness centrality (0.042) - this node is a cross-community bridge._
+- **Why does `react` connect `react` to `map.tsx`, `RainRadar.tsx`, `GpxWizardPage.tsx`, `MapLayers.tsx`, `ForecastMap.tsx`, `App.tsx`, `themeStore.ts`, `package.json`, `PlannerPage.tsx`, `ref_lib_utils`, `WizardPage.tsx`, `lucide-react`, `RoutePlannerPage.tsx`, `ResultsPage.tsx`, `GpxRouteMap.tsx`, `GpxRouteEditor.tsx`, `button.tsx`, `alert.tsx`, `tooltip.tsx`, `GpxTemperatureChart.tsx`, `WeatherGrid.tsx`, `GpxElevationChart.tsx`, `RoadProfile.tsx`, `GpxPage.tsx`, `ref_components_ui_map`, `TemperatureChart.tsx`, `command.tsx`, `table.tsx`, `select.tsx`, `card.tsx`, `tabs.tsx`, `popover.tsx`?**
+  _High betweenness centrality (0.158) - this node is a cross-community bridge._
+- **Why does `lucide-react` connect `lucide-react` to `map.tsx`, `RainRadar.tsx`, `GpxWizardPage.tsx`, `MapLayers.tsx`, `ForecastMap.tsx`, `react`, `package.json`, `PlannerPage.tsx`, `ref_lib_utils`, `WizardPage.tsx`, `RoutePlannerPage.tsx`, `ResultsPage.tsx`, `GpxRouteMap.tsx`, `GpxRouteEditor.tsx`, `GpxTemperatureChart.tsx`, `WeatherGrid.tsx`, `GpxElevationChart.tsx`, `RoadProfile.tsx`, `GpxPage.tsx`, `ref_components_ui_map`, `TemperatureChart.tsx`, `command.tsx`, `select.tsx`, `StepIndicator.tsx`?**
+  _High betweenness centrality (0.087) - this node is a cross-community bridge._
 - **What connects `name`, `private`, `version` to the rest of the system?**
   _349 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `map.tsx` be split into smaller, more focused modules?**
   _Cohesion score 0.05603864734299517 - nodes in this community are weakly interconnected._
-- **Should `Streckenplaner` be split into smaller, more focused modules?**
-  _Cohesion score 0.06722689075630252 - nodes in this community are weakly interconnected._
+- **Should `RainRadar.tsx` be split into smaller, more focused modules?**
+  _Cohesion score 0.052854122621564484 - nodes in this community are weakly interconnected._
 - **Should `GpxWizardPage.tsx` be split into smaller, more focused modules?**
   _Cohesion score 0.09407665505226481 - nodes in this community are weakly interconnected._
+- **Should `savedRoutesDb.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.06219512195121951 - nodes in this community are weakly interconnected._

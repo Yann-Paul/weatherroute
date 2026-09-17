@@ -1,5 +1,7 @@
 # WeatherRoute
 
+> **Live:** Die Anwendung ist erreichbar unter **[followthesun.onrender.com](https://followthesun.onrender.com)**.
+
 Wetter-optimierter Reiseroutenplaner für Europa. Die Anwendung berechnet die beste Route zwischen mehreren Städten basierend auf Temperaturwünschen, Höhenprofilen und historischen Klimadaten.
 
 ---
